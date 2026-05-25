@@ -1,0 +1,1095 @@
+ORDER BLOCK STRATEGY
+
+A Complete Institutional-Grade Research Document
+
+ALL MARKETS  |  ALL TIMEFRAMES  |  FULL ALGORITHMIC BREAKDOWN
+
+Covers:
+
+Forex  •  Crypto  •  Stocks  •  Futures  •  Commodities  •  Indices
+
+Scalping  •  Day Trading  •  Swing Trading  •  Position Trading
+
+Bullish OB  •  Bearish OB  •  Breaker Block  •  Mitigation Block  •  Rejection Block
+
+Algorithmic Logic  •  Inputs  •  Outputs  •  Entry Rules  •  Risk Management
+
+Based on ICT Smart Money Concepts | Inner Circle Trader Methodology
+
+Research compiled: May 2026
+
+Table of Contents
+
+1. Introduction & Origins
+
+1.1 What Is the Order Block Strategy?
+
+The Order Block (OB) strategy is one of the most powerful concepts within the Smart Money Concepts (SMC) and ICT (Inner Circle Trader) trading methodology. At its core, an order block represents a specific price zone on a chart where large institutional traders — banks, hedge funds, central banks, and prime brokers — have executed massive buy or sell orders before a significant market move.
+
+Unlike traditional support and resistance concepts that rely solely on historical price reactions, order blocks identify the exact mechanics of how institutions execute trades. Because institutions deal in billions of dollars of capital, they cannot fill their entire position in a single moment. Instead, they distribute their orders across a range of prices — and these zones leave a visible footprint on the chart.
+
+When price retraces to these footprints, the remaining unfilled institutional orders create high-probability reaction points, allowing retail traders to align with the dominant market force rather than trade against it.
+
+1.2 History & Creator
+
+The Order Block concept was developed and popularized by Michael Huddleston, widely known online as "The Inner Circle Trader" (ICT). A self-taught American trader and analyst, Huddleston built his methodology over decades of studying institutional trading behavior, central bank mechanics, and the Interbank Price Delivery Algorithm (IPDA) — the algorithmic framework used by major institutions to deliver price from one liquidity pool to another.
+
+Huddleston began publishing his concepts publicly via YouTube and mentorship programs, creating a framework that teaches retail traders to "see the market as institutions do." Order Blocks are among the foundational elements of this framework, alongside Fair Value Gaps (FVG), Liquidity Sweeps, Market Structure Shifts (MSS), and the Optimal Trade Entry (OTE) concept.
+
+NOTE
+
+Order Blocks are not a standalone indicator or mechanical signal. They are a lens for understanding institutional intent, and must be combined with market structure analysis, session timing, and multi-timeframe confluence to achieve high probability.
+
+1.3 Why Order Blocks Work
+
+Order Blocks work because of a fundamental asymmetry in the market: institutions cannot move large positions instantly without causing massive slippage. To accumulate or distribute positions efficiently, they must operate across multiple candles and price levels. This process of "layering" orders creates identifiable zones where:
+
+Unfilled limit orders remain waiting to be executed on a retrace
+
+Institutional algorithms are programmed to re-engage at these zones
+
+Price action shows predictable reactions when these zones are tapped
+
+Retail stop-loss clusters are strategically targeted before these reactions
+
+The result is a self-fulfilling prophecy reinforced by both fundamental institutional behavior and algorithmic order management systems. This is why Order Blocks show consistent respect across all markets and all timeframes.
+
+2. Core Concepts & Prerequisites
+
+2.1 Market Structure Fundamentals
+
+Before identifying Order Blocks, a trader must understand the underlying market structure that gives them context and validity. Order Blocks without structural context are meaningless.
+
+Break of Structure (BOS)
+
+A Break of Structure occurs when price creates a new high above the previous swing high in a bullish trend, or a new low below the previous swing low in a bearish trend. A BOS confirms trend continuation and is the primary signal that an Order Block has "launched" and is now valid for future retests.
+
+Change of Character (CHoCH)
+
+A Change of Character is a more significant structural shift — it occurs when price breaks in the opposite direction of the prevailing trend for the first time, signaling a potential trend reversal. A CHoCH is more powerful than a BOS because it represents a genuine shift in institutional intent rather than simple continuation.
+
+Liquidity (Buy-Side & Sell-Side)
+
+Liquidity refers to clusters of orders (stop-losses, pending orders) that exist at predictable levels — swing highs (buy-side liquidity / BSL) and swing lows (sell-side liquidity / SSL). Institutions target these liquidity pools to fill their large orders at favorable prices before reversing direction. Understanding where liquidity sits is essential to predicting where Order Blocks will form and how they will be used.
+
+Premium & Discount Arrays
+
+Institutional traders prefer to buy in discount (below the 50% equilibrium of a price range) and sell in premium (above the 50% equilibrium). Order Blocks that sit in discount zones are stronger bullish setups; Order Blocks in premium zones carry stronger bearish intent.
+
+Fair Value Gap (FVG)
+
+A Fair Value Gap is a three-candle pattern where a gap exists between the high of candle 1 and the low of candle 3, created by the momentum candle in the middle. FVGs often appear alongside Order Blocks and serve as additional confluence zones for entry precision.
+
+2.2 The Interbank Price Delivery Algorithm (IPDA)
+
+The IPDA is the institutional algorithmic framework that delivers price from one liquidity pool to the next in an organized, logical sequence. Understanding IPDA means understanding that markets are not random — they follow a systematic process of accumulation, manipulation, and distribution (AMD). Order Blocks are the "staging areas" within this algorithmic delivery system.
+
+KEY INSIGHT
+
+Price always moves from one pool of liquidity to another. Order Blocks mark the zones where this algorithmic delivery pauses, accumulates, or distributes before the next move. Trading OBs means trading WITH the algorithm, not against it.
+
+3. Types of Order Blocks
+
+3.1 Bullish Order Block (BOB)
+
+A Bullish Order Block is the last bearish (red/down) candle — or the last down-closing candle — immediately before a significant bullish impulse move that creates a Break of Structure to the upside. It represents the zone where institutional traders placed their large buy orders, disguising their accumulation as a bearish candle to attract retail sellers.
+
+Characteristics of a valid Bullish Order Block:
+
+It is the LAST bearish candle before the bullish impulse begins
+
+The following bullish candle engulfs it body-to-body and wick-to-wick
+
+The impulse creates a Fair Value Gap (imbalance) to the upside
+
+A Break of Structure or Market Structure Shift (MSS) is confirmed
+
+The zone is defined by the Open and Close of the bearish candle
+
+Sits in a discount zone (below 50% equilibrium) for highest probability
+
+Figure 1: Bullish Order Block — anatomy showing the bearish candle (OB), the bullish impulse, the OB zone, and the retest entry with Stop Loss and Take Profit levels.
+
+3.2 Bearish Order Block (BeOB)
+
+A Bearish Order Block is the last bullish (green/up) candle — or the last up-closing candle — immediately before a significant bearish impulse move that creates a Break of Structure to the downside. It marks where institutions placed their large sell orders, disguised as bullish momentum to attract retail buyers before the reversal.
+
+Characteristics of a valid Bearish Order Block:
+
+It is the LAST bullish candle before the bearish impulse begins
+
+The following bearish candle engulfs it fully (body and wick)
+
+The impulse leaves a Fair Value Gap (imbalance) to the downside
+
+A Break of Structure or Market Structure Shift (MSS) is confirmed downside
+
+The zone is defined by the Open and Close of the bullish candle
+
+Sits in a premium zone (above 50% equilibrium) for highest probability
+
+Figure 2: Bearish Order Block — showing the bullish candle (OB), the bearish impulse, the OB zone, and the retest entry with Stop Loss above and Take Profit below.
+
+3.3 Breaker Block
+
+A Breaker Block is a failed Order Block — an Order Block that price has broken through completely rather than respecting. Once an OB fails, it flips its polarity: a failed Bullish OB becomes a bearish Breaker Block (acting as resistance), and a failed Bearish OB becomes a bullish Breaker Block (acting as support).
+
+Formation process of a Breaker Block:
+
+An Order Block forms and price initially respects it
+
+Price returns and breaks THROUGH the Order Block (failure)
+
+A Change of Character (CHoCH) confirms the structural shift
+
+The broken OB zone is now the Breaker Block
+
+Price retests the Breaker from the other side — this is the entry
+
+Breaker Blocks are reversal tools — the strongest OB-family signal for trend change trades, particularly effective after liquidity sweeps.
+
+Figure 3: Breaker Block — a Bullish OB fails, flips to resistance (Bearish Breaker Block), and price retests the level for a short entry.
+
+3.4 Mitigation Block
+
+A Mitigation Block is an old Order Block that has been partially mitigated (tapped) and is being revisited again. Unlike a Breaker Block (which flips direction), a Mitigation Block continues to act in its original direction, but with reduced strength because it has already been partially consumed. They represent zones where institutional algorithms return to re-execute pending orders that were not fully filled on the first visit.
+
+3.5 Rejection Block
+
+A Rejection Block is formed at the wick of a large candlestick at a market high or low — typically visible as a long upper or lower shadow. It occurs after a liquidity sweep (false breakout) where price spikes through equal highs or equal lows, triggers retail stop orders, and then sharply reverses. Rejection Blocks are characterized by:
+
+Long wicks with little to no body — price was rejected immediately
+
+Formation at previous swing highs/lows or equal high/low clusters
+
+Strong volume during the wick (evidence of institutional absorption)
+
+Immediate reversal after the sweep — confirmation of the manipulation
+
+<w:left w:val="single" w:color="auto" w:sz="4"/><w:bottom w:val="single" w:color="auto" w:sz="4"/><w:right w:val="single" w:color="auto" w:sz="4"/><w:insideH w:val="single" w:color="auto" w:sz="4"/><w:insideV w:val="single" w:color="auto" w:sz="4"/></w:tblBorders></w:tblPr><w:gridCol w:w="2500"/><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/><w:gridCol w:w="2860"/></w:tblGrid></w:trPr><w:left w:val="single" w:color="BDC3C7" w:sz="1"/><w:bottom w:val="single" w:color="BDC3C7" w:sz="1"/><w:right w:val="single" w:color="BDC3C7" w:sz="1"/></w:tcBorders><w:shd w:fill="1F3864" w:val="clear"/><w:left w:type="dxa" w:w="120"/><w:bottom w:type="dxa" w:w="80"/><w:right w:type="dxa" w:w="120"/></w:tcMar></w:tcPr><w:p><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>OB Type
+
+Direction
+
+Trade Type
+
+Key Trigger
+
+Bullish OB
+
+Long (Buy)
+
+Continuation
+
+Last red candle before bullish impulse
+
+Bearish OB
+
+Short (Sell)
+
+Continuation
+
+Last green candle before bearish impulse
+
+Breaker Block
+
+Opposite
+
+Reversal
+
+Failed OB + CHoCH confirmed
+
+Mitigation Block
+
+Same as OB
+
+Re-entry
+
+Partially-tapped OB revisited
+
+Rejection Block
+
+Against wick
+
+Reversal
+
+Wick at liquidity zone (stop hunt)
+
+Table 1: Order Block Types Comparison
+
+4. Identification Rules — Step-by-Step
+
+4.1 The Four-Condition Validation Framework
+
+Not every last opposing candle before a move is a valid Order Block. The following four conditions must all be satisfied for a high-probability OB identification:
+
+<w:left w:val="single" w:color="auto" w:sz="4"/><w:bottom w:val="single" w:color="auto" w:sz="4"/><w:right w:val="single" w:color="auto" w:sz="4"/><w:insideH w:val="single" w:color="auto" w:sz="4"/><w:insideV w:val="single" w:color="auto" w:sz="4"/></w:tblBorders></w:tblPr><w:gridCol w:w="800"/><w:gridCol w:w="2400"/><w:gridCol w:w="6160"/></w:tblGrid></w:trPr><w:left w:val="single" w:color="BDC3C7" w:sz="1"/><w:bottom w:val="single" w:color="BDC3C7" w:sz="1"/><w:right w:val="single" w:color="BDC3C7" w:sz="1"/></w:tcBorders><w:shd w:fill="1F3864" w:val="clear"/><w:left w:type="dxa" w:w="120"/><w:bottom w:type="dxa" w:w="80"/><w:right w:type="dxa" w:w="120"/></w:tcMar></w:tcPr><w:p><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>Condition
+
+Name
+
+Description
+
+C1
+
+Body & Wick Engulf
+
+The post-OB impulse candle must engulf the OB candle both body-to-body AND wick-to-wick.
+
+C2
+
+Market Structure Shift
+
+A BOS or CHoCH must occur in the direction of the impulse, confirming institutional commitment.
+
+C3
+
+Imbalance Created
+
+A Fair Value Gap (FVG) must exist between the OB candle and the candle after the impulse, showing price moved too fast to be balanced.
+
+C4
+
+Structural Origin
+
+The OB should ideally form at a new high or new low — a structural breakpoint — indicating it was formed with liquidity swept.
+
+Table 2: Four-Condition Validation — all must be met for a high-probability OB
+
+4.2 Step-by-Step Identification Process
+
+Identify the higher-timeframe trend direction (Daily/4H) — this is your bias.
+
+Look for consolidation areas or ranges where price has been accumulating or distributing.
+
+Identify the strong impulse move that broke out of the range — the one that created the BOS.
+
+Find the LAST candle in the opposite direction of the impulse, immediately before it began. This is your candidate OB.
+
+Confirm C1–C4: engulf, MSS, FVG, structural origin. If all four are met: valid OB.
+
+Mark the zone from the OPEN to the CLOSE of the OB candle (some traders extend to the full High–Low).
+
+Wait. Do NOT enter on the impulse. Wait for price to retrace back into the OB zone.
+
+On retest, drop to a lower timeframe (LTF) for entry confirmation: look for MSS, FVG fill, or rejection wick at the zone.
+
+<w:left w:val="single" w:color="auto" w:sz="4"/><w:bottom w:val="single" w:color="auto" w:sz="4"/><w:right w:val="single" w:color="auto" w:sz="4"/><w:insideH w:val="single" w:color="auto" w:sz="4"/><w:insideV w:val="single" w:color="auto" w:sz="4"/></w:tblBorders></w:tblPr><w:gridCol w:w="1000"/><w:gridCol w:w="8360"/></w:tblGrid><w:shd w:fill="E67E22" w:val="clear"/><w:left w:type="dxa" w:w="120"/><w:bottom w:type="dxa" w:w="100"/><w:right w:type="dxa" w:w="120"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>RULE
+
+The 4-Candle Follow-Through Rule: After the OB forms, the fourth candle must remain above (bullish OB) or below (bearish OB) the OB candle's range. This confirms real institutional momentum and filters weak pivots.
+
+4.3 High-Probability vs. Low-Probability OBs
+
+Not all Order Blocks carry equal weight. Here is how to grade them:
+
+<w:left w:val="single" w:color="auto" w:sz="4"/><w:bottom w:val="single" w:color="auto" w:sz="4"/><w:right w:val="single" w:color="auto" w:sz="4"/><w:insideH w:val="single" w:color="auto" w:sz="4"/><w:insideV w:val="single" w:color="auto" w:sz="4"/></w:tblBorders></w:tblPr><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/><w:gridCol w:w="3360"/></w:tblGrid></w:trPr><w:left w:val="single" w:color="BDC3C7" w:sz="1"/><w:bottom w:val="single" w:color="BDC3C7" w:sz="1"/><w:right w:val="single" w:color="BDC3C7" w:sz="1"/></w:tcBorders><w:shd w:fill="1F3864" w:val="clear"/><w:left w:type="dxa" w:w="120"/><w:bottom w:type="dxa" w:w="80"/><w:right w:type="dxa" w:w="120"/></w:tcMar></w:tcPr><w:p><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>Factor
+
+High Probability
+
+Low Probability
+
+Timeframe
+
+Daily, 4H, 1H
+
+1M, 3M (without HTF confluence)
+
+Structural origin
+
+At new high or new low (liquidity swept)
+
+Mid-range, no structural significance
+
+Mitigation status
+
+Untouched / Fresh OB
+
+Already tapped once or more
+
+HTF alignment
+
+Aligned with Daily/Weekly bias
+
+Counter-trend to HTF bias
+
+FVG present
+
+Yes — imbalance confirmed
+
+No imbalance visible
+
+Volume
+
+Above average on impulse candle
+
+Low volume on impulse
+
+Session timing
+
+London/NY session open
+
+Dead zone, Asian session only
+
+Table 3: Order Block Quality Grading Factors
+
+5. The Institutional Cycle — AMD Framework
+
+Order Blocks do not exist in isolation. They form at specific, predictable points within the institutional trading cycle known as Accumulation, Manipulation, and Distribution (AMD). Understanding this cycle is essential to knowing WHEN an Order Block is about to become tradeable.
+
+Figure 4: The AMD Cycle — Accumulation (smart money builds position), Manipulation (liquidity sweep trapping retail), Distribution (price moves in the real institutional direction). Order Blocks form at the manipulation phase.
+
+5.1 Accumulation Phase
+
+During accumulation, smart money builds their position gradually within a defined range. Price moves sideways with no clear trend, creating confusion among retail traders. This phase is characterized by equal highs and equal lows (liquidity pools forming), tight consolidation with no significant breakout, and growing volume with limited price movement.
+
+5.2 Manipulation Phase (Where OBs Form)
+
+This is the most critical phase for Order Block traders. Institutions deliberately push price in the OPPOSITE direction of their intended trade to:
+
+Trigger retail stop-losses below support (for bullish setups) or above resistance (for bearish setups)
+
+Collect the liquidity generated by those stop orders to fill their large positions
+
+Create a convincing false breakout that traps retail traders on the wrong side
+
+The ORDER BLOCK forms at the candle immediately before the manipulation completes and the real move begins. This is why the last candle before the impulse is so critical — it is the exact moment institutions filled their orders and reversed direction.
+
+5.3 Distribution Phase
+
+After manipulation, the institutional position is fully built. Price now moves decisively in the real direction — the distribution phase. This is the trend everyone should have been trading. Retail traders who are now trapped on the wrong side are forced to exit at a loss, adding fuel to the institutional move.
+
+EXAMPLE
+
+EUR/USD consolidates for 6 hours (Accumulation). In the Asian session, price breaks below equal lows triggering retail sell stops (Manipulation). The last green candle before this drop = Bearish OB. Price then rockets up in the London session for 150 pips (Distribution). Traders who identified the Bearish OB zone entered short on the retest for a clean trade.
+
+6. Algorithmic Understanding
+
+This chapter breaks down the Order Block strategy into a formal algorithmic specification — the inputs, processing logic, decision rules, and outputs. This framework can be used to build automated scanners, trading bots, or to systematize your manual trading process.
+
+Figure 5: Algorithmic Decision Flow for the Order Block Strategy — from market scan to trade execution.
+
+6.1 Required Inputs
+
+The following inputs are required to process an Order Block setup:
+
+<w:left w:val="single" w:color="auto" w:sz="4"/><w:bottom w:val="single" w:color="auto" w:sz="4"/><w:right w:val="single" w:color="auto" w:sz="4"/><w:insideH w:val="single" w:color="auto" w:sz="4"/><w:insideV w:val="single" w:color="auto" w:sz="4"/></w:tblBorders></w:tblPr><w:gridCol w:w="2200"/><w:gridCol w:w="1800"/><w:gridCol w:w="2200"/><w:gridCol w:w="3160"/></w:tblGrid></w:trPr><w:left w:val="single" w:color="BDC3C7" w:sz="1"/><w:bottom w:val="single" w:color="BDC3C7" w:sz="1"/><w:right w:val="single" w:color="BDC3C7" w:sz="1"/></w:tcBorders><w:shd w:fill="1F3864" w:val="clear"/><w:left w:type="dxa" w:w="120"/><w:bottom w:type="dxa" w:w="80"/><w:right w:type="dxa" w:w="120"/></w:tcMar></w:tcPr><w:p><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>Input Parameter
+
+Data Type
+
+Source
+
+Description
+
+HTF Trend Direction
+
+Enum {Bullish, Bearish, Neutral}
+
+Daily / Weekly chart
+
+The macro bias that determines which OBs to trade
+
+OHLC Candle Data
+
+Float[4] per candle
+
+Price feed / broker API
+
+Open, High, Low, Close for each candle
+
+Market Structure State
+
+Enum {BOS, CHoCH, Range}
+
+Swing high/low analysis
+
+Current structural context
+
+Liquidity Levels
+
+Float[] (price levels)
+
+Swing highs and lows
+
+BSL (buy-side) and SSL (sell-side) pool locations
+
+Session Window
+
+Datetime range
+
+Market hours / timezone
+
+London Open, NY Open, Asia — OBs in London/NY sessions carry more weight
+
+Fibonacci Level
+
+Float 0.62–0.79
+
+OB zone retracement
+
+Optimal Trade Entry (OTE) zone within the OB
+
+Volume / ATR
+
+Float
+
+Volume indicator / ATR(14)
+
+Validates impulse strength; low-volume OBs are lower quality
+
+LTF Confirmation Signal
+
+Enum {MSS, FVG, Wick}
+
+Lower timeframe chart
+
+Confirmation trigger at the OB zone on LTF chart
+
+Table 4: Required Inputs for Order Block Algorithm
+
+6.2 Processing Logic — Pseudocode
+
+FUNCTION identify_order_block(candles[], timeframe, session):
+
+  htf_bias = get_htf_trend(daily_chart, weekly_chart)
+
+  IF htf_bias == NEUTRAL: return NULL  // No trade — no clear bias
+
+  FOR each candle[i] in candles[]:
+
+    IF htf_bias == BULLISH:
+
+      IF candle[i].color == RED AND candle[i+1].color == GREEN:
+
+        impulse = candle[i+1]
+
+        IF impulse.close > previous_swing_high:  // BOS confirmed
+
+          IF impulse.low < candle[i].low AND impulse.high > candle[i].high:  // Engulf
+
+            IF has_fvg(candle[i], candle[i+1], candle[i+2]):  // Imbalance
+
+              OB_zone = {low: candle[i].close, high: candle[i].open}
+
+              OB_quality = grade_ob(OB_zone, session, volume, htf_level)
+
+              RETURN OB_zone, OB_quality
+
+    IF htf_bias == BEARISH:
+
+      IF candle[i].color == GREEN AND candle[i+1].color == RED:
+
+        impulse = candle[i+1]
+
+        IF impulse.close < previous_swing_low:  // BOS confirmed
+
+          IF impulse engulfs candle[i]:  // Body + wick
+
+            IF has_fvg(candle[i], candle[i+1], candle[i+2]):
+
+              OB_zone = {low: candle[i].open, high: candle[i].close}
+
+              OB_quality = grade_ob(OB_zone, session, volume, htf_level)
+
+              RETURN OB_zone, OB_quality
+
+  RETURN NULL  // No valid OB found
+
+6.3 Decision Rules — Entry Conditions
+
+Once a valid Order Block zone is identified, the following decision tree governs entry:
+
+<w:left w:val="single" w:color="auto" w:sz="4"/><w:bottom w:val="single" w:color="auto" w:sz="4"/><w:right w:val="single" w:color="auto" w:sz="4"/><w:insideH w:val="single" w:color="auto" w:sz="4"/><w:insideV w:val="single" w:color="auto" w:sz="4"/></w:tblBorders></w:tblPr><w:gridCol w:w="2800"/><w:gridCol w:w="2800"/><w:gridCol w:w="3760"/></w:tblGrid></w:trPr><w:left w:val="single" w:color="BDC3C7" w:sz="1"/><w:bottom w:val="single" w:color="BDC3C7" w:sz="1"/><w:right w:val="single" w:color="BDC3C7" w:sz="1"/></w:tcBorders><w:shd w:fill="1F3864" w:val="clear"/><w:left w:type="dxa" w:w="120"/><w:bottom w:type="dxa" w:w="80"/><w:right w:type="dxa" w:w="120"/></w:tcMar></w:tcPr><w:p><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>Rule
+
+Condition
+
+Action
+
+R1 — Zone Fresh
+
+OB has NOT been previously tapped
+
+Proceed to next rule
+
+R2 — HTF Alignment
+
+OB direction matches Daily/4H bias
+
+Proceed to next rule
+
+R3 — Price at Zone
+
+Current price touches OB zone (open to close)
+
+Drop to LTF for confirmation
+
+R4 — LTF MSS
+
+Lower TF shows Market Structure Shift in OB direction
+
+ENTER TRADE
+
+R4 Alternative
+
+FVG fill + rejection wick at OB zone
+
+ENTER TRADE
+
+R5 — OB Violated
+
+Price closes BEYOND the full wick of OB candle
+
+INVALIDATE — Do not trade
+
+R6 — Time Filter
+
+Entry is within London (02:00–05:00 ET) or NY (07:00–10:00 ET)
+
+Accept — higher probability
+
+R7 — Second Tap
+
+OB has been tapped once already
+
+Trade with caution — reduced quality
+
+Table 5: Entry Decision Rules
+
+6.4 Outputs — Trade Parameters
+
+Upon a valid entry signal, the following outputs define the complete trade specification:
+
+<w:left w:val="single" w:color="auto" w:sz="4"/><w:bottom w:val="single" w:color="auto" w:sz="4"/><w:right w:val="single" w:color="auto" w:sz="4"/><w:insideH w:val="single" w:color="auto" w:sz="4"/><w:insideV w:val="single" w:color="auto" w:sz="4"/></w:tblBorders></w:tblPr><w:gridCol w:w="2000"/><w:gridCol w:w="2800"/><w:gridCol w:w="4560"/></w:tblGrid></w:trPr><w:left w:val="single" w:color="BDC3C7" w:sz="1"/><w:bottom w:val="single" w:color="BDC3C7" w:sz="1"/><w:right w:val="single" w:color="BDC3C7" w:sz="1"/></w:tcBorders><w:shd w:fill="1F3864" w:val="clear"/><w:left w:type="dxa" w:w="120"/><w:bottom w:type="dxa" w:w="80"/><w:right w:type="dxa" w:w="120"/></w:tcMar></w:tcPr><w:p><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>Output
+
+Value / Formula
+
+Notes
+
+Entry Price
+
+50% retracement of OB zone (Optimal Trade Entry)
+
+Can also be at zone edge or on LTF MSS confirmation candle
+
+Stop Loss
+
+Below OB low (bullish) / Above OB high (bearish) + 10–20 pip buffer
+
+Invalidation = price closes beyond full wick of OB candle
+
+Take Profit 1
+
+Previous swing high/low or next Fair Value Gap
+
+Minimum 1:1.5 Risk:Reward
+
+Take Profit 2
+
+Next major liquidity pool (BSL or SSL)
+
+Target 1:3 to 1:5 RR on higher quality setups
+
+Position Size
+
+Risk % / (Entry - SL) in pips/points
+
+Standard: 0.5%–2% risk per trade
+
+Trade Validity
+
+Until OB wick is closed through on HTF
+
+Cancel pending orders if OB is violated before tap
+
+Expected RR
+
+1:2 to 1:10 depending on timeframe and session
+
+Higher TF = wider TP targets = better RR potential
+
+Table 6: Trade Output Parameters
+
+7. Entry Techniques
+
+There are three primary entry methods for Order Block trades, ranging from aggressive to conservative. The right choice depends on your risk tolerance and the quality of the OB setup.
+
+7.1 Method 1 — Limit Order Entry (Conservative)
+
+Place a limit order at the 50% mark (equilibrium) of the Order Block zone before price arrives. This is the Optimal Trade Entry (OTE) technique and requires pre-planning.
+
+Enter: Limit buy/sell at the 50% retracement of the OB zone (open + close / 2)
+
+Advantage: Best average price; widest room before invalidation
+
+Disadvantage: OB may not be reached; requires patience and pre-identification
+
+Best for: Swing traders and day traders working from higher timeframes
+
+7.2 Method 2 — Market Structure Shift Entry (Standard)
+
+Wait for price to tap the OB zone, then drop to a lower timeframe and wait for a confirmed Market Structure Shift in the direction of the OB before entering.
+
+Enter: On the LTF close of the MSS confirmation candle
+
+Advantage: Highest confirmation; dramatically reduces false entries
+
+Disadvantage: Later entry means slightly wider stop; may miss fast moves
+
+Best for: Day traders using 15M/5M confirmation on 1H/4H OBs
+
+7.3 Method 3 — Aggressive Entry (For Scalpers)
+
+Enter immediately when price touches the edge of the Order Block zone, using the OB's structure as the entry trigger without waiting for additional LTF confirmation.
+
+Enter: At the open/close edge of the OB candle on the first tap
+
+Advantage: Best entry price; highest reward potential
+
+Disadvantage: Higher failure rate; no confirmation; not recommended for beginners
+
+Best for: Experienced scalpers on very high-quality, HTF-aligned OBs
+
+<w:left w:val="single" w:color="auto" w:sz="4"/><w:bottom w:val="single" w:color="auto" w:sz="4"/><w:right w:val="single" w:color="auto" w:sz="4"/><w:insideH w:val="single" w:color="auto" w:sz="4"/><w:insideV w:val="single" w:color="auto" w:sz="4"/></w:tblBorders></w:tblPr><w:gridCol w:w="1000"/><w:gridCol w:w="8360"/></w:tblGrid><w:shd w:fill="27AE60" w:val="clear"/><w:left w:type="dxa" w:w="120"/><w:bottom w:type="dxa" w:w="100"/><w:right w:type="dxa" w:w="120"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>BEST PRACTICE
+
+The most effective technique combines Methods 1 and 2: pre-identify the OB zone, set a limit order at the 50% level, and add a LTF MSS or FVG as a secondary confirmation filter. This gives near-optimal entry price with meaningful confirmation.
+
+8. Risk Management
+
+8.1 Stop Loss Placement
+
+Stop loss placement is mechanical with Order Blocks — there is a defined invalidation level that tells you exactly when the trade idea is wrong:
+
+Bullish OB: Stop Loss placed 10–20 pips (or 0.1–0.2 ATR) BELOW the LOW of the Order Block candle
+
+Bearish OB: Stop Loss placed 10–20 pips (or 0.1–0.2 ATR) ABOVE the HIGH of the Order Block candle
+
+Hard invalidation: If price CLOSES beyond the full wick of the OB candle on the same timeframe, the OB is invalid — no trade should be taken
+
+The buffer (10–20 pips) accounts for stop-loss hunting (deliberate spike through the OB to clear retail stops before the real move). Without a buffer, you will be stopped out by normal volatility around the zone.
+
+8.2 Take Profit Targets
+
+Take profit targets are set based on the next logical draw on liquidity — where price is algorithmically programmed to travel next:
+
+TP1 (Partial — 50% of position): Previous swing high/low in the trade direction, or the nearest Fair Value Gap
+
+TP2 (Partial — 25% of position): Next untouched Order Block in the trade direction
+
+TP3 (Remaining 25%): Major buy-side or sell-side liquidity pool (equal highs/lows on HTF)
+
+A minimum 1:2 Risk:Reward ratio is required for any OB trade. Quality setups on Daily/4H timeframes commonly achieve 1:5 to 1:15 RR.
+
+8.3 Position Sizing
+
+Use the following formula for position sizing regardless of market or timeframe:
+
+Position Size = (Account Balance x Risk %) / (Entry Price - Stop Loss Price)
+
+Maximum risk per trade: 1%–2% of total account balance
+
+Never exceed 5% total exposure across all open OB trades simultaneously
+
+Scale position size down on lower-quality OBs (second tap, counter-trend, Asian session)
+
+8.4 Trade Invalidation Rules
+
+An Order Block trade must be immediately closed or the pending order cancelled if:
+
+Price closes beyond the full High-Low range of the OB candle on the trading timeframe
+
+A CHoCH occurs in the OPPOSITE direction before price reaches the OB
+
+A major news event creates a gap beyond the OB zone
+
+The OB has been tapped more than twice (significantly weakened)
+
+9. Multi-Timeframe Analysis (MTF)
+
+Multi-timeframe analysis is not optional with the Order Block strategy — it is fundamental to it. The only OBs that achieve consistently high win rates are those that are aligned across at least two timeframes.
+
+Figure 6: Multi-Timeframe Analysis — Daily chart establishes bias, 4H locates the retest zone, 15M provides the precise entry trigger.
+
+9.1 The Top-Down Approach
+
+Always analyze from the highest timeframe down to the entry timeframe:
+
+MONTHLY / WEEKLY: Identify the macro trend direction and major institutional levels (major highs, lows, OBs from months prior). This is your master bias.
+
+DAILY: Identify the intermediate trend, key OB zones for the week, and the directional bias for the next 3–5 days. Mark the Daily OBs that are fresh and relevant.
+
+4-HOUR: Identify the current phase (AMD cycle stage), the intermediate OBs, and whether price is approaching a Daily OB for a retest. The 4H is your "setup" timeframe.
+
+1-HOUR / 15-MINUTE: The entry timeframe — confirm a Market Structure Shift at the OB zone, look for FVG fill, and identify the specific entry trigger candle.
+
+5-MINUTE / 1-MINUTE (for scalpers): Ultra-precise entry timing — look for the first strong displacement candle in the OB direction to pull the trigger.
+
+9.2 Session-Based Order Block Weighting
+
+Not all sessions produce equal-quality Order Blocks. The London and New York sessions produce the highest-volume, most institutionally driven price action:
+
+<w:left w:val="single" w:color="auto" w:sz="4"/><w:bottom w:val="single" w:color="auto" w:sz="4"/><w:right w:val="single" w:color="auto" w:sz="4"/><w:insideH w:val="single" w:color="auto" w:sz="4"/><w:insideV w:val="single" w:color="auto" w:sz="4"/></w:tblBorders></w:tblPr><w:gridCol w:w="2000"/><w:gridCol w:w="1800"/><w:gridCol w:w="2200"/><w:gridCol w:w="3360"/></w:tblGrid></w:trPr><w:left w:val="single" w:color="BDC3C7" w:sz="1"/><w:bottom w:val="single" w:color="BDC3C7" w:sz="1"/><w:right w:val="single" w:color="BDC3C7" w:sz="1"/></w:tcBorders><w:shd w:fill="1F3864" w:val="clear"/><w:left w:type="dxa" w:w="120"/><w:bottom w:type="dxa" w:w="80"/><w:right w:type="dxa" w:w="120"/></w:tcMar></w:tcPr><w:p><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>Session
+
+Time (ET)
+
+OB Quality
+
+Notes
+
+London Open
+
+02:00 – 05:00
+
+Highest
+
+Most institutional manipulation. Best OBs form here. London Killzone.
+
+NY Open
+
+07:00 – 10:00
+
+Very High
+
+Highest volume session. Strong OB formations. NY AM Killzone.
+
+London Close
+
+10:00 – 12:00
+
+Moderate
+
+NY/London overlap — high liquidity but often choppy.
+
+NY Afternoon
+
+13:00 – 17:00
+
+Low-Moderate
+
+Lower volume. OBs less reliable. Avoid new OB trades after 14:00 ET.
+
+Asian Session
+
+20:00 – 00:00
+
+Low
+
+Accumulation phase mostly. OBs here used as setup for London.
+
+Table 7: Session Quality for Order Block Trades (ET = Eastern Time)
+
+10. Timeframe Guide — All Trading Styles
+
+Figure 7: Order Block Timeframe Reference Guide — reliability, hold times, and recommended use cases across all trading styles.
+
+10.1 Scalping (1M–5M)
+
+Order Blocks on the 1-minute and 3-minute timeframes exist but are extremely short-lived — typically lasting minutes to hours. They are highly susceptible to noise and require MANDATORY higher-timeframe confluence (minimum 15M or 1H OB in same direction) to have any probabilistic edge. Risk:Reward is limited (1:1.5 to 1:3) but trade frequency is very high.
+
+Best instruments: Highly liquid markets — EUR/USD, Gold (XAU/USD), Bitcoin, NQ/ES futures
+
+Session requirement: MUST trade during London or NY Open (London/NY Killzones only)
+
+Minimum confluence: 15M or higher OB alignment + session timing
+
+10.2 Day Trading (15M–1H)
+
+The 15-minute and 1-hour timeframes are the most commonly used entry timeframes for day traders using the OB strategy. They provide a balance between trade frequency and signal quality. Typical hold times of 2–8 hours allow for clear OB formations and meaningful RR targets.
+
+HTF context required: 4H or Daily OB as the anchor zone
+
+Entry trigger: 15M MSS or FVG fill at the 4H/1H OB
+
+Session focus: London Open and NY AM sessions exclusively
+
+10.3 Swing Trading (4H–Daily)
+
+The 4-hour and Daily timeframes produce the most reliable Order Blocks due to the concentration of institutional activity. Swing trades last from days to weeks and offer the best Risk:Reward ratios (1:5 to 1:15). These timeframes reduce noise dramatically and require fewer trades for equivalent returns.
+
+HTF context: Weekly OB alignment for Daily trades; Daily for 4H trades
+
+Entry trigger: 1H or 4H MSS at the Daily OB; patience is critical
+
+Best markets: Forex majors, Gold, S&P 500, NQ, Bitcoin
+
+10.4 Position Trading (Weekly–Monthly)
+
+Monthly and Weekly Order Blocks represent the most powerful institutional footprints on any chart — zones where major accumulation or distribution has occurred over months. These OBs can hold for years and generate extraordinary RR when correctly identified. Position trading with OBs requires extreme patience and is typically reserved for experienced traders.
+
+TIMEFRAME RULE
+
+The higher the timeframe of the Order Block, the more powerful and long-lasting it is. A Daily OB will override a 15M OB. A Weekly OB will override a Daily OB. ALWAYS trade in the direction of the highest available OB.
+
+11. Market Coverage — All Asset Classes
+
+Figure 8: Order Block applicability across all major asset classes — effectiveness ratings and market-specific considerations.
+
+11.1 Forex Market
+
+The Forex market is the most natural home for the Order Block strategy. With over $7.5 trillion in daily volume, it is the most liquid market in the world — and the highest liquidity means the cleanest Order Blocks. The strategy originated in Forex and remains most refined here.
+
+Best pairs: EUR/USD, GBP/USD, USD/JPY (major pairs — highest liquidity)
+
+Commodity pairs: XAU/USD (Gold) — OBs are extremely respected due to central bank activity
+
+Key advantage: 24-hour access 5 days/week; session timing aligns with OB theory
+
+Consideration: Economic data releases (NFP, CPI, FOMC) can invalidate OBs without warning
+
+11.2 Cryptocurrency Market
+
+Cryptocurrencies trade 24/7 and are characterized by high volatility, making Order Blocks particularly visible — the manipulation phases are more aggressive and the impulse moves are stronger. However, this also means more frequent false OBs and manipulation by large holders ("whales").
+
+Best instruments: BTC/USD, ETH/USD, SOL/USD on spot and perpetual futures
+
+Recommended TFs: 4H and Daily for swing trades; 1H for day trades — 1M/5M too noisy
+
+Key advantage: 24/7 market means more OB opportunities; extreme RR on breakout OBs
+
+Consideration: Weekend gaps, exchange-specific manipulation, regulatory news risk
+
+11.3 Stocks & Equity Indices
+
+Order Blocks work exceptionally well on equity indices (S&P 500, NASDAQ, Dow, DAX) due to their high liquidity and institutional participation. Individual stocks can also show OBs, particularly around earnings releases and major news events.
+
+Best instruments: SPX / ES (S&P 500 futures), NQ (NASDAQ futures), NAS100 CFD
+
+Individual stocks: Large-cap, high-volume stocks (AAPL, NVDA, TSLA, MSFT)
+
+Key advantage: Defined trading hours create predictable session OB formations
+
+Consideration: Overnight gap risk; earnings releases disrupt OB logic temporarily
+
+11.4 Futures Markets
+
+Futures markets are arguably the most institutionally pure of all markets. The presence of publicly available volume data (unlike Forex) allows for superior OB validation using volume profile analysis alongside price structure.
+
+Best instruments: ES (S&P), NQ (NASDAQ), CL (Crude Oil), GC (Gold), SI (Silver), ZB (T-Bond)
+
+Key advantage: Volume data confirms OB quality; institutional COT data provides additional context
+
+Consideration: Contract rollover dates can create phantom price gaps at OB zones
+
+11.5 Commodities
+
+Commodities including Crude Oil, Natural Gas, Gold, Silver, and agricultural products all exhibit Order Block behavior, though they are more heavily influenced by fundamental factors than pure technical markets.
+
+Key advantage: COT (Commitment of Traders) reports provide confirmation of institutional positioning
+
+Best OB setups: Weekly and Daily OBs aligned with COT data and macroeconomic trend
+
+Consideration: Supply/demand shocks (OPEC decisions, weather events) can override technical OBs
+
+12. Advanced Confluences & Combinations
+
+Order Blocks become significantly more powerful when combined with other institutional concepts. The more confluence factors align, the higher the probability of a successful trade.
+
+12.1 OB + Fair Value Gap (FVG) Strategy
+
+When a Fair Value Gap exists within or adjacent to an Order Block zone, the probability of a strong reaction increases dramatically. This is because institutions have two reasons to defend the zone: the OB orders AND the FVG imbalance. Entry strategy: Wait for price to retrace into the OB zone, watch for the FVG within the OB to be filled, then enter on the first rejection candle. Stop Loss sits below the OB low (bullish) or above OB high (bearish).
+
+12.2 OB + Liquidity Sweep Strategy
+
+The highest probability OB setups occur AFTER a liquidity sweep. The sequence is: (1) Price sweeps a significant high or low (the liquidity grab), (2) The last candle before the sweep reversal is the OB, (3) Price returns to the OB zone for retest and continuation. This sequence confirms that institutions have completed their order-filling process and are ready to drive price in the intended direction.
+
+12.3 OB + Fibonacci Confluence
+
+The Optimal Trade Entry (OTE) zone (62%–79% Fibonacci retracement) frequently aligns with Order Block zones. When the 62%–79% Fibonacci retracement of a swing move falls within an Order Block, it creates an exceptionally powerful entry zone that is used by institutional algorithms as the ideal position entry.
+
+12.4 OB + Market Structure (BOS/CHoCH)
+
+An Order Block that is directly responsible for creating a Break of Structure (BOS) or Change of Character (CHoCH) carries the highest institutional weight of any OB type. These are called "High Probability Order Blocks" or "Source OBs" — they are the exact zones where the institutional trend was established.
+
+CONFLUENCE RULE
+
+Score your setups: +1 for each confluence factor (HTF alignment, fresh OB, liquidity sweep prior, FVG present, session timing, Fibonacci OTE alignment). Only take trades scoring 4 or higher out of 6. This filter alone dramatically improves win rate.
+
+13. Common Mistakes & How to Avoid Them
+
+<w:left w:val="single" w:color="auto" w:sz="4"/><w:bottom w:val="single" w:color="auto" w:sz="4"/><w:right w:val="single" w:color="auto" w:sz="4"/><w:insideH w:val="single" w:color="auto" w:sz="4"/><w:insideV w:val="single" w:color="auto" w:sz="4"/></w:tblBorders></w:tblPr><w:gridCol w:w="3200"/><w:gridCol w:w="3200"/><w:gridCol w:w="2960"/></w:tblGrid></w:trPr><w:left w:val="single" w:color="BDC3C7" w:sz="1"/><w:bottom w:val="single" w:color="BDC3C7" w:sz="1"/><w:right w:val="single" w:color="BDC3C7" w:sz="1"/></w:tcBorders><w:shd w:fill="1F3864" w:val="clear"/><w:left w:type="dxa" w:w="120"/><w:bottom w:type="dxa" w:w="80"/><w:right w:type="dxa" w:w="120"/></w:tcMar></w:tcPr><w:p><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>Mistake
+
+Why It Happens
+
+Fix
+
+Trading every OB regardless of quality
+
+FOMO; impatience with waiting for setups
+
+Grade every OB — only trade score 4/6 or higher
+
+Entering on the impulse (not the retest)
+
+Fear of missing the move
+
+NEVER enter on the impulse. Patience = discipline. Wait for the retest.
+
+Ignoring HTF bias
+
+Focusing only on the entry timeframe
+
+Always start your analysis from Daily/Weekly. No HTF context = no trade.
+
+Trading tapped (mitigated) OBs
+
+Not tracking which OBs have been visited
+
+Mark OBs as Fresh, Tapped Once, or Exhausted on your chart.
+
+Moving stop loss into loss
+
+Hoping the trade recovers
+
+Define and HONOR your invalidation level before entering. Never move SL wider.
+
+Trading Asian session OBs alone
+
+Mistaking noise for structure
+
+Asian OBs valid only as continuation into London/NY. Never trade them in isolation.
+
+Over-marking OBs
+
+Seeing OBs everywhere
+
+Only mark OBs that formed BOS or CHoCH. Strict structural criteria, not every candle.
+
+Ignoring news events
+
+Not checking economic calendar
+
+Check the economic calendar. Avoid new OB entries 15 mins before high-impact news.
+
+Table 8: Common Order Block Mistakes and Solutions
+
+14. Tools, Indicators & Software
+
+The following tools are commonly used by Order Block traders for identification, confirmation, and automation:
+
+14.1 Charting Platforms
+
+TradingView: Most popular platform; extensive OB indicator library (free & paid). Best for multi-timeframe analysis. Recommended indicators: LuxAlgo Price Action Concepts, ICT Order Block Detector.
+
+MT4 / MT5: Standard Forex trading platforms with automated OB expert advisors available
+
+NinjaTrader: Best for futures markets with superior volume profile integration
+
+ThinkOrSwim: Excellent for US stocks and options with solid scripting capability
+
+14.2 Key Indicators to Combine with OBs
+
+ATR (Average True Range): Validates impulse strength. Impulse should be 1.5x–2x the ATR to confirm institutional momentum.
+
+Volume Profile: Identifies high-volume nodes that often align with OB zones in futures/stocks
+
+Fibonacci Retracement: Mark 62%–79% OTE zone within identified OBs
+
+EMA (9/21 crossover): Secondary trend confirmation; OBs above 9/21 EMAs = bullish context
+
+RSI Divergence: Confluence for reversal OBs and Breaker Block setups
+
+14.3 Automated OB Detection Systems
+
+Several algorithmic tools can automatically identify and mark Order Blocks in real time:
+
+LuxAlgo Price Action Concepts (TradingView): Industry-leading OB detection with multi-timeframe overlay, FVG detection, and color-coded zone strength
+
+ICT-based Pine Script indicators: Community-built, free scripts on TradingView for OB, Breaker, and FVG detection
+
+Custom Python bots: Using CCXT (crypto), Alpaca API (stocks), or broker APIs to build programmatic OB scanners based on the pseudocode framework in Chapter 6
+
+TOOL NOTE
+
+No automated tool replaces the judgment required for high-quality OB selection. Use automated detection for scanning, but always perform manual validation (especially HTF context, mitigation status, and session timing) before executing.
+
+15. Quick Reference Glossary
+
+<w:left w:val="single" w:color="auto" w:sz="4"/><w:bottom w:val="single" w:color="auto" w:sz="4"/><w:right w:val="single" w:color="auto" w:sz="4"/><w:insideH w:val="single" w:color="auto" w:sz="4"/><w:insideV w:val="single" w:color="auto" w:sz="4"/></w:tblBorders></w:tblPr><w:gridCol w:w="2400"/><w:gridCol w:w="6960"/></w:tblGrid></w:trPr><w:left w:val="single" w:color="BDC3C7" w:sz="1"/><w:bottom w:val="single" w:color="BDC3C7" w:sz="1"/><w:right w:val="single" w:color="BDC3C7" w:sz="1"/></w:tcBorders><w:shd w:fill="1F3864" w:val="clear"/><w:left w:type="dxa" w:w="120"/><w:bottom w:type="dxa" w:w="80"/><w:right w:type="dxa" w:w="120"/></w:tcMar></w:tcPr><w:p><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>Term
+
+Definition
+
+Order Block (OB)
+
+Price zone where large institutional orders were placed; last opposing candle before a significant impulse
+
+Bullish OB (BOB)
+
+Last bearish candle before a bullish impulse + BOS; acts as support on retest
+
+Bearish OB (BeOB)
+
+Last bullish candle before a bearish impulse + BOS; acts as resistance on retest
+
+Breaker Block
+
+Failed Order Block that has flipped polarity; now acts in the opposite direction
+
+Mitigation Block
+
+Previously-tapped OB that is revisited; reduced strength but still valid
+
+Rejection Block
+
+Long-wick candle at a market high/low after a liquidity sweep; signals sharp reversal
+
+BOS
+
+Break of Structure — price creates a new high (bullish) or new low (bearish), confirming trend
+
+CHoCH
+
+Change of Character — structural break in the OPPOSITE direction; signals trend reversal
+
+MSS
+
+Market Structure Shift — lower-timeframe CHoCH used as entry trigger at an OB zone
+
+FVG
+
+Fair Value Gap — three-candle imbalance zone; price often returns to fill before continuation
+
+AMD
+
+Accumulation, Manipulation, Distribution — the institutional trading cycle
+
+IPDA
+
+Interbank Price Delivery Algorithm — the algorithmic framework institutions use to deliver price
+
+BSL
+
+Buy-Side Liquidity — stops and pending orders clustered above swing highs
+
+SSL
+
+Sell-Side Liquidity — stops and pending orders clustered below swing lows
+
+OTE
+
+Optimal Trade Entry — the 62%–79% Fibonacci retracement level within an OB; ideal entry zone
+
+HTF
+
+Higher Time Frame — the reference timeframe for bias (Daily, Weekly, Monthly)
+
+LTF
+
+Lower Time Frame — the entry timeframe used for precision triggers (15M, 5M, 1M)
+
+Mitigation
+
+When price returns to and "fills" an existing Order Block, using up the remaining orders
+
+Fresh OB
+
+An Order Block that has never been touched (retested) since formation; highest quality
+
+Killzone
+
+High-probability session windows: London Open (02:00–05:00 ET) and NY Open (07:00–10:00 ET)
+
+COT
+
+Commitment of Traders report — shows net institutional positioning in futures; confirms OB bias
+
+Table 9: Complete Order Block Strategy Glossary
+
+DISCLAIMER
+
+This document is for educational purposes only and does not constitute financial advice. Trading in financial markets involves substantial risk of loss. Past performance of any strategy does not guarantee future results. Always conduct your own research and consult a qualified financial advisor before trading.

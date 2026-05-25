@@ -11,6 +11,7 @@ import Profile from '@/pages/Profile'
 import StrategyManager from '@/pages/StrategyManager'
 import StrategyDetail from '@/pages/StrategyDetail'
 import Settings from '@/pages/Settings'
+import JournalDateDetail from '@/pages/JournalDateDetail'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
       <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/journal" element={<TradingJournal />} />
+      <Route path="/journal/:date" element={<JournalDateDetail />} />
       <Route path="/profile" element={<Profile />} />
       <Route path="/strategies" element={<StrategyManager />} />
       <Route path="/strategies/:strategyId" element={<StrategyDetail />} />

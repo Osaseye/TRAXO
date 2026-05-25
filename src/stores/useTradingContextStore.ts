@@ -20,6 +20,8 @@ export interface JournalEntry {
   taken: boolean
   outcome: JournalOutcome
   createdAt: number
+  notes?: string
+  attachmentUrl?: string // local object URL only for now
 }
 
 interface TradingContextState {
@@ -33,9 +35,35 @@ interface TradingContextState {
   setMaxDailyLossPct: (value: number) => void
   logSuggestionDecision: (entry: Omit<JournalEntry, 'id' | 'createdAt'>) => void
   setJournalOutcome: (suggestionKey: string, outcome: JournalOutcome) => void
+  addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'createdAt'>) => void
+  editJournalEntry: (id: string, updates: Partial<JournalEntry>) => void
+  deleteJournalEntry: (id: string) => void
 }
 
 export const useTradingContextStore = create<TradingContextState>((set) => ({
+    addJournalEntry: (entry) =>
+      set((state) => {
+        const newEntry: JournalEntry = {
+          ...entry,
+          id: `jrnl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: Date.now(),
+        }
+        return { journal: [newEntry, ...state.journal].slice(0, 300) }
+      }),
+
+    editJournalEntry: (id, updates) =>
+      set((state) => {
+        const idx = state.journal.findIndex((j) => j.id === id)
+        if (idx < 0) return state
+        const updated = [...state.journal]
+        updated[idx] = { ...updated[idx], ...updates }
+        return { journal: updated }
+      }),
+
+    deleteJournalEntry: (id) =>
+      set((state) => ({
+        journal: state.journal.filter((j) => j.id !== id),
+      })),
   accountBalance: 10000,
   riskPerTradePct: 1,
   maxDailyLossPct: 2,

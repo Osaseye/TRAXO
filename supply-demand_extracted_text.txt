@@ -1,0 +1,1415 @@
+SUPPLY & DEMAND
+
+TRADING STRATEGY
+
+─────────────────────────────────────────
+
+A Comprehensive Research Document
+
+Complete Coverage: All Markets · All Timeframes · Algorithmic Framework
+
+Markets Covered:
+
+Forex  ·  Stocks  ·  Crypto  ·  Commodities  ·  Indices  ·  Futures
+
+Prepared by: Quantitative Trading Research
+
+Date: May 25, 2026
+
+1. Introduction to Supply & Demand Trading
+
+Supply and Demand (S&D) trading is one of the most powerful and institutionally-grounded methodologies in financial markets. Unlike conventional support/resistance trading, S&D theory is rooted in the fundamental economic forces that actually drive price movement — the imbalance between buying (demand) and selling (supply) pressure created by large institutional participants.
+
+At its core, Supply and Demand trading is the art of identifying price zones where significant institutional orders were previously placed, and anticipating that those same institutions — central banks, hedge funds, commercial banks, and market makers — will return to those zones to fill remaining orders. When they do, price reacts explosively, creating high-probability trading opportunities for retail traders who have correctly mapped these zones.
+
+Why S&D Works — The Institutional Logic
+
+• Institutions cannot fill massive orders at a single price — they need time (consolidation/base) to accumulate or distribute
+
+• When price leaves a zone quickly, unfilled orders remain pending at that level
+
+• When price returns, those pending orders are triggered, causing the same reaction
+
+• This creates a self-fulfilling, repeating pattern on every timeframe and every market
+
+• The stronger the initial departure from a zone, the more orders remain, and the stronger the reaction on return
+
+1.1 Historical Context
+
+The Supply and Demand methodology was popularized by Sam Seiden, a former floor trader at the Chicago Mercantile Exchange (CME), who observed that price movement was not random — it was driven by the placement and execution of large institutional orders. His observations led to the codification of supply and demand zones as distinct trading instruments, separating them from traditional technical analysis patterns.
+
+Over the years, institutions such as the Inner Circle Trader (ICT), Eightify, and several prop trading firms have refined the methodology into increasingly precise algorithmic frameworks, incorporating concepts such as liquidity grabs, Fair Value Gaps (FVGs), Order Blocks, and Breaker Blocks — all of which are extensions of the original S&D theory.
+
+1.2 Core Principles
+
+Price moves from one zone of imbalance to another
+
+Zones are created by rapid price departure from a base (consolidation)
+
+Fresh (untested) zones are significantly more powerful than tested ones
+
+Higher timeframe zones take precedence over lower timeframe zones
+
+The strength of a zone is measured by the speed and size of the departure candle
+
+Supply and Demand is fractal — the same patterns appear on all timeframes
+
+Price seeks liquidity before reversing at major zones
+
+Figure 1: Anatomy of Supply & Demand Zones — Proximal and Distal Lines
+
+2. Zone Types & Formation Patterns
+
+Supply and Demand zones are classified by the price action pattern that formed them. There are four primary formation types, each indicating a specific institutional behavior. Understanding how zones form is the foundation of the entire strategy.
+
+2.1 The Four Primary Zone Formations
+
+2.1.1 Rally-Base-Drop (RBD) — Supply Zone
+
+A Rally-Base-Drop formation identifies a Supply zone. Price rallies up (institutions distribute/sell to retail buyers), consolidates in a tight base (institutions continue loading short positions), then drops sharply away from the zone. The base represents where the institutional sell orders were placed. When price returns to this area, the remaining sell orders trigger, causing another drop.
+
+2.1.2 Drop-Base-Rally (DBR) — Demand Zone
+
+The mirror of RBD. Price drops down, consolidates in a base, then rallies strongly. Institutions were accumulating buy positions in the base. This is the most common and cleanest demand formation. The sharp rally departure indicates massive unfilled buy orders remaining in the zone.
+
+2.1.3 Rally-Base-Rally (RBR) — Continuation Demand
+
+Price rallies, consolidates briefly (minor pullback), then continues rallying. This is a continuation demand zone within an uptrend. Institutions used the base to add to existing long positions. These zones are slightly weaker than fresh DBR zones but occur more frequently in strong trends.
+
+2.1.4 Drop-Base-Drop (DBD) — Continuation Supply
+
+The mirror of RBR. Price drops, consolidates, then continues dropping. Institutions added to short positions in the base. These are continuation supply zones within a downtrend. Tradeable when HTF trend is confirmed bearish.
+
+Figure 2: The Three Primary Zone Formation Types with Visual Pattern Examples
+
+2.2 Zone Components
+
+Zone Component
+
+Definition & Importance
+
+Proximal Line
+
+The closest edge of the zone to current price. This is where price enters the zone. Entry triggers are placed here.
+
+Distal Line
+
+The far edge of the zone, furthest from current price. Stop losses are placed just beyond this level.
+
+Zone Width
+
+The distance between proximal and distal lines. Tighter zones (small base) indicate faster institutional decisioning = stronger zones.
+
+Base Candles
+
+The consolidation candles within the zone. Fewer, smaller candles = more concentrated orders = stronger zone.
+
+Departure Candle
+
+The large candle that exits the zone. Larger body = more institutional intent = stronger zone.
+
+Mitigation Level
+
+The 50% midpoint of the zone. Price often reacts strongly here as a partial mitigation.
+
+2.3 Zone Quality Criteria
+
+Not all zones are created equal. A strict quality filter must be applied before trading any zone. The following criteria determine zone strength:
+
+Freshness: Has the zone been tested before? Fresh (first touch) zones are significantly stronger.
+
+Departure Speed: How many candles did it take to leave the zone? Fewer = stronger (ideally 1-2 candles).
+
+Base Size: How many candles formed the base? Fewer = stronger (1-4 candles ideal).
+
+HTF Alignment: Does the zone align with a higher timeframe zone? Confluence = stronger signal.
+
+Risk-to-Reward: Is there clear space for the trade to develop? Minimum 1:2 RR required.
+
+Departure Candle Size: Large bodied candle with minimal wicks = institutional conviction.
+
+Pattern Quality: Clean RBD, DBR, RBR, or DBD pattern with no overlapping candles in base.
+
+Figure 3: Zone Strength Scoring System — Minimum threshold score of 7/10 required
+
+3. Algorithmic Framework — Inputs, Logic & Outputs
+
+The Supply and Demand strategy can be fully systematized into a rules-based algorithm. Below is the complete specification — from data inputs to trade execution outputs — suitable for both manual execution and automated system development.
+
+Algorithm Overview
+
+Name: Supply & Demand Zone Trading System (SDZT)
+
+Type: Mean-reversion + Trend-following hybrid
+
+Execution: Top-down multi-timeframe analysis
+
+Markets: All liquid financial markets (Forex, Stocks, Crypto, Commodities, Indices)
+
+Timeframes: Monthly → 1 Minute (fractal application)
+
+Risk model: Fixed percentage risk per trade (default 1%)
+
+3.1 System Inputs
+
+Required Data Inputs
+
+Input
+
+Type
+
+Source
+
+Description
+
+OHLCV Data
+
+Time-series
+
+Broker/Exchange feed
+
+Open, High, Low, Close, Volume for all required timeframes
+
+HTF Trend
+
+Categorical
+
+Calculated from price
+
+Bullish / Bearish / Ranging — from Daily/Weekly chart
+
+Zone List
+
+Spatial array
+
+Algorithm output
+
+Array of [proximal, distal, type, freshness, score] for all TFs
+
+Current Price
+
+Float
+
+Live market feed
+
+Real-time bid/ask price used for proximity calculations
+
+ATR (14)
+
+Float
+
+Calculated
+
+Average True Range — used for dynamic SL and zone width filtering
+
+Session
+
+Categorical
+
+Time-based
+
+London / New York / Asian — affects zone weighting and timing
+
+Volatility State
+
+Float
+
+VIX or ATR ratio
+
+High/Normal/Low volatility — adjusts position sizing
+
+Account Balance
+
+Float
+
+Broker API
+
+Current available capital for position sizing calculations
+
+3.2 Zone Detection Logic
+
+The core algorithm scans price history to detect and classify supply and demand zones. The logic operates as follows:
+
+Zone Detection Pseudocode
+
+FOR each candle C in price_history:
+
+   IF candle[C] is a "base" candle (body < 40% of ATR):
+
+      Look forward: IF next 1-3 candles depart > 2x ATR in one direction:
+
+         Look backward: What preceded the base?
+
+            IF price was rallying → base → drop: MARK as Supply Zone (RBD)
+
+            IF price was dropping → base → rally: MARK as Demand Zone (DBR)
+
+            IF price was rallying → base → rally: MARK as Demand Zone (RBR)
+
+            IF price was dropping → base → drop: MARK as Supply Zone (DBD)
+
+      CALCULATE: proximal = closest edge, distal = far edge
+
+      CALCULATE: zone_score = freshness + departure_speed + base_size + htf_alignment
+
+      IF zone_score >= 7: ADD to active_zones_list
+
+      IF zone_score < 7: DISCARD zone
+
+3.3 Trade Entry Logic
+
+Condition
+
+Bullish (Demand)
+
+Bearish (Supply)
+
+Both
+
+HTF Trend
+
+Bullish (Daily/Weekly)
+
+Bearish (Daily/Weekly)
+
+Always check HTF first
+
+Zone Type
+
+DBR or RBR
+
+RBD or DBD
+
+Must match formation pattern
+
+Zone Score
+
+>= 7/10
+
+>= 7/10
+
+Apply scoring rubric
+
+Price Location
+
+At/in demand zone
+
+At/in supply zone
+
+Within proximal line
+
+Entry Trigger (Aggressive)
+
+Touch of proximal line
+
+Touch of proximal line
+
+Immediate market/limit order
+
+Entry Trigger (Conservative)
+
+Bullish engulfing/pin bar
+
+Bearish engulfing/pin bar
+
+Wait for LTF confirmation candle
+
+Volume Confirmation
+
+Volume spike on entry
+
+Volume spike on entry
+
+Optional but increases conviction
+
+Session Filter
+
+London/NY open preferred
+
+London/NY open preferred
+
+Avoid low-volume Asian session entries
+
+3.4 Stop Loss & Take Profit Outputs
+
+Parameter
+
+Rule & Calculation
+
+Stop Loss (SL)
+
+Place 2-5 pips / ticks BEYOND the distal line of the zone. Never inside the zone.
+
+SL Formula
+
+SL = Distal_Line ± (ATR × 0.1) — adds buffer for spread and slippage
+
+Take Profit 1 (TP1)
+
+First significant opposing zone (supply for longs, demand for shorts)
+
+Take Profit 2 (TP2)
+
+Second opposing zone or major structural level — book remaining position
+
+Trailing Stop
+
+Trail behind each new base/zone formed during the move (manual trailing)
+
+Partial Exit Rule
+
+Close 50% at TP1, trail remaining 50% to TP2 and beyond
+
+Break-Even Rule
+
+Move SL to entry after price moves 1R (1× risk distance) in your favor
+
+Max SL Width
+
+Maximum SL = 2× ATR(14). If zone is wider, skip the trade.
+
+Figure 4: Complete Supply & Demand Trading Algorithm — Decision Flowchart
+
+4. Timeframe Application — All Timeframes
+
+Supply and Demand is a fractal strategy, meaning the exact same patterns and rules apply on every timeframe. The key principle is top-down analysis: always start from the highest timeframe to determine the macro bias and primary zones, then drill down progressively to lower timeframes to pinpoint precise entries.
+
+Figure 5: Timeframe Hierarchy — Top-Down Supply & Demand Analysis Flow
+
+4.1 The Top-Down Analysis Process
+
+The top-down approach is non-negotiable in S&D trading. You do not look at lower timeframes in isolation — they must always be viewed in the context of higher timeframe zones and trend. This prevents trading against the dominant institutional flow.
+
+Timeframe
+
+Role
+
+What to Do
+
+Zone Strength
+
+Monthly (MN)
+
+Macro bias & major zones
+
+Identify primary trend direction; mark major S/D levels only
+
+★★★★★ Strongest
+
+Weekly (W1)
+
+Swing setup & zone context
+
+Confirm monthly bias; find high-quality weekly zones
+
+★★★★☆ Very Strong
+
+Daily (D1)
+
+Primary trading timeframe
+
+Main zone identification; determine trade direction
+
+★★★★☆ Strong
+
+4-Hour (H4)
+
+Intraday direction
+
+Refine daily zones; confirm intraday bias; find entry zone
+
+★★★☆☆ Good
+
+1-Hour (H1)
+
+Entry zone trigger
+
+Identify precise entry zone; look for LTF reaction
+
+★★★☆☆ Moderate
+
+15-Minute (M15)
+
+Entry confirmation
+
+Find confirmation candle pattern; set exact entry
+
+★★☆☆☆ Lower
+
+5-Minute (M5)
+
+Precise execution
+
+Fine-tune entry for best price; manage active trade
+
+★★☆☆☆ Scalp
+
+1-Minute (M1)
+
+Ultra-precision scalping
+
+Scalp entries only within confirmed HTF zone; tight SL
+
+★☆☆☆☆ Noise risk
+
+4.2 Timeframe-Specific Entry Frameworks
+
+Monthly/Weekly — Position Trading
+
+On the monthly and weekly timeframes, zones are massive — often spanning hundreds of pips or several percentage points. Position trades held for weeks to months. Risk per trade can be 0.5-1.5% given the longer holding period. These zones are created by central bank decisions, quarterly earnings, or macro economic shifts. Entries are typically executed on the daily or weekly close candle.
+
+Daily/4H — Swing Trading (Primary Approach)
+
+This is the bread and butter of S&D trading for most practitioners. Daily zones are formed by significant institutional activity — major news events, end-of-day position building, or economic data releases. The 4H chart is used to find the entry zone within the daily zone. Trades are held from several hours to several days. This timeframe offers the best balance of signal quality and frequency.
+
+1H/15M — Day Trading
+
+Intraday supply and demand zones on the 1H and 15M charts are highly reliable during peak market sessions (London and New York opens). These zones are created by session-specific institutional activity. Trades are entered and closed within the same trading day. The 15M is used for entry triggers after the 1H zone is identified. ATR-based stops are essential at these timeframes.
+
+5M/1M — Scalping
+
+Scalping S&D zones on the 5M and 1M timeframes requires the highest precision and the fastest execution. These zones form during specific intraday periods — typically the first 30-90 minutes of London or New York session. A scalper must have a confirmed HTF zone (at least 15M or 1H) before taking a scalp entry on the 1M/5M. Risk-to-reward must be minimum 1:1.5 given the noise at these levels.
+
+Multi-Timeframe Rule — The 3-TF Alignment
+
+For the highest probability trades, you want alignment across at least 3 timeframes:
+
+  → HTF (e.g., Daily): Confirms trend direction and major zone
+
+  → MTF (e.g., 4H): Confirms zone and entry setup
+
+  → LTF (e.g., 15M): Provides precise entry trigger
+
+When all 3 timeframes agree → HIGH CONVICTION TRADE. This is your A+ setup.
+
+When only 2 agree → MODERATE quality. Reduce position size.
+
+When only 1 agrees → DO NOT TRADE. Wait for confluence.
+
+5. Market-Specific Application
+
+Supply and Demand principles are universal — they apply to any liquid market where institutional participants operate. However, each market has unique characteristics that affect how zones form, how long they remain valid, and how they should be traded. This section covers the nuances of applying S&D across all major asset classes.
+
+Figure 6: Supply & Demand Trading Across All Major Financial Markets
+
+5.1 Forex Market
+
+The Forex market is the largest and most liquid financial market in the world, with $7.5 trillion traded daily. It is the ideal market for S&D trading because institutional activity — central banks, commercial banks, hedge funds — is constant and creates clean, well-defined zones.
+
+Forex S&D Characteristics
+
+Details
+
+Best Pairs for S&D
+
+EUR/USD, GBP/USD, USD/JPY, AUD/USD, XAU/USD (Gold) — highest liquidity = cleanest zones
+
+Session Timing
+
+London Open (08:00-10:00 GMT) and NY Open (13:00-15:00 GMT) produce the strongest zone reactions
+
+Zone Invalidation
+
+A zone is invalidated when price closes THROUGH it (body close), not just wicks through it
+
+News Events
+
+High-impact news (NFP, CPI, FOMC) can destroy or massively strengthen existing zones
+
+Spread Consideration
+
+Add spread to SL calculation. On major pairs, spread is minimal (0.5-2 pips typical)
+
+Key Confluences
+
+S&D zone + round number (1.2000, 1.1500) + Fibonacci level = very high probability
+
+5.2 Stock Market & Equities
+
+The stock market creates supply and demand zones through a combination of earnings reports, analyst upgrades/downgrades, macro economic data, and institutional re-balancing. Individual stocks can have very explosive zone reactions due to the concentrated ownership by institutional funds.
+
+Stock Market S&D Characteristics
+
+Details
+
+Best Instruments
+
+Large-cap liquid stocks (AAPL, MSFT, NVDA, TSLA), ETFs (SPY, QQQ), Stock Index CFDs
+
+Gap Trading
+
+Overnight gaps often fill back to S&D zones. Fade the gap to the unfilled zone is a powerful setup.
+
+Earnings Zones
+
+Post-earnings candles create some of the most powerful supply or demand zones — institutional repositioning
+
+Volume Profile
+
+Combine S&D zones with volume profile (POC, VAH, VAL) for higher probability confirmation
+
+Market Hours
+
+US session 9:30-16:00 EST only. Pre/post market can form zones but execution is riskier (wide spreads)
+
+Sector Rotation
+
+When a sector rotates, entire sector zones align — trade in direction of institutional sector flow
+
+5.3 Cryptocurrency Market
+
+Crypto markets operate 24/7 with no central exchange, making S&D zones particularly powerful because unfilled orders can remain valid for extended periods. The extreme volatility of crypto means zones tend to be larger and more explosive when triggered.
+
+Crypto S&D Characteristics
+
+Details
+
+Best Assets
+
+BTC, ETH for cleanest zones. Large-cap altcoins (SOL, BNB, XRP) also work well.
+
+24/7 Market
+
+Zones form at any hour. Weekend gaps are common when traditional markets re-open.
+
+Zone Size
+
+Crypto zones are larger (0.5-3% of price). Adjust SL accordingly — use % not fixed pip values.
+
+Liquidity Grabs
+
+Crypto frequently produces "stop hunts" — price sweeps below a zone then rockets higher. Trade after the sweep.
+
+Exchange Differences
+
+Spot vs Futures charts may differ slightly. Always trade from the exchange with highest volume for that asset.
+
+On-Chain Data
+
+Whale wallet movements can confirm or invalidate zones — optional but powerful additional context.
+
+5.4 Commodities
+
+Commodities are the most literal embodiment of supply and demand — physical supply constraints, demand cycles, and geopolitical events create powerful zones. Gold (XAU/USD) is a particularly clean market for S&D trading.
+
+Commodity S&D Characteristics
+
+Details
+
+Gold (XAU/USD)
+
+The most popular commodity for S&D trading. Clean institutional zones. Strong reaction to USD strength/weakness.
+
+Oil (WTI/Brent)
+
+Heavily influenced by OPEC decisions. S&D zones align with production cut/increase announcements.
+
+Silver (XAG/USD)
+
+Follows Gold with more volatility. Same S&D rules apply. Larger percentage moves.
+
+Agricultural
+
+Seasonal patterns affect zone validity. Planting/harvest seasons create predictable S/D imbalances.
+
+Zone Validity
+
+Commodity zones can remain valid for months. HTF zones (Monthly/Weekly) are especially powerful.
+
+Storage & Seasons
+
+Physical supply/demand creates natural seasonal patterns that align with technical S&D zones.
+
+5.5 Indices
+
+Stock indices (SPX500, NAS100, DAX40, FTSE100, Nikkei225) are among the most powerful instruments for S&D trading because they represent the collective institutional activity across an entire market. Major central bank decisions and economic data directly create or destroy index zones.
+
+Index S&D Characteristics
+
+Details
+
+Best Indices
+
+S&P 500 (SPX), NASDAQ 100 (NAS100), Dow Jones (US30), DAX40, FTSE100
+
+Macro Sensitivity
+
+Fed rate decisions, GDP data, CPI reports create the strongest index zones
+
+Correlation
+
+Major indices correlate highly. S&D zone on SPX often aligns with NAS100 and US30.
+
+ATH/ATL Zones
+
+All-time highs create fresh supply zones with no overhead resistance. ATLs create demand.
+
+Gamma Exposure
+
+Options market maker hedging (GEX) often aligns with S&D zones — powerful confirmation.
+
+Session Open Gaps
+
+Index futures gaps (Sunday open vs Friday close) often fill to the nearest S&D zone.
+
+6. Entry Models & Trade Execution
+
+There are two primary entry models in Supply and Demand trading: the Aggressive (limit order) entry and the Conservative (confirmation) entry. Each has advantages and trade-offs in terms of risk, fill rate, and reward potential.
+
+Figure 7: Model 1 (Aggressive Limit Entry) vs Model 2 (Conservative Confirmation Entry)
+
+6.1 Model 1 — Aggressive Entry (Limit Order at Zone)
+
+The aggressive entry places a limit order at the proximal line of the zone before price arrives. This gets the best possible entry price and the widest risk-to-reward ratio, but carries the risk that the zone may not hold and price continues through.
+
+Aggressive Entry — Step-by-Step Execution
+
+1. Identify the demand zone on your chosen timeframe
+
+2. Calculate proximal line (entry) and distal line (SL)
+
+3. Verify zone score ≥ 7/10 and HTF alignment confirmed
+
+4. Place LIMIT BUY order at the proximal line
+
+5. Place STOP LOSS 2-5 pips below the distal line
+
+6. Set TAKE PROFIT at next supply zone or 2R minimum
+
+7. Set maximum open time rule (e.g., cancel after 48 hours if not triggered)
+
+⚠ Cancel the order if a major news event occurs before zone is hit
+
+6.2 Model 2 — Conservative Entry (Confirmation Candle)
+
+The conservative entry waits for price to enter the zone AND produces a confirmation candle pattern (bullish engulfing, pin bar, inside bar breakout) before entering. This reduces the fill rate but significantly increases win rate, as you have visual confirmation that institutions are reacting at the zone.
+
+Conservative Entry — Confirmation Patterns
+
+✓ Bullish Engulfing: Large bullish candle completely engulfs the previous bearish candle — strong signal
+
+✓ Hammer/Pin Bar: Long lower wick (2x+ body), small upper wick, closing near the high — rejection of lower prices
+
+✓ Inside Bar Breakout: Small candle contained within prior candle; enter on break above its high
+
+✓ Morning Star: Three-candle pattern — bearish, small indecision, then strong bullish — very reliable
+
+✓ Bullish Marubozu: Full-bodied bullish candle with no wicks — pure institutional buying pressure
+
+✗ Avoid: Long upper wicks on entry candles — suggests sellers still in control within the zone
+
+6.3 Trade Management Rules
+
+Management Rule
+
+Specification
+
+Break-Even (BE)
+
+Move SL to entry (BE) after 1R profit. Example: risked 20 pips, move BE when +20 pips.
+
+Partial Profit 1
+
+Close 33% of position at 1R. Secures partial gain while letting rest run.
+
+Partial Profit 2
+
+Close another 33% at TP1 (first opposing zone). Runner position continues.
+
+Runner Management
+
+Trail final 33% using LTF S&D zones — trail SL to each new demand zone formed.
+
+Zone Re-test
+
+If price re-tests your entry zone after moving in your favor, it may be re-entering from supply side. Consider closing.
+
+Max Hold Time
+
+If trade hasnt moved in 48-72 hours (swing) or 4-8 hours (day trade) — close at break-even.
+
+News Management
+
+Close or hedge before major news events if trade is open and near a zone.
+
+Scaling In
+
+Only scale into a position if the zone holds and price offers a second entry at a superior price.
+
+7. Risk Management Framework
+
+Risk management is the single most important element of long-term trading success. Even the best S&D strategy will fail without disciplined, consistent risk management. The following framework is built around the principle that protecting capital is priority one — profits are a consequence of systematic risk management.
+
+Figure 8: Position Sizing & Risk/Reward Reference Table
+
+7.1 Position Sizing Formula
+
+Position Size Calculation
+
+Position Size (Lots) = Account Risk $ ÷ (Stop Loss in Pips × Pip Value)
+
+Example (Forex EUR/USD):
+
+  Account: $10,000 | Risk: 1% = $100 | SL: 20 pips | Pip value: $10/pip (standard lot)
+
+  Position Size = $100 ÷ (20 × $10) = $100 ÷ $200 = 0.50 lots
+
+Example (Crypto BTC):
+
+  Account: $5,000 | Risk: 1% = $50 | SL: 1% from entry | Entry: $65,000
+
+  SL distance: $650 | Position Size = $50 ÷ $650 = 0.077 BTC
+
+7.2 Risk Rules — The Non-Negotiables
+
+Maximum risk per trade: 1-2% of total account balance
+
+Maximum simultaneous open trades: 3-5 (prevents correlated losses)
+
+Maximum daily loss limit: 3-5% — stop trading for the day if hit
+
+Maximum weekly loss limit: 8% — stop trading for the week if hit
+
+Minimum Risk-to-Reward ratio: 1:2 (only take trades with at least 2R potential)
+
+Never move SL against your position (never widen the stop loss)
+
+Never add to a losing position (no averaging down)
+
+Correlated pairs count as one trade (EUR/USD long + GBP/USD long = one directional bet)
+
+7.3 Risk/Reward Targets by Timeframe
+
+Timeframe
+
+Min RR
+
+Target RR
+
+Max SL Width
+
+Monthly/Weekly
+
+1:3
+
+1:5+
+
+500-2000 pips
+
+Daily
+
+1:2.5
+
+1:4+
+
+100-500 pips
+
+4-Hour
+
+1:2
+
+1:3
+
+30-150 pips
+
+1-Hour
+
+1:2
+
+1:3
+
+15-60 pips
+
+15-Minute
+
+1:1.5
+
+1:2.5
+
+8-25 pips
+
+5-Minute
+
+1:1.5
+
+1:2
+
+5-15 pips
+
+1-Minute
+
+1:1.5
+
+1:2
+
+3-10 pips
+
+8. Advanced Concepts & Confluences
+
+Once the foundational S&D framework is mastered, several advanced concepts can be layered onto the strategy to dramatically increase the precision and win rate of individual trade setups.
+
+8.1 Liquidity Grabs (Stop Hunts)
+
+Before price reverses at a major S&D zone, institutions frequently engineer a "liquidity grab" — a brief spike beyond the zone to collect the stop losses of retail traders positioned there. Recognizing a liquidity grab in real time is one of the highest-conviction entry signals available.
+
+Liquidity Grab Entry — Sequence
+
+1. Price approaches a demand zone (proximal line visible to most traders)
+
+2. Price spikes BELOW the proximal line, often reaching the distal line or beyond
+
+3. Retail stop losses below the zone are collected (institutions accumulate at better prices)
+
+4. Price IMMEDIATELY reverses and closes back above the proximal line
+
+5. Enter on the close of the reversal candle — this is the highest conviction entry
+
+6. Stop Loss: Just below the low of the wick (liquidity grab wick)
+
+→ This setup has the tightest SL and widest RR of any S&D entry model
+
+8.2 Zone Confluence Factors
+
+Confluence Factor
+
+How It Strengthens the Zone
+
+HTF Zone Alignment
+
+When a 1H zone sits inside a Daily zone — multiple timeframes confirm institutional interest at that level
+
+Round Numbers
+
+Price levels ending in 000 or 00 (e.g. 1.2000, 50,000) — institutions cluster orders at psychological levels
+
+Fibonacci Levels
+
+61.8%, 50%, 38.2% retracement aligning with S&D zone — algorithmic system confluence
+
+Moving Averages
+
+200 EMA or 50 EMA intersecting with a zone — institutional trend-following systems align here
+
+VWAP / POC
+
+Volume-weighted average price or Volume Profile Point of Control at zone level — volume-based confluence
+
+Previous Structure
+
+Prior swing high/low aligning with a zone — multi-methodology confirmation
+
+Market Session Open
+
+Zone aligning with London or NY session open price — institutions begin the session at this level
+
+Fair Value Gap (FVG)
+
+An unmitigated gap in price action within or adjacent to the S&D zone — powerful magnetic level
+
+8.3 Zone Invalidation Rules
+
+A zone is not valid forever. The following events invalidate a zone and require it to be removed from your active zone list:
+
+CANDLE BODY CLOSE through the distal line — invalidated immediately. Wick penetrations alone do not invalidate.
+
+Price consolidates WITHIN the zone for more than 4-6 candles (on your trading TF) — zone is being absorbed.
+
+A major news event causes price to gap completely through the zone with no reaction.
+
+A new higher-quality zone forms in the same price area — supersedes the old zone.
+
+Zone was formed more than 3 months ago (Daily/HTF) without being tested — institutional orders likely cancelled.
+
+8.4 Order Blocks (ICT Concept)
+
+An Order Block is the specific candle — usually the last bearish candle before a rally, or the last bullish candle before a drop — where institutions placed the decisive batch of orders. While similar to S&D zones, Order Blocks pinpoint the exact candle rather than a zone range. Trading the Order Block (OB) high/low offers even tighter entry and stop loss placements, particularly on lower timeframes.
+
+8.5 Breaker Blocks
+
+A Breaker Block occurs when a supply or demand zone fails (is broken through) and then becomes the opposite type of zone. A failed demand zone becomes supply on a retest; a failed supply zone becomes demand. Breaker Blocks often produce violent, fast reactions because they combine zone expectations with trader frustration from the false breakout.
+
+9. Trading Psychology & Discipline
+
+The technical edge provided by Supply and Demand analysis is only as valuable as the discipline of the trader executing it. The psychological framework is equally important to the technical framework. Most retail traders fail not because of a poor strategy, but because they abandon their strategy during periods of normal drawdown.
+
+9.1 Core Psychological Principles
+
+Process over outcome: Judge your trades on execution quality, not individual results
+
+Probabilistic thinking: A 65% win rate means 35 losses per 100 trades — this is expected, not failure
+
+Patience as edge: The strategy requires waiting for A+ setups — forcing trades destroys the edge
+
+Detachment from individual trades: Each trade is just one data point in a 100-trade sample
+
+Journaling: Record every trade with entry rationale, zone screenshot, and outcome for continuous improvement
+
+Drawdown protocol: Pre-define maximum drawdown thresholds before reducing size or stopping
+
+9.2 Common Psychological Mistakes
+
+Mistake
+
+Correction & Protocol
+
+Revenge trading
+
+After a loss, mandatory 30-minute break. Never enter a new trade immediately after a stop-out.
+
+Moving the stop loss
+
+Stop loss is non-negotiable once set. Write the SL in your trading journal before entry to commit.
+
+Skipping the plan
+
+If there is no plan (zone ID, entry, SL, TP all pre-defined), there is no trade. No plan = no execute.
+
+Over-trading
+
+Set a maximum daily trade count (e.g., 3 trades). Quality over quantity in S&D trading.
+
+FOMO entry
+
+If you missed the zone, the trade is done. Never chase. Mark the zone for future reference.
+
+Ignoring HTF context
+
+Always ask: is HTF aligned? If not, do not execute regardless of how good LTF looks.
+
+9.3 Performance Tracking Metrics
+
+Metric
+
+Formula
+
+Target
+
+Frequency
+
+Win Rate
+
+Wins ÷ Total Trades × 100
+
+50-65%
+
+Weekly
+
+Profit Factor
+
+Gross Profit ÷ Gross Loss
+
+> 1.5
+
+Monthly
+
+Average RR
+
+Average Win ÷ Average Loss
+
+> 2.0
+
+Monthly
+
+Max Drawdown
+
+Peak-to-trough equity decline
+
+< 15%
+
+Ongoing
+
+Expectancy
+
+(WR × Avg Win) - (LR × Avg Loss)
+
+Positive
+
+Monthly
+
+Setup Quality
+
+A+ setups ÷ Total setups taken
+
+> 70% A+
+
+Weekly
+
+10. Backtesting, Automation & System Development
+
+To move from a discretionary strategy to a systematic, algorithmic one, the S&D framework must be codified into rules that can be tested historically and executed automatically. This section provides the blueprint for algorithmic implementation.
+
+10.1 Backtesting Methodology
+
+Backtesting Protocol for S&D Strategy
+
+Step 1: Select instrument and timeframe for backtesting (start with Daily chart)
+
+Step 2: Define exact zone detection rules (base size, departure speed, ATR multiples)
+
+Step 3: Walk forward through 3-5 years of price data manually or programmatically
+
+Step 4: Mark every qualifying zone that meets the score threshold (≥7/10)
+
+Step 5: Record every instance where price returned to each zone
+
+Step 6: Apply entry model (aggressive or conservative) and record outcome
+
+Step 7: Compile statistics: win rate, RR achieved, max adverse excursion, max favorable excursion
+
+Step 8: Segment results by: zone type, session, market condition, score bucket
+
+Step 9: Iterate — optimize parameters based on segment performance data
+
+Step 10: Forward test (paper trade) for 3+ months before live deployment
+
+10.2 Algorithmic Implementation Inputs & Outputs Summary
+
+Module
+
+Inputs
+
+Processing
+
+Outputs
+
+Zone Scanner
+
+OHLCV data, ATR(14), lookback period
+
+Base/departure detection, pattern classification
+
+Zone list [price, type, score, TF]
+
+Zone Filter
+
+Zone list, HTF trend, session time
+
+Score threshold, HTF alignment check
+
+Qualified zones list
+
+Entry Engine
+
+Current price, qualified zones, order book
+
+Proximity check, trigger condition monitor
+
+Entry signal [direction, price, size]
+
+Risk Calculator
+
+Account balance, zone width, ATR
+
+Position sizing formula application
+
+Lot size, SL price, TP price
+
+Trade Manager
+
+Open position, live price, zones
+
+BE rule, partial exit, trailing logic
+
+Order modifications, close signals
+
+Performance Logger
+
+Trade history, account equity
+
+Statistical calculations
+
+Metrics dashboard, journal entries
+
+10.3 Recommended Technology Stack
+
+Tool / Platform
+
+Use Case
+
+TradingView (Pine Script)
+
+Zone visualization, backtesting, alerts — best for visual development
+
+MetaTrader 4/5 (MQL4/5)
+
+Automated EA development for Forex — direct broker integration
+
+Python (pandas, backtrader)
+
+Full statistical backtesting, machine learning integration, data analysis
+
+cTrader (cAlgo)
+
+Algo trading for Forex/CFDs — C# based, professional broker integration
+
+Interactive Brokers API
+
+Stocks and options automation — institutional grade execution
+
+CCXT (Python)
+
+Cryptocurrency exchange connectivity — supports 100+ exchanges
+
+10.4 Zone Detection Code Specification (Pseudocode)
+
+Core Zone Detection Algorithm — Pseudocode
+
+FUNCTION detect_zones(ohlcv_data, atr_period=14, base_max_body_ratio=0.4, departure_min_atr=2.0):
+
+   atr = calculate_ATR(ohlcv_data, atr_period)
+
+   zones = []
+
+   FOR i in range(3, len(ohlcv_data) - 3):
+
+      candle = ohlcv_data[i]
+
+      body_size = abs(candle.close - candle.open)
+
+      IF body_size < atr[i] * base_max_body_ratio:  // It is a base candle
+
+         prev_move = classify_move(ohlcv_data[i-3:i])  // Rally or Drop
+
+         next_move = classify_move(ohlcv_data[i:i+3])  // Rally or Drop
+
+         departure_size = calculate_move_size(ohlcv_data[i:i+3])
+
+         IF departure_size > atr[i] * departure_min_atr:  // Strong departure
+
+            zone_type = classify_zone(prev_move, next_move)  // RBD/DBR/RBR/DBD
+
+            score = calculate_zone_score(candle, ohlcv_data, i)
+
+            IF score >= 7:
+
+               zones.append({type: zone_type, proximal: ..., distal: ..., score: score})
+
+   RETURN zones
+
+11. Quick Reference — Trading Checklists
+
+11.1 Pre-Trade Checklist (Every Trade)
+
+HTF trend identified and direction confirmed (Daily/Weekly)
+
+Zone type correctly classified (RBD/DBR/RBR/DBD)
+
+Zone score calculated and ≥ 7/10
+
+Zone is FRESH (first touch or maximum second touch)
+
+Clear space between entry zone and next opposing zone (room to run)
+
+Risk-to-Reward ratio ≥ 1:2 confirmed
+
+Position size calculated (max 1-2% account risk)
+
+Stop loss placed correctly (beyond distal line)
+
+Take profit levels identified (at opposing zones)
+
+No major news events in next 2-4 hours that could invalidate zone
+
+11.2 Zone ID Cheat Sheet
+
+Zone Type
+
+Formation
+
+Trade Direction
+
+HTF Bias Needed
+
+RBD (Supply)
+
+Rally → Base → Drop
+
+SHORT (Sell)
+
+Bearish or Neutral
+
+DBR (Demand)
+
+Drop → Base → Rally
+
+LONG (Buy)
+
+Bullish or Neutral
+
+RBR (Demand)
+
+Rally → Base → Rally
+
+LONG (Buy)
+
+Bullish
+
+DBD (Supply)
+
+Drop → Base → Drop
+
+SHORT (Sell)
+
+Bearish
+
+Breaker (Demand)
+
+Failed Supply → Demand
+
+LONG (Buy)
+
+Bullish reversal
+
+Breaker (Supply)
+
+Failed Demand → Supply
+
+SHORT (Sell)
+
+Bearish reversal
+
+11.3 Session Timing Reference
+
+Session
+
+GMT Time
+
+EST Time
+
+Best For
+
+Asian
+
+00:00 - 08:00
+
+19:00 - 03:00
+
+JPY pairs; zone formation (low vol)
+
+London
+
+08:00 - 16:00
+
+03:00 - 11:00
+
+EUR/GBP/CHF; strongest zone reactions
+
+NY Open
+
+13:00 - 17:00
+
+08:00 - 12:00
+
+USD pairs, stocks, indices; highest volume
+
+NY Afternoon
+
+17:00 - 21:00
+
+12:00 - 16:00
+
+Continuation trades; stock market close
+
+Overlap
+
+13:00 - 16:00
+
+08:00 - 11:00
+
+London/NY overlap = peak liquidity
+
+11.4 Common Mistakes Reference
+
+Mistake
+
+Rule to Follow
+
+Trading a tested zone (2nd+ touch)
+
+Stick to fresh zones only. Score drops 3 points on each test.
+
+Wide base = big zone = weaker signal
+
+Base of 1-3 candles = A+ grade. 7+ candles = skip.
+
+Entering mid-zone instead of proximal
+
+Always enter at the proximal line. Mid-zone = worse RR, unclear SL.
+
+Trading against HTF trend
+
+Counter-trend S&D trades exist but need 3+ confluences. Default = with trend.
+
+Ignoring spread on small timeframes
+
+On 1M/5M scalps, spread can be 20-50% of your entire SL. Always account for it.
+
+No zone invalidation plan
+
+Define before entry: "If price closes through X level, zone is invalid, SL is hit."
+
+11.5 Key Terms Glossary
+
+Term
+
+Definition
+
+Supply Zone
+
+Area where price previously dropped sharply away from — institutions sold here
+
+Demand Zone
+
+Area where price previously rallied sharply away from — institutions bought here
+
+Proximal Line
+
+The closest edge of the zone to current price — entry reference line
+
+Distal Line
+
+The far edge of the zone — stop loss reference line
+
+Mitigation
+
+When price returns to and reacts at a zone — partially filling remaining orders
+
+Fresh Zone
+
+A zone that has not been touched/tested since it was formed
+
+Liquidity Grab
+
+A brief spike beyond a zone to collect stop losses before reversing
+
+Order Block
+
+The specific candle (last opposing candle) where institutional orders were placed
+
+Breaker Block
+
+A failed zone that flips polarity and becomes the opposite type of zone
+
+HTF
+
+Higher Timeframe — any timeframe above your trading timeframe
+
+LTF
+
+Lower Timeframe — used for entry confirmation after HTF zone is identified
+
+RR / R:R
+
+Risk-to-Reward ratio — profit potential divided by maximum risk
+
+ATR
+
+Average True Range — volatility measure used for dynamic SL sizing
+
+RBD
+
+Rally-Base-Drop — supply zone formation pattern
+
+DBR
+
+Drop-Base-Rally — demand zone formation pattern
