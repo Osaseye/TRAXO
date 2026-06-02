@@ -1,39 +1,62 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  createChart,
-  ColorType,
-  CrosshairMode,
-  CandlestickSeries,
-  createSeriesMarkers,
-  LineStyle,
-} from 'lightweight-charts'
-import type { IPriceLine, UTCTimestamp, Time, SeriesMarker } from 'lightweight-charts'
+import type { Time, UTCTimestamp } from 'lightweight-charts'
 import { ChevronDown, X } from 'lucide-react'
 import { useOnboardingStore } from '@/stores/useOnboardingStore'
+import { useAuthStore } from '@/stores/useAuthStore'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
+import { ChartPanel, type ChartPanelMarker, type ChartPanelActiveSignal, type ChartPanelManualSetup } from '@/components/dashboard/ChartPanel'
 import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
-import type { Timeframe } from '@/types'
 import { getMarketRiskContext } from '@/lib/marketRisk'
+import { getCandles, type Candle } from '@/lib/marketData'
+import { useMarketWebSocket } from '@/hooks/useMarketWebSocket'
+import { runSignalsForStrategies, riskFromConfidence, priceDigits, type AnalysisSignal, type RiskLabel } from '@/lib/signalDetection'
 
-type SymbolOption = 'EURUSD' | 'GBPUSD' | 'USDJPY' | 'XAUUSD' | 'BTCUSDT' | 'ETHUSD'
+type SymbolOption =
+  | 'EURUSD'
+  | 'GBPUSD'
+  | 'USDJPY'
+  | 'XAUUSD'
+  | 'XAGUSD'
+  | 'AUDUSD'
+  | 'USDCAD'
+  | 'USDCHF'
+  | 'NZDUSD'
+  | 'EURJPY'
+  | 'GBPJPY'
+  | 'EURGBP'
+  | 'SPX500'
+  | 'NAS100'
+  | 'US30'
+  | 'DE40'
+  | 'UK100'
+  | 'JP225'
+  | 'FRA40'
+  | 'AUS200'
+  | 'WTI'
+  | 'BRENT'
+  | 'NATGAS'
+  | 'BTCUSDT'
+  | 'ETHUSD'
+  | 'SOLUSDT'
+  | 'XRPUSDT'
+  | 'ADAUSDT'
+  | 'DOGEUSDT'
+  | 'BNBUSDT'
+  | 'AAPL'
+  | 'MSFT'
+  | 'NVDA'
+  | 'TSLA'
+  | 'AMZN'
+  | 'META'
+  | 'GOOGL'
+  | 'NFLX'
+  | 'AMD'
+  | 'COIN'
+  | 'MSTR'
+  | 'SMCI'
+  | 'MNQ'
 
-type RiskLabel = 'Low' | 'Medium' | 'High'
 type TradeAction = 'BUY' | 'SELL'
-
-interface AnalysisSignal {
-  id: string
-  time: UTCTimestamp
-  strategyId: string
-  strategyLabel: string
-  direction: 'BUY' | 'SELL'
-  entry: number
-  sl: number
-  tp: number
-  rr: number
-  confidence: number
-  risk: RiskLabel
-  reason: string[]
-}
 
 interface TradeHistoryMarker {
   id: string
@@ -69,8 +92,13 @@ interface MoneyContext {
   capitalRisk: RiskLabel
 }
 
-const SYMBOLS: SymbolOption[] = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSDT', 'ETHUSD']
-const TF_OPTIONS: Timeframe[] = ['1H', '4H', '1D']
+const FX_SYMBOLS: SymbolOption[] = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'EURJPY', 'GBPJPY', 'EURGBP']
+const METAL_SYMBOLS: SymbolOption[] = ['XAUUSD', 'XAGUSD']
+const INDEX_SYMBOLS: SymbolOption[] = ['SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'FRA40', 'AUS200']
+const ENERGY_SYMBOLS: SymbolOption[] = ['WTI', 'BRENT', 'NATGAS']
+const CRYPTO_SYMBOLS: SymbolOption[] = ['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT']
+const STOCK_SYMBOLS: SymbolOption[] = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI']
+const FUTURES_SYMBOLS: SymbolOption[] = ['MNQ']
 
 const STRATEGY_LABELS: Record<string, string> = {
   'wick-rejection': 'Wick Rejection',
@@ -80,15 +108,6 @@ const STRATEGY_LABELS: Record<string, string> = {
   'trend-following': 'Trend Following',
 }
 
-function seeded(seed: number) {
-  let t = seed + 0x6d2b79f5
-  return function rand() {
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
 function hash(input: string) {
   let h = 2166136261
   for (let i = 0; i < input.length; i++) {
@@ -96,168 +115,6 @@ function hash(input: string) {
     h = Math.imul(h, 16777619)
   }
   return Math.abs(h)
-}
-
-function intervalSeconds(tf: Timeframe) {
-  if (tf === '1H') return 3600
-  if (tf === '4H') return 14400
-  return 86400
-}
-
-function basePrice(symbol: SymbolOption) {
-  if (symbol === 'EURUSD') return 1.082
-  if (symbol === 'GBPUSD') return 1.274
-  if (symbol === 'USDJPY') return 155.4
-  if (symbol === 'XAUUSD') return 2330
-  if (symbol === 'BTCUSDT') return 67250
-  return 3340
-}
-
-function priceDigits(symbol: SymbolOption) {
-  if (symbol === 'USDJPY') return 3
-  if (symbol === 'XAUUSD') return 2
-  if (symbol === 'BTCUSDT' || symbol === 'ETHUSD') return 1
-  return 5
-}
-
-function generateCandles(symbol: SymbolOption, timeframe: Timeframe, count = 220) {
-  const now = Math.floor(Date.now() / 1000)
-  const step = intervalSeconds(timeframe)
-  const rand = seeded(hash(`${symbol}:${timeframe}:candles`))
-  const digits = priceDigits(symbol)
-  const bars: Array<{
-    time: UTCTimestamp
-    open: number
-    high: number
-    low: number
-    close: number
-  }> = []
-
-  let px = basePrice(symbol)
-  const vol = symbol === 'BTCUSDT' ? 0.009 : symbol === 'ETHUSD' ? 0.0075 : symbol === 'XAUUSD' ? 0.003 : 0.0012
-
-  for (let i = count; i >= 0; i--) {
-    const drift = (rand() - 0.48) * vol
-    const open = px
-    const close = px * (1 + drift)
-    const wickScale = px * (vol * 0.6)
-    const high = Math.max(open, close) + rand() * wickScale
-    const low = Math.min(open, close) - rand() * wickScale
-
-    bars.push({
-      time: (now - i * step) as UTCTimestamp,
-      open: Number(open.toFixed(digits)),
-      high: Number(high.toFixed(digits)),
-      low: Number(low.toFixed(digits)),
-      close: Number(close.toFixed(digits)),
-    })
-    px = close
-  }
-
-  return bars
-}
-
-function buildReasons(strategyId: string, direction: 'BUY' | 'SELL') {
-  const dirWord = direction === 'BUY' ? 'bullish' : 'bearish'
-  if (strategyId === 'wick-rejection') {
-    return [
-      `Long ${direction === 'BUY' ? 'lower' : 'upper'} wick rejection confirmed on candle close`,
-      `${dirWord} close position inside range supports continuation`,
-      'Confluence zone respected with clean structure retest',
-    ]
-  }
-  if (strategyId === 'breakout') {
-    return [
-      `Range break with strong ${dirWord} body close`,
-      'Breakout leg holds above key range boundary after retest',
-      'Momentum profile supports follow-through into measured move',
-    ]
-  }
-  if (strategyId === 'order-block') {
-    return [
-      'Institutional block retest produced immediate reaction candle',
-      `${dirWord} displacement confirms order-flow imbalance`,
-      'Entry aligns with protected liquidity zone and trend bias',
-    ]
-  }
-  if (strategyId === 'supply-demand') {
-    return [
-      'Fresh zone touch with strong response at boundary',
-      'Impulse profile from zone remains valid and unmitigated',
-      `${dirWord} rejection supports continuation to next target zone`,
-    ]
-  }
-  return [
-    'Trend filter remains aligned with active directional bias',
-    `${dirWord} continuation trigger confirmed after pullback`,
-    'Momentum and structure conditions remain in sync for entry',
-  ]
-}
-
-function createSignalsForStrategy(
-  candles: Array<{ time: UTCTimestamp; open: number; high: number; low: number; close: number }>,
-  symbol: SymbolOption,
-  strategyId: string,
-  pointShift = 0,
-  marketPenalty = 0
-) {
-  const rand = seeded(hash(`${symbol}:${strategyId}:signals`))
-  const digits = priceDigits(symbol)
-  const strategyLabel = STRATEGY_LABELS[strategyId] ?? strategyId
-  const points = [150, 168, 186, 203]
-    .map((p, i) => p + ((pointShift + i) % 5))
-    .filter((p) => p < candles.length - 2)
-
-  return points.map((idx, i) => {
-    const c = candles[idx]
-    const direction: 'BUY' | 'SELL' = c.close >= c.open ? 'BUY' : 'SELL'
-    const range = Math.max(c.high - c.low, c.close * 0.0006)
-    const entry = c.close
-    const slGap = range * (0.8 + rand() * 0.7)
-    const rr = Number((1.8 + rand() * 0.9).toFixed(1))
-    const tpGap = slGap * rr
-    const sl = direction === 'BUY' ? entry - slGap : entry + slGap
-    const tp = direction === 'BUY' ? entry + tpGap : entry - tpGap
-    const confidence = Math.max(0, Number((72 + rand() * 20).toFixed(0)) - marketPenalty)
-    const risk: RiskLabel = confidence >= 85 ? 'Low' : confidence >= 78 ? 'Medium' : 'High'
-
-    return {
-      id: `sig-${strategyId}-${i}-${c.time}`,
-      time: c.time,
-      strategyId,
-      strategyLabel,
-      direction,
-      entry: Number(entry.toFixed(digits)),
-      sl: Number(sl.toFixed(digits)),
-      tp: Number(tp.toFixed(digits)),
-      rr,
-      confidence,
-      risk,
-      reason: [
-        `${strategyLabel} selected this setup based on live structure context`,
-        ...buildReasons(strategyId, direction),
-      ],
-    } satisfies AnalysisSignal
-  })
-}
-
-function createSignals(
-  candles: Array<{ time: UTCTimestamp; open: number; high: number; low: number; close: number }>,
-  symbol: SymbolOption,
-  strategyIds: string[],
-  marketPenalty = 0
-) {
-  const merged = strategyIds.flatMap((strategyId, idx) =>
-    createSignalsForStrategy(candles, symbol, strategyId, idx * 2, marketPenalty)
-  )
-
-  return merged.sort((a, b) => Number(a.time) - Number(b.time))
-}
-
-function riskFromConfidence(confidence: number): RiskLabel {
-  if (confidence >= 85) return 'Low'
-  if (confidence >= 77) return 'Medium'
-  return 'High'
 }
 
 function buildMoneyContext(
@@ -325,6 +182,7 @@ function generateLevels(entry: number, action: TradeAction, range: number, digit
 }
 
 export default function Dashboard() {
+  const displayName = useAuthStore((s) => s.user?.displayName || s.user?.fullName || s.user?.email || 'Trader')
   const { plan, selectedStrategyId, selectedStrategyIds } = useOnboardingStore()
   const {
     accountBalance,
@@ -346,10 +204,12 @@ export default function Dashboard() {
     plan === 'pro' && activeStrategyIds.length > 1
       ? `Multi-Strategy (${activeStrategyIds.length})`
       : STRATEGY_LABELS[activeStrategyIds[0]] ?? 'Wick Rejection'
-  const [symbol, setSymbol] = useState<SymbolOption>('EURUSD')
-  const [timeframe, setTimeframe] = useState<Timeframe>('4H')
+  const symbol = useTradingContextStore((s) => s.chartSymbol)
+  const setSymbol = useTradingContextStore((s) => s.setChartSymbol)
+  const timeframe = useTradingContextStore((s) => s.chartTimeframe)
+  const setTimeframe = useTradingContextStore((s) => s.setChartTimeframe)
   const [loading, setLoading] = useState(true)
-  const [candles, setCandles] = useState<ReturnType<typeof generateCandles>>([])
+  const [candles, setCandles] = useState<Candle[]>([])
   const [signals, setSignals] = useState<AnalysisSignal[]>([])
   const [hoveredSignalId, setHoveredSignalId] = useState<string | null>(null)
   const [lockedSignalId, setLockedSignalId] = useState<string | null>(null)
@@ -359,16 +219,6 @@ export default function Dashboard() {
   const [draggingPopup, setDraggingPopup] = useState(false)
   const [dismissedNoticeKeys, setDismissedNoticeKeys] = useState<string[]>([])
   const dragOffsetRef = useRef({ x: 0, y: 0 })
-
-  const chartContainerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<ReturnType<typeof createChart> | null>(null)
-  const seriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addSeries']> | null>(null)
-  const entryLineRef = useRef<IPriceLine | null>(null)
-  const slLineRef = useRef<IPriceLine | null>(null)
-  const tpLineRef = useRef<IPriceLine | null>(null)
-  const manualEntryLineRef = useRef<IPriceLine | null>(null)
-  const manualSLLineRef = useRef<IPriceLine | null>(null)
-  const manualTPLineRef = useRef<IPriceLine | null>(null)
 
   const hoveredSignal = useMemo(
     () => signals.find((s) => s.id === hoveredSignalId) ?? null,
@@ -385,6 +235,17 @@ export default function Dashboard() {
     () => getMarketRiskContext(symbol, timeframe, activeStrategyIds.length),
     [symbol, timeframe, activeStrategyIds.length]
   )
+
+  useMarketWebSocket({
+    symbol,
+    timeframe,
+    candles,
+    enabled: candles.length > 0,
+    onCandleUpdate: (nextCandles) => {
+      setCandles(nextCandles)
+      setSignals(runSignalsForStrategies(nextCandles, symbol, timeframe, activeStrategyIds))
+    },
+  })
 
   const todayLoss = useMemo(() => {
     const start = new Date()
@@ -457,16 +318,16 @@ export default function Dashboard() {
   const warnings = useMemo(() => {
     const items: string[] = []
     if (consecutiveLosses >= 4) {
-      items.push(`This is your ${consecutiveLosses}th consecutive loss. Consider reducing risk or pausing.`)
+      items.push(`Hey ${displayName}, this is your ${consecutiveLosses}th consecutive loss. Consider reducing risk or stepping away.`)
     }
-    if (todayTakenCount >= 6) {
-      items.push(`You have taken ${todayTakenCount} trades today. Want to take a short break?`)
+    if (todayTakenCount >= 5) {
+      items.push(`${displayName}, you've taken ${todayTakenCount} trades today. Make sure you aren't overtrading!`)
     }
     if (lockedMoneyContext && lockedMoneyContext.remainingDailyLoss <= 0) {
-      items.push('Daily loss limit reached. New risk suggestions are now constrained.')
+      items.push(`Daily loss limit reached, ${displayName}. Step back from the charts for today.`)
     }
     return items
-  }, [consecutiveLosses, todayTakenCount, lockedMoneyContext])
+  }, [consecutiveLosses, todayTakenCount, lockedMoneyContext, displayName])
 
   const alertNotices = useMemo(() => {
     const notices: Array<{ id: string; title: string; body: string }> = []
@@ -493,97 +354,23 @@ export default function Dashboard() {
     setDismissedNoticeKeys((prev) => (prev.includes(noticeId) ? prev : [...prev, noticeId]))
   }
 
-  useEffect(() => {
-    if (!chartContainerRef.current) return
+  const stockMarketFilter: 'forex' | 'metals' | 'indices' | 'energy' | 'crypto' | 'stocks' | 'futures' = FX_SYMBOLS.includes(symbol)
+    ? 'forex'
+    : METAL_SYMBOLS.includes(symbol)
+    ? 'metals'
+    : INDEX_SYMBOLS.includes(symbol)
+    ? 'indices'
+    : ENERGY_SYMBOLS.includes(symbol)
+    ? 'energy'
+    : CRYPTO_SYMBOLS.includes(symbol)
+    ? 'crypto'
+    : FUTURES_SYMBOLS.includes(symbol)
+    ? 'futures'
+    : 'stocks'
+  const marketFilter = stockMarketFilter
 
-    const initialWidth = chartContainerRef.current.clientWidth || 1200
-    const initialHeight = chartContainerRef.current.clientHeight || 700
-
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: '#070709' },
-        textColor: '#475569',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        fontSize: 11,
-      },
-      grid: {
-        vertLines: { color: '#0d1117' },
-        horzLines: { color: '#0d1117' },
-      },
-      crosshair: {
-        mode: CrosshairMode.Normal,
-        vertLine: { color: '#3b82f6', labelBackgroundColor: '#1d4ed8' },
-        horzLine: { color: '#3b82f6', labelBackgroundColor: '#1d4ed8' },
-      },
-      rightPriceScale: { borderColor: '#111827' },
-      timeScale: {
-        borderColor: '#111827',
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      handleScroll: true,
-      handleScale: true,
-      autoSize: false,
-      width: initialWidth,
-      height: initialHeight,
-    })
-
-    const series = chart.addSeries(CandlestickSeries, {
-      upColor: '#22c55e',
-      downColor: '#ef4444',
-      borderUpColor: '#22c55e',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e',
-      wickDownColor: '#ef4444',
-    })
-
-    chartRef.current = chart
-    seriesRef.current = series
-
-    const ro = new ResizeObserver(() => {
-      if (!chartContainerRef.current || !chartRef.current) return
-      chartRef.current.applyOptions({
-        width: chartContainerRef.current.clientWidth,
-        height: chartContainerRef.current.clientHeight,
-      })
-    })
-
-    ro.observe(chartContainerRef.current)
-
-    return () => {
-      ro.disconnect()
-      chart.remove()
-      chartRef.current = null
-      seriesRef.current = null
-    }
-  }, [])
-
-  useEffect(() => {
-    setLoading(true)
-    setHoveredSignalId(null)
-    setLockedSignalId(null)
-    setManualSetup(null)
-    const timer = setTimeout(() => {
-      const generatedCandles = generateCandles(symbol, timeframe)
-      const generatedSignals = createSignals(generatedCandles, symbol, activeStrategyIds, marketRiskContext.confidencePenalty)
-      setCandles(generatedCandles)
-      setSignals(generatedSignals)
-      setLoading(false)
-    }, 1400)
-
-    return () => clearTimeout(timer)
-  }, [symbol, timeframe, activeStrategyIds, marketRiskContext.confidencePenalty])
-
-  useEffect(() => {
-    if (!seriesRef.current || candles.length === 0) return
-    seriesRef.current.setData(candles)
-    chartRef.current?.timeScale().fitContent()
-  }, [candles])
-
-  useEffect(() => {
-    if (!seriesRef.current) return
-
-    const suggestionMarkers: SeriesMarker<UTCTimestamp>[] = signals.map((s) => ({
+  const chartMarkers = useMemo(() => {
+    const suggestionMarkers: ChartPanelMarker[] = signals.map((s) => ({
       time: s.time,
       position: s.direction === 'BUY' ? 'belowBar' : 'aboveBar',
       shape: s.direction === 'BUY' ? 'arrowUp' : 'arrowDown',
@@ -591,7 +378,7 @@ export default function Dashboard() {
       text: `${s.strategyLabel.split(' ')[0]} ${s.direction} ${s.confidence}%`,
     }))
 
-    const historicalMarkers: SeriesMarker<UTCTimestamp>[] = journalMarkers.map((m) => ({
+    const historicalMarkers: ChartPanelMarker[] = journalMarkers.map((m) => ({
       time: m.time,
       position: 'inBar',
       shape: 'circle',
@@ -599,231 +386,134 @@ export default function Dashboard() {
       text: m.pnl,
     }))
 
-    createSeriesMarkers(
-      seriesRef.current,
-      [...suggestionMarkers, ...historicalMarkers]
-    )
+    return [...suggestionMarkers, ...historicalMarkers]
   }, [signals, journalMarkers])
 
-  useEffect(() => {
-    const chart = chartRef.current
-    if (!chart || signals.length === 0) return
+  const chartActiveSignal: ChartPanelActiveSignal | null = activeSignal
+    ? {
+        entry: activeSignal.entry,
+        sl: activeSignal.sl,
+        tp: activeSignal.tp,
+        locked: Boolean(lockedSignal),
+      }
+    : null
 
-    const threshold = intervalSeconds(timeframe) * 0.7
-    const handleMove = (param: { time?: Time }) => {
-      if (!param.time || typeof param.time !== 'number') {
-        if (!lockedSignalId) setHoveredSignalId(null)
+  const chartManualSetup: ChartPanelManualSetup | null = manualSetup
+    ? {
+        entry: manualSetup.entry,
+        action: manualSetup.action,
+        sl: manualSetup.sl,
+        tp: manualSetup.tp,
+        generated: manualSetup.generated,
+      }
+    : null
+
+  const handleCrosshairMove = (time: UTCTimestamp | null) => {
+    if (signals.length === 0 || time == null) {
+      if (!lockedSignalId) setHoveredSignalId(null)
+      return
+    }
+
+    const closest = signals.find((s) => s.time === time) ?? null
+
+    if (closest) {
+      setHoveredSignalId(closest.id)
+    } else if (!lockedSignalId) {
+      setHoveredSignalId(null)
+    }
+  }
+
+  const handleChartClick = ({ point, time, price }: { point?: { x: number; y: number }; time?: Time; price?: number | null }) => {
+    if (!point) return
+
+    const clickedTime = typeof time === 'number' ? (time as UTCTimestamp) : null
+
+    if (clickedTime != null) {
+      const nearestSignal = signals.find((s) => s.time === clickedTime) ?? null
+
+      if (nearestSignal) {
+        setLockedSignalId(nearestSignal.id)
+        setHoveredSignalId(nearestSignal.id)
+        setManualSetup(null)
         return
       }
 
-      let closest: AnalysisSignal | null = null
-      let minDistance = Number.MAX_SAFE_INTEGER
-      for (const s of signals) {
-        const d = Math.abs(s.time - (param.time as number))
-        if (d < minDistance) {
-          minDistance = d
-          closest = s
-        }
-      }
-
-      if (closest && minDistance <= threshold) {
-        setHoveredSignalId(closest.id)
-      } else {
-        if (!lockedSignalId) setHoveredSignalId(null)
+      const nearestHistory = journalMarkers.find((h) => h.time === clickedTime) ?? null
+      if (nearestHistory) {
+        return
       }
     }
 
-    chart.subscribeCrosshairMove(handleMove)
-    return () => chart.unsubscribeCrosshairMove(handleMove)
-  }, [signals, timeframe, lockedSignalId])
+    if (price == null) return
+
+    const digits = priceDigits(symbol)
+    const entry = Number(price.toFixed(digits))
+    const fallbackTime = candles[candles.length - 1]?.time ?? (Math.floor(Date.now() / 1000) as UTCTimestamp)
+    const anchorTime = clickedTime ?? fallbackTime
+
+    let nearest = candles[0]
+    for (const c of candles) {
+      if (!nearest || Math.abs(c.time - anchorTime) < Math.abs(nearest.time - anchorTime)) {
+        nearest = c
+      }
+    }
+
+    const suggestedAction: TradeAction = nearest && nearest.close >= nearest.open ? 'BUY' : 'SELL'
+    const confidenceSeed = 72 + (hash(`${symbol}:${timeframe}:${anchorTime}`) % 21)
+    const confidence = Number(confidenceSeed.toFixed(0))
+    const risk = riskFromConfidence(confidence)
+    const range = Math.max((nearest?.high ?? entry) - (nearest?.low ?? entry), entry * 0.001)
+
+    const reason = [
+      `${strategyLabel} sees structure interest around the selected entry`,
+      `Market context suggests ${suggestedAction} bias with ${confidence}% confidence`,
+      marketRiskContext.summary,
+      'Confirm direction, then generate SL/TP based on this exact point',
+    ]
+
+    setHoveredSignalId(null)
+    setLockedSignalId(null)
+    setManualSetup({
+      time: anchorTime,
+      entry,
+      action: suggestedAction,
+      suggestedAction,
+      confidence,
+      risk,
+      reason,
+      range,
+      digits,
+      generated: false,
+      sl: null,
+      tp: null,
+      rr: 0,
+    })
+  }
 
   useEffect(() => {
-    const chart = chartRef.current
-    const series = seriesRef.current
-    if (!chart || !series) return
+    let cancelled = false
+    setLoading(true)
+    setHoveredSignalId(null)
+    setLockedSignalId(null)
+    setManualSetup(null)
+    setCandles([])
+    setSignals([])
 
-    const handleClick = (param: { point?: { x: number; y: number }; time?: Time }) => {
-      if (!param.point) return
-
-      const clickedTime = typeof param.time === 'number' ? (param.time as UTCTimestamp) : null
-      const threshold = intervalSeconds(timeframe) * 0.7
-
-      if (clickedTime != null) {
-        let nearestSignal: AnalysisSignal | null = null
-        let nearestSignalDistance = Number.MAX_SAFE_INTEGER
-        for (const s of signals) {
-          const d = Math.abs(s.time - clickedTime)
-          if (d < nearestSignalDistance) {
-            nearestSignalDistance = d
-            nearestSignal = s
-          }
-        }
-
-        if (nearestSignal && nearestSignalDistance <= threshold) {
-          setLockedSignalId(nearestSignal.id)
-          setHoveredSignalId(nearestSignal.id)
-          setManualSetup(null)
-          return
-        }
-
-        let nearestHistoryDistance = Number.MAX_SAFE_INTEGER
-        for (const h of journalMarkers) {
-          const d = Math.abs(h.time - clickedTime)
-          if (d < nearestHistoryDistance) nearestHistoryDistance = d
-        }
-
-        // Previous trades are reference-only and cannot be used as fresh entry anchors.
-        if (nearestHistoryDistance <= threshold) {
-          return
-        }
-      }
-
-      const entryRaw = series.coordinateToPrice(param.point.y)
-      if (entryRaw == null) return
-
-      const digits = priceDigits(symbol)
-      const entry = Number(entryRaw.toFixed(digits))
-      const fallbackTime = candles[candles.length - 1]?.time ?? (Math.floor(Date.now() / 1000) as UTCTimestamp)
-      const anchorTime = clickedTime ?? fallbackTime
-
-      let nearest = candles[0]
-      for (const c of candles) {
-        if (!nearest || Math.abs(c.time - anchorTime) < Math.abs(nearest.time - anchorTime)) {
-          nearest = c
-        }
-      }
-
-      const suggestedAction: TradeAction = nearest && nearest.close >= nearest.open ? 'BUY' : 'SELL'
-      const confidenceSeed = 72 + (hash(`${symbol}:${timeframe}:${anchorTime}`) % 21)
-      const confidence = Number(confidenceSeed.toFixed(0))
-      const risk = riskFromConfidence(confidence)
-      const range = Math.max((nearest?.high ?? entry) - (nearest?.low ?? entry), entry * 0.001)
-
-      const reason = [
-        `${strategyLabel} sees structure interest around the selected entry`,
-        `Market context suggests ${suggestedAction} bias with ${confidence}% confidence`,
-        marketRiskContext.summary,
-        'Confirm direction, then generate SL/TP based on this exact point',
-      ]
-
-      setHoveredSignalId(null)
-      setLockedSignalId(null)
-      setManualSetup({
-        time: anchorTime,
-        entry,
-        action: suggestedAction,
-        suggestedAction,
-        confidence,
-        risk,
-        reason,
-        range,
-        digits,
-        generated: false,
-        sl: null,
-        tp: null,
-        rr: 0,
-      })
+    const loadCandles = async () => {
+      const generatedCandles = await getCandles(symbol, timeframe)
+      if (cancelled) return
+      const generatedSignals = runSignalsForStrategies(generatedCandles, symbol, timeframe, activeStrategyIds)
+      setCandles(generatedCandles)
+      setSignals(generatedSignals)
+      setLoading(false)
     }
 
-    chart.subscribeClick(handleClick)
-    return () => chart.unsubscribeClick(handleClick)
-  }, [candles, symbol, strategyLabel, timeframe, signals, journalMarkers, marketRiskContext.summary])
+    void loadCandles()
 
-  useEffect(() => {
-    const series = seriesRef.current
-    if (!series) return
-
-    if (entryLineRef.current) {
-      series.removePriceLine(entryLineRef.current)
-      entryLineRef.current = null
+    return () => {
+      cancelled = true
     }
-    if (slLineRef.current) {
-      series.removePriceLine(slLineRef.current)
-      slLineRef.current = null
-    }
-    if (tpLineRef.current) {
-      series.removePriceLine(tpLineRef.current)
-      tpLineRef.current = null
-    }
-
-    if (!activeSignal) return
-
-    entryLineRef.current = series.createPriceLine({
-      price: activeSignal.entry,
-      color: '#cbd5e1',
-      lineWidth: 1,
-      lineStyle: LineStyle.SparseDotted,
-      axisLabelVisible: true,
-      title: lockedSignal ? 'Entry · Locked' : 'Entry',
-    })
-
-    slLineRef.current = series.createPriceLine({
-      price: activeSignal.sl,
-      color: '#ef4444',
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      axisLabelVisible: true,
-      title: 'SL',
-    })
-
-    tpLineRef.current = series.createPriceLine({
-      price: activeSignal.tp,
-      color: '#22c55e',
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      axisLabelVisible: true,
-      title: 'TP',
-    })
-  }, [activeSignal, lockedSignal])
-
-  useEffect(() => {
-    const series = seriesRef.current
-    if (!series) return
-
-    if (manualEntryLineRef.current) {
-      series.removePriceLine(manualEntryLineRef.current)
-      manualEntryLineRef.current = null
-    }
-    if (manualSLLineRef.current) {
-      series.removePriceLine(manualSLLineRef.current)
-      manualSLLineRef.current = null
-    }
-    if (manualTPLineRef.current) {
-      series.removePriceLine(manualTPLineRef.current)
-      manualTPLineRef.current = null
-    }
-
-    if (!manualSetup) return
-
-    manualEntryLineRef.current = series.createPriceLine({
-      price: manualSetup.entry,
-      color: '#d1d5db',
-      lineWidth: 2,
-      lineStyle: LineStyle.Solid,
-      axisLabelVisible: true,
-      title: `Entry · ${manualSetup.action}`,
-    })
-
-    if (!manualSetup.generated || manualSetup.sl == null || manualSetup.tp == null) return
-
-    manualSLLineRef.current = series.createPriceLine({
-      price: manualSetup.sl,
-      color: '#ef4444',
-      lineWidth: 2,
-      lineStyle: LineStyle.Dashed,
-      axisLabelVisible: true,
-      title: 'Stop Loss',
-    })
-
-    manualTPLineRef.current = series.createPriceLine({
-      price: manualSetup.tp,
-      color: '#22c55e',
-      lineWidth: 2,
-      lineStyle: LineStyle.Dashed,
-      axisLabelVisible: true,
-      title: 'Take Profit',
-    })
-  }, [manualSetup])
+  }, [symbol, timeframe, activeStrategyIds, marketRiskContext.confidencePenalty])
 
   const generateManualSLTP = () => {
     setManualSetup((prev) => {
@@ -955,6 +645,9 @@ export default function Dashboard() {
         <div className="flex items-center gap-2.5 shrink-0">
           <img src="/TRAXO-icon.png" alt="TRAXO" className="w-6 h-6 object-contain" />
           <span className="text-[10px] font-black tracking-[0.2em] uppercase text-white hidden sm:inline">TRAXO</span>
+          <span className="hidden md:inline-flex items-center h-8 px-2.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border border-white/[0.14] bg-[#0d1117] text-[#cbd5e1]">
+            {displayName}
+          </span>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -964,11 +657,50 @@ export default function Dashboard() {
 
           <div className="relative">
             <select
+              value={marketFilter}
+              onChange={(e) => {
+                const m = e.target.value as 'forex' | 'crypto' | 'stocks' | 'metals' | 'indices' | 'energy' | 'futures'
+                if (m === 'forex') setSymbol(FX_SYMBOLS[0])
+                if (m === 'metals') setSymbol(METAL_SYMBOLS[0])
+                if (m === 'indices') setSymbol(INDEX_SYMBOLS[0])
+                if (m === 'energy') setSymbol(ENERGY_SYMBOLS[0])
+                if (m === 'crypto') setSymbol(CRYPTO_SYMBOLS[0])
+                if (m === 'stocks') setSymbol(STOCK_SYMBOLS[0])
+                if (m === 'futures') setSymbol(FUTURES_SYMBOLS[0])
+              }}
+              className="appearance-none h-9 pl-3 pr-8 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-bold text-white focus:outline-none focus:border-[#3b82f6]/50 uppercase"
+            >
+              <option value="forex">FOREX</option>
+              <option value="metals">METALS</option>
+              <option value="indices">INDICES</option>
+              <option value="energy">ENERGY</option>
+              <option value="crypto">CRYPTO</option>
+              <option value="stocks">STOCKS</option>
+              <option value="futures">FUTURES</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#4b5563] pointer-events-none" />
+          </div>
+
+          <div className="relative">
+            <select
               value={symbol}
               onChange={(e) => setSymbol(e.target.value as SymbolOption)}
               className="appearance-none h-9 pl-3 pr-8 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-semibold text-white focus:outline-none focus:border-[#3b82f6]/50"
             >
-              {SYMBOLS.map((s) => (
+              {(stockMarketFilter === 'forex'
+                ? FX_SYMBOLS
+                : stockMarketFilter === 'metals'
+                ? METAL_SYMBOLS
+                : stockMarketFilter === 'indices'
+                ? INDEX_SYMBOLS
+                : stockMarketFilter === 'energy'
+                ? ENERGY_SYMBOLS
+                : stockMarketFilter === 'crypto'
+                ? CRYPTO_SYMBOLS
+                : stockMarketFilter === 'futures'
+                ? FUTURES_SYMBOLS
+                : STOCK_SYMBOLS
+              ).map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -977,21 +709,6 @@ export default function Dashboard() {
             <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#4b5563] pointer-events-none" />
           </div>
 
-          <div className="flex items-center gap-1 rounded-lg bg-[#0b0f17] border border-white/[0.08] p-1">
-            {TF_OPTIONS.map((tf) => (
-              <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
-                className="h-7 px-2.5 rounded-md text-[11px] font-semibold transition-colors"
-                style={{
-                  background: timeframe === tf ? 'rgba(59,130,246,0.15)' : 'transparent',
-                  color: timeframe === tf ? '#bfdbfe' : '#4b5563',
-                }}
-              >
-                {tf}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -1021,7 +738,33 @@ export default function Dashboard() {
           setMouse({ x: e.clientX - rect.left, y: e.clientY - rect.top })
         }}
       >
-        <div ref={chartContainerRef} className="absolute inset-0" />
+        <div className="relative h-full">
+          {candles.length === 0 ? (
+            <div className="absolute inset-0 flex items-center justify-center p-6">
+              <div className="w-full max-w-6xl">
+                <div className="h-[420px] w-full rounded-lg bg-gradient-to-r from-[#071018] via-[#0b1118] to-[#071018] animate-pulse border border-white/[0.04]" />
+                <div className="mt-4 flex items-center justify-center">
+                  <svg className="h-6 w-6 text-[#60a5fa] animate-spin" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <ChartPanel
+              symbol={symbol}
+              timeframe={timeframe}
+              candles={candles}
+              markers={chartMarkers}
+              activeSignal={chartActiveSignal}
+              manualSetup={chartManualSetup}
+              onCrosshairMove={handleCrosshairMove}
+              onChartClick={handleChartClick}
+              onTimeframeChange={setTimeframe}
+            />
+          )}
+        </div>
 
         <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4 px-3 py-2 rounded-lg bg-[#0d1117]/90 border border-white/[0.08] text-[11px] text-[#94a3b8] pointer-events-none">
           Hover TRAXO suggestions to preview. Click one to lock it. Previous trades (gray dots) are reference-only.
@@ -1104,7 +847,13 @@ export default function Dashboard() {
               <span className="text-[12px] font-bold text-[#3b82f6] shrink-0">{hoveredSignal.confidence}%</span>
             </div>
 
-            <div className="flex items-center gap-1.5 mb-3 whitespace-nowrap overflow-hidden">
+            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+              {hoveredSignal.confidence >= 85 && (
+                <span className="text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold uppercase tracking-wider shrink-0 shadow-[0_0_10px_rgba(59,130,246,0.15)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                  High Quality Pattern
+                </span>
+              )}
               <span className="text-[10px] px-2 py-0.5 rounded-full border border-white/[0.14] bg-[#0b0f17] text-[#cbd5e1] truncate">
                 {hoveredSignal.strategyLabel}
               </span>
@@ -1162,7 +911,7 @@ export default function Dashboard() {
 
             <div>
               <div className="text-[9px] font-semibold text-[#64748b] uppercase tracking-wider mb-2">
-                Why {hoveredSignal.strategyLabel} picked this signal
+                Why we flagged this for you, {displayName.split(' ')[0]}
               </div>
               <div className="space-y-1.5">
                 {hoveredSignal.reason.map((r, i) => (
@@ -1181,7 +930,13 @@ export default function Dashboard() {
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[#64748b] font-semibold">Locked TRAXO Suggestion</div>
                 <div className="text-[13px] font-semibold text-white mt-1">{lockedSignal.direction} · {symbol}</div>
-                <div className="flex items-center gap-1.5 mt-1 whitespace-nowrap overflow-hidden">
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {lockedSignal.confidence >= 85 && (
+                    <span className="text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold uppercase tracking-wider shrink-0 shadow-[0_0_10px_rgba(59,130,246,0.15)]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                      High Quality Pattern
+                    </span>
+                  )}
                   <span className="text-[10px] px-2 py-0.5 rounded-full border border-white/[0.14] bg-[#0b0f17] text-[#cbd5e1] truncate">
                     {lockedSignal.strategyLabel}
                   </span>
@@ -1265,7 +1020,10 @@ export default function Dashboard() {
               </div>
             )}
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 pt-2 border-t border-white/[0.08]">
+              <div className="text-[9px] font-semibold text-[#64748b] uppercase tracking-wider mb-2">
+                Why we flagged this for you, {displayName.split(' ')[0]}
+              </div>
               {lockedSignal.reason.map((line, i) => (
                 <p key={i} className="text-[11px] text-[#94a3b8] leading-relaxed">• {line}</p>
               ))}

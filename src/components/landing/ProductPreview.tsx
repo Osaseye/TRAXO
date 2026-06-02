@@ -1,4 +1,5 @@
 // Fake dashboard UI mockup rendered in pure CSS/SVG — shown on the landing page hero
+import ScrollReveal from '@/components/ui/ScrollReveal'
 
 const SIGNALS = [
   { dir: 'BUY',  sym: 'EURUSD', conf: 82, entry: '1.08432', sl: '1.08190', tp: '1.08916', rr: '2.2R' },
@@ -70,6 +71,7 @@ function FakeChart() {
 
 export function ProductPreview() {
   return (
+    <ScrollReveal>
     <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_50px_100px_-20px_rgba(0,0,0,0.9)]">
       {/* Ambient glow behind mockup */}
       <div className="absolute inset-0 -z-10 blur-3xl opacity-30 bg-gradient-to-b from-[#3b82f6]/20 to-transparent pointer-events-none" />
@@ -211,5 +213,6 @@ export function ProductPreview() {
         </div>
       </div>
     </div>
+    </ScrollReveal>
   )
 }

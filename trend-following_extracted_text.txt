@@ -1,0 +1,1933 @@
+TREND FOLLOWING
+
+STRATEGY
+
+THE COMPLETE REFERENCE GUIDE
+
+Version 1.0  |  2025  |  SIDID Limited
+
+TABLE OF CONTENTS
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>1.  Introduction to Trend Following	3
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>2.  Core Theory & Market Structure	4
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>3.  Key Indicators & Tools	5
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>4.  Algorithmic Framework — Inputs, Logic & Outputs	8
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>5.  Entry Methods & Signal Rules	10
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>6.  Exit Strategies & Trailing Stops	12
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>7.  Risk Management & Position Sizing	13
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>8.  Trend Following Across All Markets	15
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>9.  Trend Following Across All Timeframes	17
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>10.  Multi-Timeframe Analysis (MTF)	19
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>11.  Backtesting, Performance & Statistics	20
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>12.  Common Mistakes & Best Practices	22
+
+</w:tabs><w:spacing w:after="80" w:before="80"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Arial" w:eastAsia="Arial" w:hAnsi="Arial"/><w:color w:val="2D3748"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>13.  Pseudocode & Implementation Reference	23
+
+1. INTRODUCTION TO TREND FOLLOWING
+
+Trend following is one of the oldest, most battle-tested, and most consistently profitable trading strategies known to financial markets. Rather than attempting to predict future price movements, trend following is entirely reactive — traders wait for a trend to establish itself, join it, ride it, and exit when evidence of its exhaustion appears.
+
+The core philosophy can be summarized in a single sentence: "The trend is your friend — until it ends." This approach has been proven profitable across decades, asset classes, and market regimes by legendary traders including Richard Dennis, Bill Dunn, Jerry Parker, and the entire Turtle Traders experiment.
+
+🔑 Definition
+
+Trend Following is a trading methodology that identifies the direction of current price momentum and executes trades aligned with that direction — entering after confirmation and exiting when the trend shows signs of reversal or exhaustion. It is based on price action, not fundamental analysis or prediction.
+
+1.1 Why Trend Following Works
+
+Markets are driven by human behavior — fear and greed — which create persistent directional moves
+
+Institutions (banks, hedge funds) require time to build positions, which creates sustained trends
+
+News and macroeconomic data take time to be fully priced in, extending trends longer than expected
+
+A relatively small number of large winning trades can offset many small losses — right-skewed returns
+
+Unlike mean-reversion strategies, trend following profits in both bull and bear markets
+
+1.2 Key Characteristics
+
+Characteristic
+
+Description
+
+Win Rate
+
+30%–50% (fewer wins but larger average wins)
+
+Risk:Reward
+
+1:2 to 1:5+ (asymmetric payoff structure)
+
+Holding Period
+
+Hours to months (timeframe dependent)
+
+Prediction Required
+
+None — purely reactive to price
+
+Works In
+
+Trending markets; underperforms in ranging/choppy markets
+
+Automation Friendly
+
+Highly — rules-based, objective entry/exit criteria
+
+2. CORE THEORY & MARKET STRUCTURE
+
+Before executing any trend following strategy, a trader must deeply understand market structure — the language that price speaks on every chart, across every asset, and on every timeframe.
+
+2.1 Trend Structure: The Anatomy of a Trend
+
+A trend is not simply price moving in one direction — it has a repeating structural pattern defined by swing points:
+
+Figure 1 — Uptrend (Higher Highs + Higher Lows) vs Downtrend (Lower Highs + Lower Lows)
+
+Structure
+
+Uptrend Condition
+
+Downtrend Condition
+
+Swing Highs
+
+Each high is HIGHER than the last (HH)
+
+Each high is LOWER than the last (LH)
+
+Swing Lows
+
+Each low is HIGHER than the last (HL)
+
+Each low is LOWER than the last (LL)
+
+Trend Bias
+
+BULLISH — Look for buy setups
+
+BEARISH — Look for sell setups
+
+Break of Structure
+
+Price makes a LL → potential reversal
+
+Price makes a HH → potential reversal
+
+2.2 Trend Phases
+
+Every trend passes through recognizable phases, originally described in the Dow Theory:
+
+Accumulation Phase — Institutional players quietly build positions; price appears to range with low volatility.
+
+Markup/Markdown Phase — The trend becomes visible; momentum builds; this is where trend followers enter.
+
+Distribution/Climax Phase — Trend overextends; retail FOMO peaks; institutions quietly exit.
+
+Reversal/Consolidation Phase — Price loses directional momentum; trend followers exit or are stopped out.
+
+⚡ Critical Insight
+
+Trend followers do NOT try to buy at the exact bottom or sell at the exact top. They sacrifice the first 10-20% of a move to get CONFIRMATION, then ride the remaining 60-80% of the trend with disciplined risk management. Missing the turn is the cost of certainty.
+
+2.3 Types of Trends by Duration
+
+Trend Type
+
+Duration
+
+Timeframe
+
+Example
+
+Primary (Major)
+
+1 month – several years
+
+Weekly / Monthly
+
+2009–2021 S&P 500 Bull Run
+
+Secondary (Intermediate)
+
+1 week – several months
+
+Daily / Weekly
+
+Quarterly earnings-driven moves
+
+Minor (Short-term)
+
+1 day – several weeks
+
+H1 / H4 / Daily
+
+Post-news breakout swing
+
+Micro (Intraday)
+
+Minutes – hours
+
+M1 / M5 / M15
+
+Opening range breakout in Forex
+
+3. KEY INDICATORS & TOOLS
+
+Trend following relies on a set of proven technical indicators that help identify trend direction, confirm trend strength, time entries, and signal exits. No single indicator is sufficient — the best systems combine multiple complementary tools.
+
+3.1 Moving Averages (MA / EMA / SMA)
+
+Moving averages are the backbone of almost every trend following system. They smooth price data and provide dynamic support/resistance levels.
+
+Figure 2 — EMA 20/50/200 Crossover System with Buy/Sell Signal Annotations
+
+MA Type
+
+Formula
+
+Best Use
+
+Sensitivity
+
+SMA (Simple)
+
+Sum(Close, n) / n
+
+Trend direction filter, HTF bias
+
+Low — equal weight to all bars
+
+EMA (Exponential)
+
+Price × k + EMA_prev × (1-k)
+
+Entry timing, crossovers, dynamic S/R
+
+High — more weight to recent price
+
+WMA (Weighted)
+
+Sum(Price × weight) / Sum(weights)
+
+Short-term momentum confirmation
+
+Medium — linear weighting
+
+HULL MA
+
+WMA(2×WMA(n/2) - WMA(n), √n)
+
+Low-lag trend direction
+
+Very High — minimal lag
+
+VWMA (Volume-Weighted)
+
+Sum(Price × Volume) / Sum(Volume)
+
+Institutional trend confirmation
+
+Medium — weighted by volume
+
+Standard period settings used by professional trend followers:
+
+Short-term scalping: EMA 8, EMA 21
+
+Intraday / Day trading: EMA 20, EMA 50
+
+Swing trading: EMA 50, EMA 100, SMA 200
+
+Position trading: SMA 200 (the "institutional trend filter")
+
+3.2 Average Directional Index (ADX)
+
+The ADX is the most important trend strength indicator available. Unlike moving averages, it does not indicate direction — it measures HOW STRONG the current trend is, regardless of whether it is up or down.
+
+Figure 3 — ADX with +DI/-DI Lines. ADX > 25 signals a strong, tradable trend (shaded zone)
+
+ADX Value
+
+Trend Strength
+
+Trading Recommendation
+
+0 – 20
+
+Absent / Weak
+
+AVOID — market is ranging, choppy. Trend-follow signals are unreliable.
+
+20 – 25
+
+Developing
+
+CAUTIOUS — trend beginning to form. Wait for confirmation.
+
+25 – 40
+
+Strong
+
+IDEAL — high probability trending conditions. Execute trend-follow trades.
+
+40 – 60
+
+Very Strong
+
+ACTIVE — ride the trend aggressively. Tighten stops as exhaustion approaches.
+
+60+
+
+Extreme
+
+CAUTION — overextension possible. Reduce size, watch for reversal signals.
+
+📐 ADX Calculation Summary
+
++DI = (Smoothed +DM / ATR) × 100  |  -DI = (Smoothed -DM / ATR) × 100  |  DX = (|+DI − −DI| / (+DI + −DI)) × 100  |  ADX = 14-period Smoothed Average of DX. +DI crossing above -DI with ADX > 25 = BULLISH trend confirmation. -DI crossing above +DI with ADX > 25 = BEARISH trend confirmation.
+
+3.3 Average True Range (ATR)
+
+ATR measures the average volatility of an asset over a given period. It is NOT a directional indicator — it quantifies how much price typically moves. This makes it invaluable for position sizing, stop placement, and take-profit targets.
+
+ATR Formula: Average of True Range over n periods, where TR = max(High - Low, |High - Prev.Close|, |Low - Prev.Close|)
+
+Standard period: 14 bars (adaptable — shorter for scalping, longer for position trading)
+
+Stop Loss: Place stops at 1.5× to 3× ATR from entry
+
+Position Size: Risk ÷ (ATR multiplier × ATR) = number of units/lots
+
+Take Profit: Set targets at 2× to 5× ATR for asymmetric reward
+
+3.4 MACD (Moving Average Convergence Divergence)
+
+MACD Line = EMA(12) - EMA(26)
+
+Signal Line = EMA(9) of MACD Line
+
+Histogram = MACD Line - Signal Line
+
+BULLISH: MACD crosses ABOVE Signal Line + Histogram goes positive
+
+BEARISH: MACD crosses BELOW Signal Line + Histogram goes negative
+
+MACD above zero line = medium-term bullish bias; below zero = bearish bias
+
+3.5 RSI (Relative Strength Index) — Trend Use
+
+In trend following, RSI is NOT used as an overbought/oversold indicator. Instead, it is used as a TREND FILTER and MOMENTUM CONFIRMATION tool:
+
+RSI > 50 = BULLISH momentum bias (look for long setups)
+
+RSI < 50 = BEARISH momentum bias (look for short setups)
+
+RSI > 55 required for long entries on most systematic trend-follow rules
+
+RSI divergence can provide early warning of trend exhaustion
+
+3.6 Donchian Channel
+
+The Donchian Channel, invented by Richard Donchian (the father of trend following), plots the highest high and lowest low over a set period. It is one of the purest trend following tools:
+
+Breakout above the upper band (n-period high) = BUY signal
+
+Breakout below the lower band (n-period low) = SELL signal
+
+Classic turtle trader setting: 20-day channel for entry, 10-day channel for exit
+
+Longer channels (55-day, 200-day) filter false breakouts and produce more reliable signals
+
+4. ALGORITHMIC FRAMEWORK — INPUTS, LOGIC & OUTPUTS
+
+The following section breaks down the Trend Following Strategy into a formal algorithmic specification. This is designed for both manual traders who need a clear decision framework and developers implementing automated systems.
+
+4.1 Required Inputs
+
+Input Parameter
+
+Type
+
+Default Value
+
+Description
+
+Symbol / Instrument
+
+String
+
+User-defined
+
+The asset being traded (e.g., EURUSD, BTC/USDT, AAPL)
+
+Timeframe
+
+Enum
+
+H4
+
+Chart timeframe: M1, M5, M15, M30, H1, H4, D1, W1, MN
+
+EMA Fast Period
+
+Integer
+
+20
+
+Period for the fast exponential moving average
+
+EMA Slow Period
+
+Integer
+
+50
+
+Period for the slow exponential moving average
+
+EMA Trend Filter
+
+Integer
+
+200
+
+Long-term trend direction filter (above = bullish, below = bearish)
+
+ADX Period
+
+Integer
+
+14
+
+Period for ADX trend strength calculation
+
+ADX Threshold
+
+Float
+
+25.0
+
+Minimum ADX value required to enter a trade
+
+RSI Period
+
+Integer
+
+14
+
+Period for RSI momentum calculation
+
+RSI Long Min
+
+Float
+
+50.0
+
+RSI must exceed this value for long entries
+
+RSI Short Max
+
+Float
+
+50.0
+
+RSI must be below this value for short entries
+
+ATR Period
+
+Integer
+
+14
+
+Period for ATR volatility measurement
+
+Stop Loss ATR Mult
+
+Float
+
+2.0
+
+Stop loss placed at entry ± (ATR × this multiplier)
+
+TP1 ATR Mult
+
+Float
+
+3.0
+
+First take profit target (ATR multiplier)
+
+TP2 ATR Mult
+
+Float
+
+5.0
+
+Second take profit target (ATR multiplier)
+
+Risk Per Trade %
+
+Float
+
+1.0
+
+Maximum account equity risked per trade (%)
+
+Max Open Trades
+
+Integer
+
+5
+
+Maximum concurrent positions
+
+Trailing Stop ATR
+
+Float
+
+1.5
+
+Trail stop by this ATR multiple as trade develops
+
+Session Filter
+
+Boolean
+
+false
+
+If true, only trade during specified market hours
+
+Volume Filter
+
+Boolean
+
+true
+
+If true, require above-average volume on breakout signals
+
+4.2 Signal Generation Logic (Decision Tree)
+
+📊 Algorithmic Decision Flow — LONG Entry
+
+📊 Algorithmic Decision Flow — SHORT Entry
+
+4.3 Outputs
+
+Output
+
+Type
+
+Description
+
+Trade Signal
+
+Enum: BUY / SELL / HOLD
+
+Primary trading direction instruction
+
+Entry Price
+
+Float
+
+Recommended entry price (market price or limit level)
+
+Stop Loss Price
+
+Float
+
+Hard stop loss level: Entry ± (ATR × SL_Multiplier)
+
+Take Profit 1
+
+Float
+
+First partial exit target: Entry ± (ATR × TP1_Multiplier)
+
+Take Profit 2
+
+Float
+
+Second full exit target: Entry ± (ATR × TP2_Multiplier)
+
+Position Size
+
+Float (lots/units)
+
+(Account Equity × Risk%) ÷ (ATR × SL_Multiplier × Pip Value)
+
+Trailing Stop Level
+
+Float
+
+Dynamic stop that adjusts upward (long) or downward (short)
+
+Trend Score
+
+Integer 0–5
+
+Number of confluence conditions met (1–2 = weak, 4–5 = strong)
+
+Signal Confidence
+
+String: LOW/MED/HIGH
+
+Based on Trend Score: 1-2=LOW, 3=MED, 4-5=HIGH
+
+Exit Signal
+
+Boolean
+
+True when exit conditions are met (stop hit, TP reached, trend broken)
+
+5. ENTRY METHODS & SIGNAL RULES
+
+There are three primary entry methods used in trend following. Each has different risk/reward characteristics and is appropriate for different market conditions and trader styles.
+
+Figure 4 — Breakout Entry (left) vs Pullback Entry (right). Both are valid trend following entries.
+
+5.1 Method 1: Breakout Entry
+
+A breakout entry occurs when price moves decisively beyond a significant resistance level (for longs) or support level (for shorts). This is the most aggressive entry — you enter as the trend is confirmed.
+
+Rule
+
+Description
+
+Trigger
+
+Price closes ABOVE the recent swing high (or Donchian Channel upper band) for longs; closes BELOW swing low for shorts
+
+Confirmation
+
+ADX > 25 and rising; Volume above 20-period average; EMA alignment confirmed
+
+Entry
+
+Market order at the close of the breakout candle, OR limit order at the breakout level
+
+Stop Loss
+
+1 ATR below the breakout candle low (for longs); 1 ATR above candle high (for shorts)
+
+Advantage
+
+Catches the trend early; largest potential profit
+
+Disadvantage
+
+More false breakouts (whipsaws); stop loss takes more heat
+
+5.2 Method 2: Pullback Entry
+
+A pullback entry waits for price to retrace to a key level within an already established trend. This offers a better entry price and tighter stop loss, but risks missing the move if the trend accelerates without retracing.
+
+Rule
+
+Description
+
+Trigger
+
+In an uptrend, price pulls back to touch or come close to EMA 20, EMA 50, or a prior swing high-turned-support
+
+Confirmation
+
+ADX still > 20; Price has not broken structure (no new Lower Low); Candle shows rejection (hammer, bullish engulf)
+
+Entry
+
+Limit order at the moving average level OR market order after bullish confirmation candle closes
+
+Stop Loss
+
+1–2 ATR below the pullback low (long) or above pullback high (short)
+
+Advantage
+
+Tighter stop loss; better Risk:Reward ratio; higher win rate
+
+Disadvantage
+
+May miss the trade if price does not retrace; requires more patience
+
+5.3 Method 3: Moving Average Crossover Entry
+
+LONG: Fast EMA (e.g., EMA 20) crosses ABOVE Slow EMA (e.g., EMA 50) — also known as the "Golden Cross" on SMA 50/200
+
+SHORT: Fast EMA crosses BELOW Slow EMA — also known as the "Death Cross" on SMA 50/200
+
+Add ADX > 25 filter to avoid false crossovers in ranging markets
+
+Add RSI > 50 (long) or RSI < 50 (short) filter for momentum alignment
+
+Best used on H4, Daily, and Weekly timeframes for high-quality signals
+
+5.4 Candlestick Confirmation Patterns
+
+Candle Pattern
+
+Signal Type
+
+Use In Trend Following
+
+Bullish Engulfing
+
+Long entry confirmation
+
+Appears at pullback low in uptrend — high-probability long signal
+
+Bearish Engulfing
+
+Short entry confirmation
+
+Appears at pullback high in downtrend — high-probability short signal
+
+Hammer / Pin Bar
+
+Reversal/entry from S/R
+
+Long wick rejection at moving average support in uptrend
+
+Shooting Star
+
+Short entry from resistance
+
+Long upper wick rejection at resistance in downtrend pullback
+
+Inside Bar (IB)
+
+Breakout anticipation
+
+Compression before continuation; trade the breakout of the IB range
+
+Marubozu
+
+Strong momentum candle
+
+Large-bodied candle with no wicks — confirms breakout strength
+
+6. EXIT STRATEGIES & TRAILING STOPS
+
+The exit is where most of a trend follower's edge is generated. Cutting losers quickly and letting winners run is the fundamental asymmetry that makes trend following profitable over time.
+
+Figure 5 — ATR Trailing Stop: The stop rises as price advances and never moves down, locking in profits
+
+6.1 Exit Methods Comparison
+
+Exit Method
+
+Mechanism
+
+Best For
+
+Pros
+
+Cons
+
+Fixed Stop Loss
+
+Hard stop at entry ± (n × ATR)
+
+All traders
+
+Predictable, disciplined
+
+May exit before trend resumption
+
+ATR Trailing Stop
+
+Stop trails price by n × ATR
+
+Swing / Position
+
+Rides full trend
+
+Gives back profit in reversal
+
+EMA Trail Stop
+
+Exit if price closes below EMA 20/50
+
+Swing trading
+
+Simple, objective
+
+Lag in fast reversals
+
+Chandelier Stop
+
+Highest high − (n × ATR)
+
+Trend momentum
+
+Adapts to volatility
+
+Can be slow to react
+
+Structure-Based
+
+Exit if new Lower Low forms (long)
+
+Price action traders
+
+Respects market structure
+
+Requires experience to identify
+
+Time-Based
+
+Exit after set number of bars/days
+
+Systematic traders
+
+Prevents over-holding
+
+Ignores active trend signals
+
+Take Profit Levels
+
+Partial exit at TP1, full at TP2
+
+Risk management
+
+Locks in partial gains
+
+Limits maximum upside
+
+📏 ATR Trailing Stop Rule
+
+LONG: Trailing Stop = Highest Close since entry − (2 × ATR). The stop only moves UP — never DOWN. If price falls below this level on any bar close, EXIT immediately. This is the most widely used exit mechanism in professional trend following systems.
+
+7. RISK MANAGEMENT & POSITION SIZING
+
+Risk management is the single most important determinant of long-term profitability in trend following. Even with a 35% win rate, proper risk management produces consistent compound growth. The following rules govern every trade in a professional trend following system.
+
+7.1 The Golden Rules of Trend Following Risk
+
+Never risk more than 1–2% of total account equity on any single trade
+
+Never move your stop loss further from entry (only tighter or trailing)
+
+Cut all losing trades at your predetermined stop — no exceptions
+
+Let winning trades run — do not close winning positions prematurely
+
+Limit total portfolio risk exposure to 4–8% (all open trades combined)
+
+After 3–5 consecutive losses, reduce position size by 50% until edge returns
+
+A 50% drawdown requires a 100% gain to recover — protect capital at all costs
+
+7.2 Position Sizing Formula
+
+🧮 Position Size Calculation
+
+7.3 Position Sizing Methods Compared
+
+Method
+
+Formula
+
+Best For
+
+Risk Level
+
+Fixed Dollar
+
+Risk $X per trade
+
+Beginners — simple to calculate
+
+LOW
+
+Fixed Percentage (1-2%)
+
+Risk % of account equity
+
+Most professional retail traders
+
+MEDIUM
+
+Volatility-Based (ATR)
+
+Adjust size based on ATR
+
+All market conditions; scales with volatility
+
+MEDIUM
+
+Kelly Criterion
+
+f* = (bp - q) / b
+
+Advanced quants; historical data required
+
+HIGH
+
+Fixed Fractional
+
+Same % of equity each trade
+
+Systematic / algorithmic trading
+
+MEDIUM
+
+Equal Weighting
+
+Same dollar amount each market
+
+Portfolio of diversified markets
+
+LOW-MED
+
+7.4 Drawdown Management
+
+Drawdown Level
+
+Action Required
+
+0–5% drawdown
+
+Continue trading normally — within expected variance
+
+5–10% drawdown
+
+Review recent trades. Check if market is ranging. Reduce position size to 75%
+
+10–15% drawdown
+
+Reduce position size to 50%. Increase signal quality filters. Pause and review
+
+15–20% drawdown
+
+Reduce size to 25%. Only take A+ setups. Consult trading journal for patterns
+
+20%+ drawdown
+
+STOP trading. Full system review required. Resume with minimum size
+
+8. TREND FOLLOWING ACROSS ALL MARKETS
+
+Figure 6 — Average Win Rate and Risk:Reward Ratio across major markets using trend following systems
+
+8.1 Forex (Foreign Exchange)
+
+Aspect
+
+Details
+
+Best Currency Pairs
+
+EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD — major pairs with tight spreads and strong trends
+
+Best Timeframes
+
+H4, Daily (swing); H1 for day trading; Weekly for position trades
+
+Trend Drivers
+
+Central bank interest rate decisions, macroeconomic data (CPI, NFP, GDP), geopolitical risk
+
+Key Indicators
+
+EMA 50/200, ADX(14), ATR(14), RSI(14), Bollinger Bands, MACD
+
+Session Timing
+
+London (08:00–16:00 GMT) and New York (13:00–21:00 GMT) overlap — peak trend days
+
+Avg Win Rate
+
+40–45% | Avg R:R: 2.5–3.0:1
+
+Unique Risks
+
+Weekend gaps, central bank interventions, spread widening during news events
+
+8.2 Equities / Stocks
+
+Aspect
+
+Details
+
+Best Markets
+
+US (S&P 500, NASDAQ, NYSE), LSE, ASX, NSE — liquid, institutional participation
+
+Best Timeframes
+
+Daily for swing trading; Weekly for position trading; H1-H4 for intraday
+
+Trend Drivers
+
+Earnings beats/misses, sector rotation, index inclusion/exclusion, macro sentiment
+
+Key Indicators
+
+SMA 50/200 (institutional), ADX, MACD, Volume, Relative Strength vs Index
+
+Special Rules
+
+Avoid shorting stocks long-term (structural upward bias). Use trend filter: only long above SMA 200
+
+Avg Win Rate
+
+43–50% | Avg R:R: 2.8–3.5:1
+
+Unique Risks
+
+Earnings gaps, single-stock news events, halts, illiquidity in small-caps
+
+8.3 Cryptocurrencies
+
+Aspect
+
+Details
+
+Best Assets
+
+BTC/USDT, ETH/USDT, SOL/USDT — top market cap with most institutional trend activity
+
+Best Timeframes
+
+H4, Daily for swing; Weekly for position; M15-H1 for intraday
+
+Trend Drivers
+
+Halving cycles, ETF flows, regulatory news, DeFi/on-chain metrics, macro risk-on/off
+
+Key Indicators
+
+EMA 20/50/200, ADX(14), RSI(14), Volume, Funding Rate (for crypto-specific sentiment)
+
+Special Rules
+
+Wider ATR-based stops (crypto is 3–5× more volatile than Forex); reduce position size accordingly
+
+Avg Win Rate
+
+35–42% | Avg R:R: 3.5–5.0:1 (high volatility = larger winning trades)
+
+Unique Risks
+
+Exchange hacks, regulatory bans, 24/7 market (no session breaks), extreme gap risk
+
+8.4 Commodities
+
+Aspect
+
+Details
+
+Best Instruments
+
+Gold (XAUUSD), Crude Oil (WTI/Brent), Natural Gas, Silver, Copper, Wheat, Corn
+
+Best Timeframes
+
+H4, Daily for swing; Weekly for multi-month position trades
+
+Trend Drivers
+
+Supply/demand fundamentals, geopolitical events (oil), weather (agricultural), USD strength
+
+Key Indicators
+
+Donchian Channel, EMA 20/50, ADX, ATR, COT (Commitment of Traders) report for bias
+
+Special Rules
+
+Trend following has its DEEPEST historical roots in commodities. COT data provides institutional flow confirmation
+
+Avg Win Rate
+
+45–50% | Avg R:R: 3.0–4.0:1
+
+Unique Risks
+
+Seasonal patterns, contract rollover gaps, government interventions in energy/agricultural
+
+8.5 Indices
+
+Aspect
+
+Details
+
+Instruments
+
+S&P 500 (SPX), NASDAQ 100 (NDX), DAX 40, FTSE 100, Nikkei 225, ASX 200
+
+Best Timeframes
+
+H1, H4 for day/swing; Daily and Weekly for position trading
+
+Trend Drivers
+
+Central bank policy, earnings seasons, economic cycle, geopolitical risk, sector strength
+
+Key Indicators
+
+SMA 50/200, ADX, MACD, Breadth indicators (Advance/Decline), VIX (volatility)
+
+Special Rules
+
+Use VIX as a regime filter: VIX < 20 = trending conditions; VIX > 30 = choppy, reduce position size
+
+Avg Win Rate
+
+43–47% | Avg R:R: 2.5–3.0:1
+
+Unique Risks
+
+Index rebalancing events, flash crashes, correlation with broader equity sentiment
+
+8.6 Futures
+
+Aspect
+
+Details
+
+Instruments
+
+ES (S&P 500 Futures), NQ (NASDAQ Futures), CL (Crude Oil), GC (Gold), 6E (EUR/USD Futures)
+
+Best Timeframes
+
+H1, H4, Daily — futures are the natural instrument for systematic trend following
+
+Trend Drivers
+
+Same as underlying asset + futures-specific factors (basis, roll, open interest)
+
+Key Indicators
+
+EMA 20/50, Donchian Channel, ATR, Volume, Open Interest (growing OI = trend continuation)
+
+Special Rules
+
+Monitor contract expiry. Roll positions to next front month to avoid delivery risk. Use CME Group data for COT
+
+Avg Win Rate
+
+44–48% | Avg R:R: 2.8–3.5:1
+
+Unique Risks
+
+Leverage risk, contract rollovers, margin calls, overnight gaps
+
+9. TREND FOLLOWING ACROSS ALL TIMEFRAMES
+
+The trend following methodology is universally applicable across all timeframes. However, each timeframe requires different indicator settings, risk parameters, and trading rules. The table below is a complete reference guide.
+
+Figure 7 — Timeframe Matrix: Category, Holding Period, Indicators, and Recommended Markets
+
+Timeframe
+
+Style
+
+Hold Time
+
+EMA Settings
+
+ADX Min
+
+ATR SL Mult
+
+Markets
+
+Trades/Week
+
+M1
+
+Scalping
+
+1–5 min
+
+8/21/50
+
+30
+
+1.5×
+
+Forex, Indices
+
+20–50
+
+M5
+
+Scalping
+
+5–30 min
+
+8/21/50
+
+30
+
+1.5×
+
+Forex, Crypto
+
+10–30
+
+M15
+
+Intraday
+
+30min–2hr
+
+20/50
+
+25
+
+1.8×
+
+Forex, Crypto
+
+5–15
+
+M30
+
+Intraday
+
+1hr–4hr
+
+20/50/200
+
+25
+
+2.0×
+
+Forex, Indices
+
+3–10
+
+H1
+
+Day/Swing
+
+4hr–2 days
+
+20/50/200
+
+25
+
+2.0×
+
+All Markets
+
+2–8
+
+H4
+
+Swing
+
+2–7 days
+
+20/50/200
+
+25
+
+2.5×
+
+All Markets
+
+1–5
+
+D1 (Daily)
+
+Swing
+
+1–4 weeks
+
+50/200
+
+20
+
+2.5×
+
+Stocks, Forex, Crypto
+
+2–8/month
+
+W1 (Weekly)
+
+Position
+
+1–6 months
+
+20/50/200
+
+20
+
+3.0×
+
+Stocks, Commodities
+
+1–4/month
+
+MN (Monthly)
+
+Long-Term
+
+6mo–3 years
+
+12/24
+
+15
+
+3.0×
+
+Indices, Commodities
+
+1–2/quarter
+
+9.1 Scalping (M1 – M5)
+
+Objective: Capture 5–20 pip moves aligned with the intraday and higher timeframe trend
+
+EMA Setup: EMA 8, EMA 21. LONG only when EMA 8 > EMA 21 and price above both
+
+ADX minimum 30 — choppy scalp setups destroy accounts; only trade when intraday trend is clear
+
+Session filter CRITICAL: Only scalp during London or New York sessions when volume and volatility are highest
+
+Risk per trade: 0.25–0.5% maximum — frequency of trades demands tighter risk per position
+
+Stop: 5–10 pips or 1.5× ATR(14). Target: 1:1.5 to 1:2 R:R minimum
+
+Use H1 or H4 chart to confirm higher timeframe trend direction before any scalp entry
+
+9.2 Intraday / Day Trading (M15 – H1)
+
+Objective: Capture directional moves within a single trading session (one day)
+
+EMA Setup: EMA 20, EMA 50, EMA 200. Trade only on the side of the EMA 200
+
+MACD crossover on M30 or H1 is a primary entry trigger with EMA alignment confirmation
+
+Preferred markets: Forex (during London/NY sessions), Crypto (any time), Indices (during equity market hours)
+
+All positions CLOSED before end of session to avoid overnight gap risk
+
+Target: 20–80 pips (Forex) or 0.5–2% (Crypto/Stocks) per trade
+
+9.3 Swing Trading (H4 – Daily)
+
+Optimal timeframe for most trend following systems — best balance of signal quality vs frequency
+
+Trade setup analysis done at end of day on the H4 or Daily chart
+
+EMA 50/200 crossover is a primary long-term signal; EMA 20 provides dynamic entry support
+
+Positions held for days to weeks; trailing stop based on ATR gives room for volatility
+
+Works across all markets — particularly powerful in Forex, Stocks, and Crypto
+
+Target: 100–500 pips (Forex), 5–20% (Stocks/Crypto), or 2–8× ATR
+
+9.4 Position Trading (Weekly – Monthly)
+
+Captures macro trends lasting weeks to years — highest quality setups but lowest frequency
+
+SMA 200 on the Daily or EMA 200 on the Weekly is the primary trend filter
+
+Donchian Channel (55-week or 200-day) is used for breakout entry signals
+
+ATR-based trailing stops are widened (3× ATR minimum) to accommodate major corrections within the trend
+
+Suitable for: Commodities (oil supercycles), Stock indices (decade-long bull markets), Forex (multi-year interest rate divergence trends)
+
+Target: 20–100% moves or 5–20× ATR; many winning trades last 6–18 months
+
+10. MULTI-TIMEFRAME ANALYSIS (MTF)
+
+Multi-timeframe analysis is the practice of analyzing a market on multiple timeframes simultaneously to gain a complete picture of trend direction, strength, and entry timing. It is the single most powerful way to filter out noise and increase the probability of successful trend following trades.
+
+Figure 8 — Top-Down MTF Analysis: Weekly defines bias, Daily confirms setup, H4 provides precise entry timing
+
+10.1 The Three-Timeframe Rule
+
+Role
+
+Timeframe (Example)
+
+Purpose
+
+Question to Answer
+
+Higher TF (HTF)
+
+Weekly / Daily
+
+Defines the primary trend direction and bias
+
+"What is the overall trend? Am I in a bullish or bearish environment?"
+
+Middle TF (MTF)
+
+H4 / Daily
+
+Confirms the setup and identifies key levels
+
+"Is there a valid entry setup forming in alignment with the HTF?"
+
+Lower TF (LTF)
+
+H1 / H4
+
+Times the precise entry for best risk:reward
+
+"Where exactly is the lowest-risk entry point within this setup?"
+
+🎯 MTF Alignment = Maximum Probability
+
+When the Weekly chart says BULLISH (price above SMA 200), the Daily chart shows a bullish setup (EMA 50/200 golden cross), and the H4 chart provides a pullback entry to EMA 20 — all three timeframes are aligned. This is the highest probability setup in trend following. Do not take counter-trend trades on lower timeframes when the HTF shows a strong opposing trend.
+
+10.2 Standard MTF Configurations by Trading Style
+
+Trading Style
+
+HTF (Trend)
+
+MTF (Setup)
+
+LTF (Entry)
+
+Enter When
+
+Scalper
+
+H1
+
+M15
+
+M5
+
+All 3 TF: same EMA alignment + ADX > 30
+
+Day Trader
+
+H4 / Daily
+
+H1
+
+M30
+
+HTF trend confirmed; H1 setup formed; M30 entry candle
+
+Swing Trader
+
+Weekly
+
+Daily
+
+H4
+
+Weekly bias set; Daily setup formed; H4 entry trigger fires
+
+Position Trader
+
+Monthly
+
+Weekly
+
+Daily
+
+Monthly macro trend; Weekly structure; Daily breakout entry
+
+11. BACKTESTING, PERFORMANCE & STATISTICS
+
+11.1 Key Performance Metrics
+
+Metric
+
+Formula / Definition
+
+Target for Trend Following
+
+Win Rate
+
+Winning Trades ÷ Total Trades × 100
+
+35%–50% is acceptable — focus on R:R not win rate
+
+Average Risk:Reward
+
+Avg Win ÷ Avg Loss
+
+Minimum 2:1; optimal 3:1 to 5:1
+
+Expectancy
+
+(Win Rate × Avg Win) - (Loss Rate × Avg Loss)
+
+Must be positive. Even 0.1R expectancy is profitable
+
+Profit Factor
+
+Gross Profit ÷ Gross Loss
+
+> 1.5 = good; > 2.0 = excellent
+
+Max Drawdown
+
+Largest peak-to-trough equity decline
+
+< 20% target; > 30% requires system review
+
+Calmar Ratio
+
+Annual Return ÷ Max Drawdown
+
+> 1.0 = good; > 2.0 = excellent
+
+Sharpe Ratio
+
+(Return - Risk-free Rate) ÷ Std Dev
+
+> 1.0 = good; > 1.5 = excellent
+
+Recovery Factor
+
+Net Profit ÷ Max Drawdown
+
+> 3.0 = robust system
+
+Avg Holding Period
+
+Total bars held ÷ Total trades
+
+Varies by timeframe; swing: 5–30 days
+
+Consecutive Losses
+
+Longest run of losing trades
+
+Plan for 8–12 consecutive losses in normal operation
+
+11.2 Backtesting Standards
+
+Use at minimum 5–10 years of data across multiple market regimes (bull, bear, sideways)
+
+Include realistic transaction costs: spreads, commissions, slippage (model at 0.5–2 pips for Forex)
+
+Test on out-of-sample data — use 70% in-sample for optimization, 30% out-of-sample for validation
+
+Walk-forward analysis: test on rolling windows to check strategy robustness over time
+
+Monte Carlo simulation: randomize trade order 1,000+ times to stress-test drawdown expectations
+
+Avoid over-optimization ("curve fitting") — a robust strategy should work with a range of parameter values
+
+Test across multiple instruments, not just on one cherry-picked symbol
+
+⚠️ Warning: Overfitting
+
+The most common backtesting error in trend following is optimizing indicator parameters (e.g., EMA periods, ATR multiplier) on historical data until the equity curve looks perfect. This is called "curve fitting." A truly robust trend following system should show positive results across a wide range of parameter values — not just the single best-performing setting.
+
+12. COMMON MISTAKES & BEST PRACTICES
+
+Common Mistake
+
+Why It Destroys Performance
+
+Best Practice
+
+Trading against the HTF trend
+
+Counter-trend trades have low R:R and fail frequently
+
+Always confirm bias on 2 higher timeframes before any entry
+
+Moving stop loss to avoid being stopped out
+
+Converts small losses into account-damaging losses
+
+Set stop, forget the stop — the market will tell you if you're wrong
+
+Exiting winning trades too early
+
+Ruins the R:R ratio; a 35% win rate only works with large wins
+
+Trail stops or set TP targets and leave the position alone
+
+Trading in choppy/ranging markets
+
+ADX < 20 means no trend — trend signals generate endless whipsaws
+
+Require ADX > 25 before any entry; skip low-ADX environments
+
+Overtrading (too many positions)
+
+Correlated positions multiply drawdown; no diversification benefit
+
+Cap open trades at 5–8; ensure they are in uncorrelated markets
+
+Ignoring position sizing
+
+A single oversized trade can erase months of gains
+
+Always calculate position size BEFORE entering any trade
+
+Not keeping a trading journal
+
+Cannot identify strengths, weaknesses, or recurring mistakes
+
+Record every trade: setup, entry, exit, emotions, lessons
+
+FOMO entries (chasing)
+
+Entering after the trend is mature; stop is far away; poor R:R
+
+Wait for the next pullback or accept you missed this move
+
+Abandoning the system during drawdown
+
+Every trend following system has multi-month losing streaks
+
+Trust backtested statistics; drawdown is normal, not failure
+
+13. PSEUDOCODE & IMPLEMENTATION REFERENCE
+
+The following pseudocode defines a complete, systematic trend following algorithm. It is language-agnostic and can be implemented in Python (with libraries such as pandas, ta-lib, backtrader), PineScript (TradingView), MQL4/MQL5 (MetaTrader), or any other algorithmic trading framework.
+
+13.1 System Initialization
+
+// ═══════════════════════════════════════════════════════════════
+
+// TREND FOLLOWING ALGORITHM — INITIALIZATION
+
+// ═══════════════════════════════════════════════════════════════
+
+INPUTS:
+
+  symbol          = "EURUSD"
+
+  timeframe       = "H4"
+
+  ema_fast        = 20
+
+  ema_slow        = 50
+
+  ema_trend       = 200
+
+  adx_period      = 14
+
+  adx_threshold   = 25.0
+
+  rsi_period      = 14
+
+  atr_period      = 14
+
+  sl_atr_mult     = 2.0
+
+  tp1_atr_mult    = 3.0
+
+  tp2_atr_mult    = 5.0
+
+  risk_pct        = 0.01        // 1% per trade
+
+  max_open_trades = 5
+
+INITIALIZE:
+
+  account_equity  = GET_ACCOUNT_EQUITY()
+
+  open_trades     = []
+
+  trade_log       = []
+
+13.2 Indicator Calculation
+
+// ═══════════════════════════════════════════════════════════════
+
+// INDICATOR CALCULATIONS (run on each new bar close)
+
+// ═══════════════════════════════════════════════════════════════
+
+FUNCTION calculate_indicators(price_data):
+
+  close  = price_data.close
+
+  high   = price_data.high
+
+  low    = price_data.low
+
+  // Moving Averages
+
+  EMA_FAST  = EMA(close, ema_fast)
+
+  EMA_SLOW  = EMA(close, ema_slow)
+
+  EMA_TREND = EMA(close, ema_trend)
+
+  // Trend Strength
+
+  ADX, DI_PLUS, DI_MINUS = ADX(high, low, close, adx_period)
+
+  // Momentum
+
+  RSI  = RSI(close, rsi_period)
+
+  MACD, SIGNAL, HIST = MACD(close, 12, 26, 9)
+
+  // Volatility
+
+  ATR  = ATR(high, low, close, atr_period)
+
+  RETURN {EMA_FAST, EMA_SLOW, EMA_TREND, ADX, DI_PLUS, DI_MINUS,
+
+           RSI, MACD, SIGNAL, HIST, ATR}
+
+13.3 Signal Detection Logic
+
+// ═══════════════════════════════════════════════════════════════
+
+// SIGNAL DETECTION — runs on bar close
+
+// ═══════════════════════════════════════════════════════════════
+
+FUNCTION detect_signal(indicators, close):
+
+  // ── LONG SIGNAL CONDITIONS ──────────────────────────────────
+
+  long_cond_1 = close > indicators.EMA_TREND         // Price above HTF EMA
+
+  long_cond_2 = indicators.EMA_FAST > indicators.EMA_SLOW  // Bullish EMA cross
+
+  long_cond_3 = indicators.ADX > adx_threshold       // Trend is strong
+
+  long_cond_4 = indicators.DI_PLUS > indicators.DI_MINUS   // DI alignment
+
+  long_cond_5 = indicators.RSI > 50                  // Bullish momentum
+
+  long_cond_6 = indicators.MACD > indicators.SIGNAL  // MACD confirmation
+
+  long_score  = COUNT_TRUE([long_cond_1, long_cond_2, long_cond_3,
+
+                             long_cond_4, long_cond_5, long_cond_6])
+
+  // ── SHORT SIGNAL CONDITIONS ─────────────────────────────────
+
+  short_cond_1 = close < indicators.EMA_TREND
+
+  short_cond_2 = indicators.EMA_FAST < indicators.EMA_SLOW
+
+  short_cond_3 = indicators.ADX > adx_threshold
+
+  short_cond_4 = indicators.DI_MINUS > indicators.DI_PLUS
+
+  short_cond_5 = indicators.RSI < 50
+
+  short_cond_6 = indicators.MACD < indicators.SIGNAL
+
+  short_score = COUNT_TRUE([short_cond_1, short_cond_2, short_cond_3,
+
+                             short_cond_4, short_cond_5, short_cond_6])
+
+  // ── SIGNAL OUTPUT ────────────────────────────────────────────
+
+  IF long_score  >= 5: RETURN { signal: "BUY",  score: long_score  }
+
+  IF short_score >= 5: RETURN { signal: "SELL", score: short_score }
+
+  ELSE:                RETURN { signal: "HOLD", score: 0           }
+
+13.4 Trade Execution & Management
+
+// ═══════════════════════════════════════════════════════════════
+
+// TRADE EXECUTION
+
+// ═══════════════════════════════════════════════════════════════
+
+FUNCTION execute_trade(signal, entry_price, indicators):
+
+  IF len(open_trades) >= max_open_trades: RETURN  // Max positions reached
+
+  IF signal.signal == "HOLD":             RETURN  // No signal
+
+  atr = indicators.ATR
+
+  IF signal.signal == "BUY":
+
+    stop_loss    = entry_price - (sl_atr_mult  × atr)
+
+    take_profit1 = entry_price + (tp1_atr_mult × atr)
+
+    take_profit2 = entry_price + (tp2_atr_mult × atr)
+
+    direction    = "LONG"
+
+  ELSE IF signal.signal == "SELL":
+
+    stop_loss    = entry_price + (sl_atr_mult  × atr)
+
+    take_profit1 = entry_price - (tp1_atr_mult × atr)
+
+    take_profit2 = entry_price - (tp2_atr_mult × atr)
+
+    direction    = "SHORT"
+
+  // Position sizing
+
+  risk_amount   = account_equity × risk_pct
+
+  sl_distance   = ABS(entry_price - stop_loss)
+
+  position_size = risk_amount / sl_distance
+
+  trade = { direction, entry_price, stop_loss, take_profit1,
+
+             take_profit2, position_size, trail_stop: stop_loss,
+
+             highest_price: entry_price, timestamp: NOW() }
+
+  open_trades.APPEND(trade)
+
+  LOG_TRADE(trade)
+
+// ═══════════════════════════════════════════════════════════════
+
+// TRAILING STOP & EXIT MANAGEMENT
+
+// ═══════════════════════════════════════════════════════════════
+
+FUNCTION manage_open_trades(current_price, atr):
+
+  FOR EACH trade IN open_trades:
+
+    IF trade.direction == "LONG":
+
+      // Update trailing stop (only moves up)
+
+      new_trail = current_price - (sl_atr_mult × atr)
+
+      trade.trail_stop = MAX(trade.trail_stop, new_trail)
+
+      trade.highest_price = MAX(trade.highest_price, current_price)
+
+      // EXIT CONDITIONS
+
+      IF current_price <= trade.trail_stop:  CLOSE_TRADE(trade, "TRAIL_STOP")
+
+      IF current_price >= trade.take_profit1: PARTIAL_CLOSE(trade, 0.5, "TP1")
+
+      IF current_price >= trade.take_profit2: CLOSE_TRADE(trade, "TP2")
+
+    ELSE IF trade.direction == "SHORT":
+
+      new_trail = current_price + (sl_atr_mult × atr)
+
+      trade.trail_stop = MIN(trade.trail_stop, new_trail)
+
+      IF current_price >= trade.trail_stop:  CLOSE_TRADE(trade, "TRAIL_STOP")
+
+      IF current_price <= trade.take_profit1: PARTIAL_CLOSE(trade, 0.5, "TP1")
+
+      IF current_price <= trade.take_profit2: CLOSE_TRADE(trade, "TP2")
+
+13.5 Main Loop
+
+// ═══════════════════════════════════════════════════════════════
+
+// MAIN STRATEGY LOOP — executed on each bar close
+
+// ═══════════════════════════════════════════════════════════════
+
+ON_BAR_CLOSE(price_data):
+
+  // 1. Calculate all indicators
+
+  indicators = calculate_indicators(price_data)
+
+  // 2. Manage existing positions (trailing stops, partial closes)
+
+  manage_open_trades(price_data.close, indicators.ATR)
+
+  // 3. Detect new signals
+
+  signal = detect_signal(indicators, price_data.close)
+
+  // 4. Execute new trade if signal is valid
+
+  IF signal.signal != "HOLD" AND len(open_trades) < max_open_trades:
+
+    execute_trade(signal, price_data.close, indicators)
+
+  // 5. Update performance metrics
+
+  account_equity = GET_ACCOUNT_EQUITY()
+
+  UPDATE_JOURNAL(signal, indicators, open_trades)
+
+💡 Implementation Notes
+
+This algorithm is designed for bar-close execution (not tick-by-tick) to minimize overfitting and reduce execution noise. For live trading, add the following safeguards: (1) Economic calendar filter — do not open new positions within 30 minutes of high-impact news events. (2) Correlation check — do not hold more than 2 highly correlated positions simultaneously (e.g., EURUSD and GBPUSD are 85% correlated). (3) Daily drawdown circuit breaker — halt trading if daily loss exceeds 3% of equity. (4) Slippage buffer — add 1–2 pips to all calculated entry and exit prices when backtesting.
+
+13.6 Strategy Summary Card
+
+Component
+
+Specification
+
+Strategy Type
+
+Systematic Trend Following — Reactive, Rule-Based
+
+Works On
+
+Forex, Equities, Crypto, Commodities, Indices, Futures
+
+Timeframes
+
+M1 to Monthly (parameters must be adjusted per timeframe)
+
+Required Indicators
+
+EMA (Fast/Slow/Trend), ADX, RSI, ATR, MACD (optional)
+
+Entry Methods
+
+Breakout above resistance / Pullback to EMA / MA Crossover
+
+Stop Loss
+
+ATR-based (1.5–3× ATR from entry); never moved further from entry
+
+Take Profit
+
+Partial close at TP1 (3× ATR); full close at TP2 (5× ATR) or trailing stop
+
+Position Size
+
+(Account × 1% Risk) ÷ Stop Distance in price
+
+ADX Filter
+
+ADX must exceed 25 before any entry is taken
+
+Win Rate
+
+35%–50% (compensated by 2.5:1 to 5:1 average R:R)
+
+Max Drawdown Target
+
+< 20% of account equity
+
+Best Suited For
+
+Patient, disciplined, rule-following traders and automated systems
+
+— END OF DOCUMENT —
+
+SIDID Limited  |  Trend Following Research  |  2025

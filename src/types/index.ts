@@ -18,7 +18,7 @@ export interface Signal {
 }
 
 // Strategy types
-export type StrategyId = 'wick_rejection' | 'breakout' | 'trend_following' | 'supply_demand' | 'scalping'
+export type StrategyId = 'wick_rejection' | 'breakout' | 'trend_following' | 'supply_demand' | 'scalping' | 'order_block'
 
 export interface Strategy {
   id: StrategyId
@@ -31,7 +31,7 @@ export interface Strategy {
 }
 
 // Timeframe
-export type Timeframe = '1m' | '5m' | '15m' | '1H' | '4H' | '1D'
+export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1H' | '4H' | '1D'
 
 // Subscription tiers
 export type Plan = 'free' | 'pro' | 'elite'
@@ -41,6 +41,12 @@ export interface User {
   email: string
   plan: Plan
   subscriptionStatus: 'active' | 'cancelled' | 'expired'
+  // Optional profile fields stored in Firestore
+  fullName?: string
+  displayName?: string
+  dob?: string // ISO date
+  country?: string
+  bio?: string
 }
 
 // Risk settings

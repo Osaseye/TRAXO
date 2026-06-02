@@ -1,6 +1,6 @@
 import { LandingNav } from '@/components/landing/LandingNav'
 import { HeroSection } from '@/components/landing/HeroSection'
-import { StatsBar } from '@/components/landing/StatsBar'
+import { SupportedMarkets } from '@/components/landing/SupportedMarkets'
 import { HowItWorks } from '@/components/landing/HowItWorks'
 import { FeaturesSection } from '@/components/landing/FeaturesSection'
 import { PricingSection } from '@/components/landing/PricingSection'
@@ -12,7 +12,7 @@ export default function Landing() {
     <div className="min-h-screen bg-[#070709] text-white overflow-x-hidden">
       <LandingNav />
       <HeroSection />
-      <StatsBar />
+      <SupportedMarkets />
       <HowItWorks />
       <FeaturesSection />
       <PricingSection />

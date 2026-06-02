@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { getFirebaseErrorMessage } from '@/lib/utils'
 
 const ic = 'w-full h-11 px-4 rounded-xl bg-[#0d1117] border border-white/[0.08] text-[13px] text-white placeholder:text-[#2d3748] focus:outline-none focus:border-[#3b82f6]/50 focus:ring-1 focus:ring-[#3b82f6]/20 transition-colors'
 
@@ -8,10 +10,19 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const signIn = useAuthStore((s) => s.signIn)
+  const isLoading = useAuthStore((s) => s.isLoading)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // Wire to auth in Phase 1 backend
+    setError(null)
+    signIn(email, password).then(() => {
+      navigate('/dashboard')
+    }).catch((err) => {
+      setError(getFirebaseErrorMessage(err))
+    })
   }
 
   return (
@@ -128,10 +139,15 @@ export default function Login() {
             <button
               type="submit"
               className="w-full h-11 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-[13px] font-bold tracking-wide flex items-center justify-center gap-2 transition-colors mt-1"
+              disabled={isLoading}
             >
-              Sign in <ArrowRight size={14} />
+              {isLoading ? 'Signing in…' : 'Sign in'} <ArrowRight size={14} />
             </button>
           </form>
+
+          {error && (
+            <div className="text-sm text-red-400 mt-3">{error}</div>
+          )}
 
           <div className="flex items-center gap-3 my-6">
             <div className="flex-1 h-px bg-white/[0.06]" />

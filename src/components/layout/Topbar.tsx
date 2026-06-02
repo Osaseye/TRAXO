@@ -1,4 +1,5 @@
 import { Bell, User } from 'lucide-react'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 interface TopbarProps {
   title: string
@@ -6,6 +7,8 @@ interface TopbarProps {
 }
 
 export function Topbar({ title, subtitle }: TopbarProps) {
+  const displayName = useAuthStore((s) => s.user?.displayName || s.user?.fullName || s.user?.email || 'Trader')
+
   return (
     <header className="h-[60px] flex items-center justify-between px-4 sm:px-6 border-b border-[#1e293b] bg-[#09090d] shrink-0">
       <div>
@@ -27,7 +30,13 @@ export function Topbar({ title, subtitle }: TopbarProps) {
         </button>
 
         {/* User avatar */}
-        <button className="w-8 h-8 rounded-lg bg-[#1e293b] flex items-center justify-center text-[#6b7280] hover:text-[#e5e7eb] transition-colors">
+        <button className="hidden sm:flex h-8 items-center gap-2 px-2.5 rounded-lg bg-[#1e293b] text-[#cbd5e1] hover:text-[#e5e7eb] transition-colors">
+          <span className="w-5 h-5 rounded-full bg-[#3b82f6]/20 text-[#bfdbfe] flex items-center justify-center text-[10px] font-bold">
+            {displayName.charAt(0).toUpperCase()}
+          </span>
+          <span className="text-[11px] font-medium max-w-[10rem] truncate">{displayName}</span>
+        </button>
+        <button className="sm:hidden w-8 h-8 rounded-lg bg-[#1e293b] flex items-center justify-center text-[#6b7280] hover:text-[#e5e7eb] transition-colors">
           <User size={14} />
         </button>
       </div>

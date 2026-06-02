@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   BadgeCheck,
@@ -7,7 +7,6 @@ import {
   KeyRound,
   Mail,
   MapPin,
-  Phone,
   ShieldCheck,
   SlidersHorizontal,
   Target,
@@ -34,8 +33,8 @@ function formatLabel(value: string | null) {
     .join(' ')
 }
 
-function getInitials(firstName: string, lastName: string, displayName: string) {
-  const source = `${firstName} ${lastName}`.trim() || displayName || 'TRAXO'
+function getInitials(fullName: string, displayName: string) {
+  const source = fullName.trim() || displayName || 'TRAXO'
   return source
     .split(' ')
     .filter(Boolean)
@@ -46,8 +45,8 @@ function getInitials(firstName: string, lastName: string, displayName: string) {
 
 export default function Profile() {
   const authUser = useAuthStore((s) => s.user)
-  const profile = useProfileStore()
-  const updateProfile = useProfileStore((s) => s.updateProfile)
+  const updateProfile = useAuthStore((s) => s.updateProfile)
+  const twoFaEnabled = useProfileStore((s) => s.twoFaEnabled)
   const setTwoFaEnabled = useProfileStore((s) => s.setTwoFaEnabled)
 
   const plan = useOnboardingStore((s) => s.plan)
@@ -62,17 +61,29 @@ export default function Profile() {
   const journal = useTradingContextStore((s) => s.journal)
 
   const fallbackEmail = authUser?.email ?? 'trader@traxo.app'
-  const effectiveEmail = profile.email || fallbackEmail
-  const displayName = profile.displayName || `${profile.firstName} ${profile.lastName}`.trim() || 'TRAXO Trader'
+  const effectiveEmail = authUser?.email || fallbackEmail
+  const displayName = authUser?.displayName || authUser?.fullName || 'TRAXO Trader'
+  const dobLabel = authUser?.dob ? new Date(authUser.dob).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not set'
 
   const [form, setForm] = useState({
-    firstName: profile.firstName,
-    lastName: profile.lastName,
-    displayName: profile.displayName,
+    fullName: authUser?.fullName ?? '',
+    displayName: authUser?.displayName ?? '',
     email: effectiveEmail,
-    phone: profile.phone,
-    country: profile.country,
+    dob: authUser?.dob ?? '',
+    country: authUser?.country ?? '',
+    bio: authUser?.bio ?? '',
   })
+
+  useEffect(() => {
+    setForm({
+      fullName: authUser?.fullName ?? '',
+      displayName: authUser?.displayName ?? '',
+      email: authUser?.email ?? fallbackEmail,
+      dob: authUser?.dob ?? '',
+      country: authUser?.country ?? '',
+      bio: authUser?.bio ?? '',
+    })
+  }, [authUser, fallbackEmail])
 
   const activeStrategies = useMemo(() => {
     const ids = plan === 'pro' ? selectedStrategyIds : [selectedStrategyId]
@@ -100,7 +111,7 @@ export default function Profile() {
   }, [journal])
 
   const instrumentsText = instruments.length > 0 ? instruments.map(formatLabel).join(', ') : 'Not set'
-  const initials = getInitials(profile.firstName, profile.lastName, displayName)
+  const initials = getInitials(authUser?.fullName ?? '', displayName)
   const accountStatus = authUser?.subscriptionStatus ?? 'active'
 
   function updateField(field: keyof typeof form, value: string) {
@@ -140,7 +151,11 @@ export default function Profile() {
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <MapPin size={13} />
-                    {profile.country || 'Country not set'}
+                    {authUser?.country || 'Country not set'}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <CalendarClock size={13} />
+                    {dobLabel}
                   </span>
                 </div>
               </div>
@@ -158,7 +173,7 @@ export default function Profile() {
               <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3 col-span-2 sm:col-span-1">
                 <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Security</p>
                 <p className="mt-1 text-[14px] font-bold text-[#f8fafc]">
-                  {profile.twoFaEnabled ? '2FA enabled' : '2FA off'}
+                  {twoFaEnabled ? '2FA enabled' : '2FA off'}
                 </p>
               </div>
             </div>
@@ -225,6 +240,10 @@ export default function Profile() {
                   <p className="mt-2 text-[14px] font-semibold text-[#e5e7eb]">{instrumentsText}</p>
                 </div>
                 <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-4">
+                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Display name</p>
+                  <p className="mt-2 text-[14px] font-semibold text-[#e5e7eb]">{authUser?.displayName || 'Not set'}</p>
+                </div>
+                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-4">
                   <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Latest Journal Event</p>
                   <p className="mt-2 text-[14px] font-semibold text-[#e5e7eb]">
                     {journalStats.latest
@@ -242,19 +261,11 @@ export default function Profile() {
               </div>
 
               <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="text-[12px] text-[#94a3b8]">
-                  First name
+                <label className="text-[12px] text-[#94a3b8] sm:col-span-2">
+                  Full name
                   <input
-                    value={form.firstName}
-                    onChange={(event) => updateField('firstName', event.target.value)}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
-                  />
-                </label>
-                <label className="text-[12px] text-[#94a3b8]">
-                  Last name
-                  <input
-                    value={form.lastName}
-                    onChange={(event) => updateField('lastName', event.target.value)}
+                    value={form.fullName}
+                    onChange={(event) => updateField('fullName', event.target.value)}
                     className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
                   />
                 </label>
@@ -267,28 +278,38 @@ export default function Profile() {
                   />
                 </label>
                 <label className="text-[12px] text-[#94a3b8]">
-                  Email
+                  Date of birth
                   <input
-                    type="email"
-                    value={form.email}
-                    onChange={(event) => updateField('email', event.target.value)}
+                    type="date"
+                    value={form.dob}
+                    onChange={(event) => updateField('dob', event.target.value)}
                     className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
                   />
                 </label>
                 <label className="text-[12px] text-[#94a3b8]">
-                  Phone
-                  <input
-                    value={form.phone}
-                    onChange={(event) => updateField('phone', event.target.value)}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
-                  />
-                </label>
-                <label className="text-[12px] text-[#94a3b8] sm:col-span-2">
                   Country
                   <input
                     value={form.country}
                     onChange={(event) => updateField('country', event.target.value)}
                     className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
+                  />
+                </label>
+                <label className="text-[12px] text-[#94a3b8] sm:col-span-2">
+                  Email
+                  <input
+                    type="email"
+                    value={form.email}
+                    readOnly
+                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-[#94a3b8] outline-none cursor-not-allowed"
+                  />
+                  <span className="mt-1 block text-[10px] text-[#64748b]">Managed by sign-in email</span>
+                </label>
+                <label className="text-[12px] text-[#94a3b8] sm:col-span-2">
+                  Bio
+                  <textarea
+                    value={form.bio}
+                    onChange={(event) => updateField('bio', event.target.value)}
+                    className="mt-1.5 min-h-24 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 py-2 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
                   />
                 </label>
               </div>
@@ -299,6 +320,9 @@ export default function Profile() {
               >
                 Save profile changes
               </button>
+              <p className="mt-3 text-[11px] text-[#64748b] leading-relaxed">
+                This information is synced with Firestore and reused across onboarding, dashboard identity, and the backend profile endpoint.
+              </p>
             </section>
           </div>
 
@@ -341,19 +365,19 @@ export default function Profile() {
               <div className="mt-4 rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-start gap-3">
-                    <BadgeCheck size={16} className={profile.twoFaEnabled ? 'text-[#86efac]' : 'text-[#64748b]'} />
+                    <BadgeCheck size={16} className={twoFaEnabled ? 'text-[#86efac]' : 'text-[#64748b]'} />
                     <div>
                       <p className="text-[12px] font-semibold">Two-factor authentication</p>
                       <p className="mt-1 text-[11px] text-[#94a3b8]">Authenticator app verification on login.</p>
                     </div>
                   </div>
                   <button
-                    onClick={() => setTwoFaEnabled(!profile.twoFaEnabled)}
+                    onClick={() => setTwoFaEnabled(!twoFaEnabled)}
                     className={`h-8 px-3 rounded-lg text-[11px] font-semibold transition-colors ${
-                      profile.twoFaEnabled ? 'bg-[#14532d] text-[#bbf7d0]' : 'bg-[#1e293b] text-[#cbd5e1]'
+                      twoFaEnabled ? 'bg-[#14532d] text-[#bbf7d0]' : 'bg-[#1e293b] text-[#cbd5e1]'
                     }`}
                   >
-                    {profile.twoFaEnabled ? 'Enabled' : 'Enable'}
+                    {twoFaEnabled ? 'Enabled' : 'Enable'}
                   </button>
                 </div>
               </div>
@@ -409,10 +433,10 @@ export default function Profile() {
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-[#94a3b8] inline-flex items-center gap-2">
-                    <Phone size={13} />
-                    Phone
+                    <MapPin size={13} />
+                    Country
                   </span>
-                  <span className="text-[#e5e7eb] text-right">{profile.phone || 'Not set'}</span>
+                  <span className="text-[#e5e7eb] text-right">{authUser?.country || 'Not set'}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-[#94a3b8] inline-flex items-center gap-2">

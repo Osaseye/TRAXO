@@ -1,3 +1,4 @@
+import React from 'react'
 import { useNavigate } from 'react-router'
 import { ArrowRight, ArrowLeft, Check, TrendingUp, BarChart2, Layers, Zap, ShieldCheck } from 'lucide-react'
 import { useOnboardingStore, ONBOARDING_STRATEGIES } from '@/stores/useOnboardingStore'
@@ -314,6 +315,113 @@ function StepStrategies({ onNext, onBack }: { onNext: () => void; onBack: () => 
   )
 }
 
+// ─── Step 2: Personal info ───────────────────────────────────────────────────
+function StepPersonal({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+  const auth = useAuthStore()
+  const current = auth.user
+  const [fullName, setFullName] = React.useState(current?.fullName ?? '')
+  const [displayName, setDisplayName] = React.useState(current?.displayName ?? '')
+  const [dob, setDob] = React.useState(current?.dob ?? '')
+  const [country, setCountry] = React.useState(current?.country ?? '')
+  const [bio, setBio] = React.useState(current?.bio ?? '')
+  const [saving, setSaving] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const trimmedFullName = fullName.trim()
+  const trimmedDisplayName = displayName.trim()
+  const trimmedCountry = country.trim()
+  const trimmedBio = bio.trim()
+  const isValid = trimmedFullName.length >= 2 && trimmedCountry.length >= 2 && dob.length > 0
+
+  function validateAge(value: string) {
+    if (!value) return false
+    const birthDate = new Date(value)
+    if (Number.isNaN(birthDate.getTime())) return false
+    const today = new Date()
+    let age = today.getFullYear() - birthDate.getFullYear()
+    const monthDiff = today.getMonth() - birthDate.getMonth()
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--
+    }
+    return age >= 18
+  }
+
+  async function handleNext() {
+    if (!isValid) {
+      setError('Please enter your full name, date of birth, and country before continuing.')
+      return
+    }
+    if (!validateAge(dob)) {
+      setError('You must be at least 18 years old to continue.')
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+    try {
+      await auth.updateProfile({
+        fullName: trimmedFullName,
+        displayName: trimmedDisplayName || trimmedFullName,
+        dob,
+        country: trimmedCountry,
+        bio: trimmedBio,
+      })
+      onNext()
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(err)
+      setError('We could not save your profile. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-[1.4rem] font-extrabold text-white tracking-tight">Tell us about you</h2>
+        <p className="text-[13px] text-[#4b5563] mt-1">This helps personalize your TRAXO workspace.</p>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="text-[10px] font-semibold text-[#4b5563] uppercase tracking-wider block mb-2">Full name</label>
+          <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full h-11 px-4 rounded-xl bg-[#0d1117] border border-white/[0.08] text-white" />
+        </div>
+
+        <div>
+          <label className="text-[10px] font-semibold text-[#4b5563] uppercase tracking-wider block mb-2">Display name</label>
+          <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full h-11 px-4 rounded-xl bg-[#0d1117] border border-white/[0.08] text-white" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] font-semibold text-[#4b5563] uppercase tracking-wider block mb-2">Date of birth</label>
+            <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className="w-full h-11 px-4 rounded-xl bg-[#0d1117] border border-white/[0.08] text-white" />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-[#4b5563] uppercase tracking-wider block mb-2">Country</label>
+            <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Country" className="w-full h-11 px-4 rounded-xl bg-[#0d1117] border border-white/[0.08] text-white" />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[10px] font-semibold text-[#4b5563] uppercase tracking-wider block mb-2">Bio (optional)</label>
+          <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-[#0d1117] border border-white/[0.08] text-white" rows={3} />
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-[#ef4444]/25 bg-[#450a0a]/40 px-4 py-3 text-[12px] text-[#fecaca]">
+          {error}
+        </div>
+      )}
+
+      <NavRow onBack={onBack} onNext={handleNext} nextDisabled={saving || !isValid} nextLabel={saving ? 'Saving…' : 'Continue'} />
+    </div>
+  )
+}
+
 // ─── Step 3: Risk Parameters ──────────────────────────────────────────────────
 function RiskSlider({
   label,
@@ -503,7 +611,7 @@ function StepComplete() {
 }
 
 // ─── Main Onboarding page ─────────────────────────────────────────────────────
-const TOTAL_STEPS = 5
+const TOTAL_STEPS = 6
 
 export default function Onboarding() {
   const { step, nextStep, prevStep } = useOnboardingStore()
@@ -526,9 +634,10 @@ export default function Onboarding() {
       <div className="w-full max-w-lg bg-[#09090d] border border-white/[0.06] rounded-2xl p-6 sm:p-8">
         {step === 0 && <StepWelcome onNext={nextStep} />}
         {step === 1 && <StepProfile onNext={nextStep} onBack={prevStep} />}
-        {step === 2 && <StepStrategies onNext={nextStep} onBack={prevStep} />}
-        {step === 3 && <StepRisk onNext={nextStep} onBack={prevStep} />}
-        {step === 4 && <StepComplete />}
+        {step === 2 && <StepPersonal onNext={nextStep} onBack={prevStep} />}
+        {step === 3 && <StepStrategies onNext={nextStep} onBack={prevStep} />}
+        {step === 4 && <StepRisk onNext={nextStep} onBack={prevStep} />}
+        {step === 5 && <StepComplete />}
       </div>
     </div>
   )

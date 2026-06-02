@@ -1,4 +1,51 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
+export type ChartSymbol =
+  | 'EURUSD'
+  | 'GBPUSD'
+  | 'USDJPY'
+  | 'XAUUSD'
+  | 'XAGUSD'
+  | 'AUDUSD'
+  | 'USDCAD'
+  | 'USDCHF'
+  | 'NZDUSD'
+  | 'EURJPY'
+  | 'GBPJPY'
+  | 'EURGBP'
+  | 'SPX500'
+  | 'NAS100'
+  | 'US30'
+  | 'DE40'
+  | 'UK100'
+  | 'JP225'
+  | 'FRA40'
+  | 'AUS200'
+  | 'WTI'
+  | 'BRENT'
+  | 'NATGAS'
+  | 'BTCUSDT'
+  | 'ETHUSD'
+  | 'SOLUSDT'
+  | 'XRPUSDT'
+  | 'ADAUSDT'
+  | 'DOGEUSDT'
+  | 'BNBUSDT'
+  | 'AAPL'
+  | 'MSFT'
+  | 'NVDA'
+  | 'TSLA'
+  | 'AMZN'
+  | 'META'
+  | 'GOOGL'
+  | 'NFLX'
+  | 'AMD'
+  | 'COIN'
+  | 'MSTR'
+  | 'SMCI'
+  | 'MNQ'
+export type ChartTimeframe = '1m' | '5m' | '15m' | '1H' | '4H' | '1D'
 
 export type JournalOutcome = 'pending' | 'skipped' | 'win' | 'loss' | 'breakeven'
 export type JournalRisk = 'Low' | 'Medium' | 'High'
@@ -22,25 +69,46 @@ export interface JournalEntry {
   createdAt: number
   notes?: string
   attachmentUrl?: string // local object URL only for now
+  /** True once the user has moved SL to entry (break-even management). */
+  breakEvenTriggered?: boolean
+  /**
+   * Current stop-loss price after any manual adjustments (e.g. break-even).
+   * Falls back to the original `sl` field when undefined.
+   */
+  currentSl?: number
 }
 
 interface TradingContextState {
   accountBalance: number
   riskPerTradePct: number
   maxDailyLossPct: number
+  chartSymbol: ChartSymbol
+  chartTimeframe: ChartTimeframe
   journal: JournalEntry[]
 
   setAccountBalance: (value: number) => void
   setRiskPerTradePct: (value: number) => void
   setMaxDailyLossPct: (value: number) => void
+  setChartSymbol: (value: ChartSymbol) => void
+  setChartTimeframe: (value: ChartTimeframe) => void
   logSuggestionDecision: (entry: Omit<JournalEntry, 'id' | 'createdAt'>) => void
   setJournalOutcome: (suggestionKey: string, outcome: JournalOutcome) => void
   addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'createdAt'>) => void
   editJournalEntry: (id: string, updates: Partial<JournalEntry>) => void
   deleteJournalEntry: (id: string) => void
+  /** Move SL to entry for a pending trade (break-even management). */
+  triggerBreakEven: (id: string) => void
+
+  // --- Notification preferences ---
+  notifToastEnabled: boolean
+  notifSoundEnabled: boolean
+  notifPushEnabled: boolean
+  setNotifToastEnabled: (v: boolean) => void
+  setNotifSoundEnabled: (v: boolean) => void
+  setNotifPushEnabled: (v: boolean) => void
 }
 
-export const useTradingContextStore = create<TradingContextState>((set) => ({
+export const useTradingContextStore = create<TradingContextState>()(persist((set) => ({
     addJournalEntry: (entry) =>
       set((state) => {
         const newEntry: JournalEntry = {
@@ -64,16 +132,38 @@ export const useTradingContextStore = create<TradingContextState>((set) => ({
       set((state) => ({
         journal: state.journal.filter((j) => j.id !== id),
       })),
+
+    triggerBreakEven: (id) =>
+      set((state) => {
+        const idx = state.journal.findIndex((j) => j.id === id)
+        if (idx < 0) return state
+        const entry = state.journal[idx]
+        if (entry.outcome !== 'pending' || entry.breakEvenTriggered) return state
+        const updated = [...state.journal]
+        updated[idx] = { ...entry, breakEvenTriggered: true, currentSl: entry.entry }
+        return { journal: updated }
+      }),
   accountBalance: 10000,
   riskPerTradePct: 1,
   maxDailyLossPct: 2,
+  chartSymbol: 'EURUSD',
+  chartTimeframe: '4H',
   journal: [],
+
+  notifToastEnabled: true,
+  notifSoundEnabled: true,
+  notifPushEnabled: false,
+  setNotifToastEnabled: (v) => set({ notifToastEnabled: v }),
+  setNotifSoundEnabled: (v) => set({ notifSoundEnabled: v }),
+  setNotifPushEnabled: (v) => set({ notifPushEnabled: v }),
 
   setAccountBalance: (value) => set({ accountBalance: Math.max(0, Number(value) || 0) }),
   setRiskPerTradePct: (value) =>
     set({ riskPerTradePct: Math.max(0.1, Math.min(10, Number(value) || 1)) }),
   setMaxDailyLossPct: (value) =>
     set({ maxDailyLossPct: Math.max(0.5, Math.min(20, Number(value) || 2)) }),
+  setChartSymbol: (value) => set({ chartSymbol: value }),
+  setChartTimeframe: (value) => set({ chartTimeframe: value }),
 
   logSuggestionDecision: (entry) =>
     set((state) => {
@@ -150,4 +240,17 @@ export const useTradingContextStore = create<TradingContextState>((set) => ({
         accountBalance: nextBalance,
       }
     }),
+}), {
+  name: 'traxo-trading-context',
+  partialize: (state) => ({
+    accountBalance: state.accountBalance,
+    riskPerTradePct: state.riskPerTradePct,
+    maxDailyLossPct: state.maxDailyLossPct,
+    chartSymbol: state.chartSymbol,
+    chartTimeframe: state.chartTimeframe,
+    journal: state.journal.map(({ attachmentUrl: _url, ...j }) => j),
+    notifToastEnabled: state.notifToastEnabled,
+    notifSoundEnabled: state.notifSoundEnabled,
+    notifPushEnabled: state.notifPushEnabled,
+  }),
 }))

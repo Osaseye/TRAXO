@@ -1,10 +1,11 @@
 import { Link } from 'react-router'
 import { ArrowRight } from 'lucide-react'
-import { HeroChart } from './HeroChart'
+import ScrollReveal from '@/components/ui/ScrollReveal'
 
 export function HeroSection() {
   return (
     <section className="pt-28 sm:pt-32 pb-16 sm:pb-24 px-4 sm:px-6 max-w-6xl mx-auto overflow-hidden">
+      <ScrollReveal>
       {/* Eyebrow */}
       <div className="flex items-center gap-2 mb-6 sm:mb-8">
         <span className="relative flex h-2 w-2 shrink-0">
@@ -63,8 +64,13 @@ export function HeroSection() {
             background: 'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(59,130,246,0.1) 0%, transparent 100%)',
           }}
         />
-        <HeroChart />
+        <img 
+          src="/hero.png" 
+          alt="TRAXO Analyst Mode Interface" 
+          className="w-full h-auto rounded-xl border border-gray-800 shadow-[0_0_40px_rgba(59,130,246,0.15)] relative z-10"
+        />
       </div>
+      </ScrollReveal>
     </section>
   )
 }

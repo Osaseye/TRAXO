@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router'
+import { BarChart2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   NavDashboardIcon,
@@ -7,11 +8,13 @@ import {
   NavSettingsIcon,
   NavStrategyIcon,
 } from '@/components/layout/NavIcons'
+const BacktestIcon = ({ className }: { className?: string }) => <BarChart2 className={className} size={14} />
 
 const DESKTOP_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: NavDashboardIcon },
   { to: '/strategies', label: 'Strategies', icon: NavStrategyIcon },
   { to: '/journal', label: 'Journal', icon: NavJournalIcon },
+  { to: '/backtesting', label: 'Backtest', icon: BacktestIcon },
   { to: '/profile', label: 'Profile', icon: NavProfileIcon },
   { to: '/settings', label: 'Settings', icon: NavSettingsIcon },
 ]
@@ -20,7 +23,7 @@ const MOBILE_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: NavDashboardIcon },
   { to: '/strategies', label: 'Strategies', icon: NavStrategyIcon },
   { to: '/journal', label: 'Journal', icon: NavJournalIcon },
-  { to: '/profile', label: 'Profile', icon: NavProfileIcon },
+  { to: '/backtesting', label: 'Backtest', icon: BacktestIcon },
   { to: '/settings', label: 'Settings', icon: NavSettingsIcon },
 ]
 

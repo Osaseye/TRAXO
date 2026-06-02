@@ -8,9 +8,72 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      body {
+        margin: 0;
+        background-color: #0A0D14;
+      }
+      #initial-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: #0A0D14;
+        z-index: 9999;
+      }
+      .loader-glow {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 200px;
+        height: 200px;
+        background: rgba(59, 130, 246, 0.15);
+        border-radius: 50%;
+        filter: blur(60px);
+        animation: pulse 3s infinite ease-in-out;
+      }
+      .loader-dots {
+        display: flex;
+        gap: 6px;
+        margin-top: 30px;
+      }
+      .loader-dot {
+        width: 6px;
+        height: 6px;
+        background-color: #3b82f6;
+        border-radius: 50%;
+        animation: bounce 1.2s infinite ease-in-out;
+        box-shadow: 0 0 8px rgba(59, 130, 246, 0.8);
+      }
+      .loader-dot:nth-child(1) { animation-delay: 0s; }
+      .loader-dot:nth-child(2) { animation-delay: 0.2s; }
+      .loader-dot:nth-child(3) { animation-delay: 0.4s; }
+
+      @keyframes pulse {
+        0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+        50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+      }
+      @keyframes bounce {
+        0%, 100% { transform: translateY(0); opacity: 0.2; }
+        50% { transform: translateY(-4px); opacity: 1; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="initial-loader">
+        <div class="loader-glow"></div>
+        <div style="position: relative; z-index: 10; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 0.25em; color: rgba(255,255,255,0.9); text-transform: uppercase;">TRAXO</div>
+        <div class="loader-dots">
+          <div class="loader-dot"></div>
+          <div class="loader-dot"></div>
+          <div class="loader-dot"></div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

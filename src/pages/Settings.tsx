@@ -1,8 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   AlertTriangle,
   BarChart3,
+  Bell,
   Crown,
+  Check,
   Landmark,
   Layers3,
   Rocket,
@@ -14,6 +16,8 @@ import {
 } from 'lucide-react'
 import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
 import { ONBOARDING_STRATEGIES, type OnboardingStrategyId, useOnboardingStore } from '@/stores/useOnboardingStore'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { useNavigate } from 'react-router'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
 
 function formatCurrency(value: number) {
@@ -21,6 +25,108 @@ function formatCurrency(value: number) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   })}`
+}
+
+const PLAN_CARDS = [
+  {
+    id: 'free' as const,
+    name: 'Free',
+    price: '₦0',
+    period: 'forever',
+    badge: 'Starter',
+    description: 'Learn Analyst Mode with one strategy and delayed signals.',
+    features: [
+      '1 active strategy',
+      '5-minute signal delay',
+      'Basic dashboard and journal',
+      'Forex and crypto exposure',
+    ],
+    cta: 'Keep Free',
+  },
+  {
+    id: 'pro' as const,
+    name: 'Pro',
+    price: '₦8,000',
+    period: 'per month',
+    badge: 'Most Popular',
+    description: 'Real-time signals, multi-strategy routing, and deeper market context.',
+    features: [
+      'Up to 5 active strategies',
+      'Real-time signals',
+      'Full risk controls and journals',
+      'Forex, crypto, gold, and majors',
+    ],
+    cta: 'Switch to Pro',
+  },
+  {
+    id: 'elite' as const,
+    name: 'Elite',
+    price: '₦20,000',
+    period: 'per month',
+    badge: 'Roadmap',
+    description: 'Everything in Pro plus Autopilot, paper trading, and execution guardrails.',
+    features: [
+      'Autopilot execution layer',
+      'Paper trading and backtesting',
+      'Advanced analytics and alerts',
+      'Priority support and compliance logs',
+    ],
+    cta: 'Coming soon',
+  },
+] as const
+
+const MARKET_CONTEXT = [
+  'Forex majors',
+  'Gold (XAU)',
+  'Bitcoin',
+  'Ethereum',
+  'Indices',
+  'Commodities',
+]
+
+const AUTOPILOT_BENEFITS = [
+  {
+    title: 'Strategy-aware routing',
+    body: 'Autopilot will only act on setups that match the active strategy stack and timeframe rules.',
+  },
+  {
+    title: 'Market filter checks',
+    body: 'Execution will pause around high-impact news, session flips, and volatile market transitions.',
+  },
+  {
+    title: 'Risk guardrails',
+    body: 'Per-trade risk, daily loss caps, and trade limits remain enforced before any execution handoff.',
+  },
+]
+
+function SignOutButton() {
+  const logout = useAuthStore((s) => s.logout)
+  const isLoading = useAuthStore((s) => s.isLoading)
+  const navigate = useNavigate()
+
+  async function handleSignOut() {
+    // quick confirmation
+    if (!window.confirm('Sign out of TRAXO?')) return
+    try {
+      await logout()
+      navigate('/login')
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Sign out failed', err)
+      navigate('/')
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleSignOut}
+      disabled={isLoading}
+      className="ml-2 px-3 py-1 rounded-lg border border-white/[0.08] text-[13px] font-medium text-white hover:bg-white/[0.04] transition-colors"
+    >
+      Sign out
+    </button>
+  )
 }
 
 export default function Settings() {
@@ -38,6 +144,16 @@ export default function Settings() {
   const setRiskPerTradePct = useTradingContextStore((s) => s.setRiskPerTradePct)
   const maxDailyLossPct = useTradingContextStore((s) => s.maxDailyLossPct)
   const setMaxDailyLossPct = useTradingContextStore((s) => s.setMaxDailyLossPct)
+
+  const notifToastEnabled = useTradingContextStore((s) => s.notifToastEnabled)
+  const setNotifToastEnabled = useTradingContextStore((s) => s.setNotifToastEnabled)
+  const notifSoundEnabled = useTradingContextStore((s) => s.notifSoundEnabled)
+  const setNotifSoundEnabled = useTradingContextStore((s) => s.setNotifSoundEnabled)
+  const notifPushEnabled = useTradingContextStore((s) => s.notifPushEnabled)
+  const setNotifPushEnabled = useTradingContextStore((s) => s.setNotifPushEnabled)
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  )
 
   const activeStrategies = useMemo(() => {
     const ids = plan === 'pro' ? selectedStrategyIds : [selectedStrategyId]
@@ -66,7 +182,10 @@ export default function Settings() {
           <span className="hidden sm:block h-4 w-px bg-white/[0.1]" />
           <h1 className="text-[14px] font-semibold text-[#e5e7eb] truncate">Settings</h1>
         </div>
-        <DesktopWorkspaceNav />
+        <div className="flex items-center gap-2">
+          <DesktopWorkspaceNav />
+          <SignOutButton />
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
@@ -113,42 +232,60 @@ export default function Settings() {
                   <p className="mt-2 text-[12px] text-[#94a3b8]">{activeStrategyText}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 w-full sm:w-64">
-                  <button
-                    type="button"
-                    onClick={() => setPlan('free')}
-                    className={`h-10 rounded-lg text-[12px] font-semibold transition-colors ${
-                      plan === 'free'
-                        ? 'bg-white text-[#111827]'
-                        : 'bg-[#0b0f17] border border-white/[0.12] text-[#cbd5e1] hover:border-white/[0.22]'
-                    }`}
-                  >
-                    Free
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPlan('pro')}
-                    className={`h-10 rounded-lg text-[12px] font-semibold transition-colors ${
-                      plan === 'pro'
-                        ? 'bg-white text-[#111827]'
-                        : 'bg-[#0b0f17] border border-white/[0.12] text-[#cbd5e1] hover:border-white/[0.22]'
-                    }`}
-                  >
-                    Pro
-                  </button>
-                </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Free Mode</p>
-                  <p className="mt-2 text-[13px] font-semibold text-[#e5e7eb]">One active strategy</p>
-                  <p className="mt-2 text-[12px] text-[#94a3b8]">Focused suggestions from a single framework.</p>
-                </div>
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Pro Mode</p>
-                  <p className="mt-2 text-[13px] font-semibold text-[#e5e7eb]">Two to five strategies</p>
-                  <p className="mt-2 text-[12px] text-[#94a3b8]">Blended suggestions across selected frameworks.</p>
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+                {PLAN_CARDS.map((card) => {
+                  const active = card.id === plan
+                  const disabled = card.id === 'elite'
+
+                  return (
+                    <button
+                      key={card.name}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => !disabled && setPlan(card.id)}
+                      className={`relative flex h-full flex-col rounded-2xl border p-5 text-left transition-all ${
+                        active
+                          ? 'border-[#3b82f6]/45 bg-[#0d1626] shadow-[0_0_0_1px_rgba(59,130,246,0.15)]'
+                          : 'border-white/[0.08] bg-[#0b0f17] hover:border-white/[0.18]'
+                      } ${disabled ? 'opacity-90' : ''}`}
+                    >
+                      {card.badge && (
+                        <span className={`absolute -top-3 left-4 rounded-full px-3 py-1 text-[10px] font-bold tracking-wide ${card.id === 'pro' ? 'bg-[#3b82f6] text-white' : 'bg-[#1e293b] text-[#cbd5e1]'}`}>
+                          {card.badge}
+                        </span>
+                      )}
+                      <p className="text-[11px] font-semibold tracking-[0.12em] uppercase text-[#64748b]">{card.name}</p>
+                      <div className="mt-3 flex items-end gap-1.5">
+                        <span className="text-3xl font-extrabold text-white tracking-tight">{card.price}</span>
+                        <span className="text-[12px] text-[#374151] mb-1.5">{card.period}</span>
+                      </div>
+                      <p className="mt-3 text-[12px] text-[#94a3b8] leading-relaxed">{card.description}</p>
+                      <ul className="mt-5 space-y-2.5">
+                        {card.features.map((feature) => (
+                          <li key={feature} className="flex items-start gap-2.5">
+                            <Check size={13} className={`mt-0.5 shrink-0 ${active ? 'text-[#3b82f6]' : 'text-[#374151]'}`} />
+                            <span className="text-[12px] text-[#cbd5e1] leading-snug">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-[12px] font-semibold text-white">
+                        {disabled ? 'Coming soon' : card.cta}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-white/[0.08] bg-[#0b0f17] p-4">
+                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Market coverage</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {MARKET_CONTEXT.map((market) => (
+                    <span key={market} className="rounded-full border border-white/[0.08] bg-[#09090d] px-3 py-1 text-[11px] text-[#cbd5e1]">
+                      {market}
+                    </span>
+                  ))}
                 </div>
               </div>
             </section>
@@ -275,21 +412,131 @@ export default function Settings() {
                 </label>
               </div>
             </section>
+
+            {/* Signal Alerts */}
+            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6">
+              <div className="flex items-center gap-2 mb-1">
+                <Bell size={16} className="text-[#93c5fd]" />
+                <p className="text-[13px] font-semibold">Signal Alerts</p>
+              </div>
+              <p className="text-[12px] text-[#94a3b8] mb-5">
+                Get notified the moment a live signal is detected on the current candle.
+              </p>
+
+              <div className="space-y-3">
+                {/* Toast toggle */}
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-white/[0.08] bg-[#0b0f17] px-4 py-3">
+                  <div>
+                    <p className="text-[12px] font-semibold text-[#e5e7eb]">In-app toasts</p>
+                    <p className="text-[11px] text-[#64748b] mt-0.5">Pop-up card in the bottom-right corner of the dashboard</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNotifToastEnabled(!notifToastEnabled)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                      notifToastEnabled ? 'bg-[#3b82f6]' : 'bg-[#1e293b]'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                        notifToastEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Sound toggle */}
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-white/[0.08] bg-[#0b0f17] px-4 py-3">
+                  <div>
+                    <p className="text-[12px] font-semibold text-[#e5e7eb]">Sound alerts</p>
+                    <p className="text-[11px] text-[#64748b] mt-0.5">Brief chime when a signal fires (ascending for BUY, descending for SELL)</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNotifSoundEnabled(!notifSoundEnabled)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                      notifSoundEnabled ? 'bg-[#3b82f6]' : 'bg-[#1e293b]'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                        notifSoundEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Browser push toggle */}
+                <div className="flex items-start justify-between gap-4 rounded-xl border border-white/[0.08] bg-[#0b0f17] px-4 py-3">
+                  <div>
+                    <p className="text-[12px] font-semibold text-[#e5e7eb]">Browser push</p>
+                    <p className="text-[11px] text-[#64748b] mt-0.5">Fires even when the tab is minimised</p>
+                    {pushPermission === 'denied' && (
+                      <p className="text-[10px] text-[#ef4444] mt-1">Permission blocked — enable in browser site settings</p>
+                    )}
+                    {pushPermission === 'default' && notifPushEnabled && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const result = await Notification.requestPermission()
+                          setPushPermission(result)
+                          if (result !== 'granted') setNotifPushEnabled(false)
+                        }}
+                        className="mt-2 text-[10px] font-semibold text-[#3b82f6] underline"
+                      >
+                        Request permission
+                      </button>
+                    )}
+                    {pushPermission === 'granted' && (
+                      <p className="text-[10px] text-[#22c55e] mt-1">Permission granted</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={pushPermission === 'denied'}
+                    onClick={() => {
+                      const next = !notifPushEnabled
+                      setNotifPushEnabled(next)
+                      if (next && pushPermission === 'default') {
+                        void Notification.requestPermission().then((result) => {
+                          setPushPermission(result)
+                          if (result !== 'granted') setNotifPushEnabled(false)
+                        })
+                      }
+                    }}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                      notifPushEnabled && pushPermission === 'granted' ? 'bg-[#3b82f6]' : 'bg-[#1e293b]'
+                    } disabled:opacity-40`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                        notifPushEnabled && pushPermission === 'granted' ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </section>
           </div>
 
           <aside className="space-y-5">
             <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5">
               <div className="flex items-center gap-2">
                 <Rocket size={16} className="text-[#bfdbfe]" />
-                <p className="text-[13px] font-semibold">Execution Pilot</p>
+                <p className="text-[13px] font-semibold">Autopilot Roadmap</p>
               </div>
-              <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-[#64748b]">Pilot - Phase 2</p>
+              <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-[#64748b]">Elite feature set</p>
               <h3 className="mt-2 text-lg font-bold text-[#f8fafc]">Autopilot execution</h3>
               <p className="mt-2 text-[12px] leading-relaxed text-[#94a3b8]">
-                A guided pilot will route validated setups to broker execution profiles with safety limits and post-trade compliance checks.
+                Autopilot will turn Elite into the execution layer: it will read the active strategy stack, respect your risk budget, and only route approved setups when market filters agree.
               </p>
-              <div className="mt-4 rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3 text-[12px] text-[#cbd5e1]">
-                Current status: preparation mode
+              <div className="mt-4 space-y-3">
+                {AUTOPILOT_BENEFITS.map((item) => (
+                  <div key={item.title} className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
+                    <p className="text-[12px] font-semibold text-white">{item.title}</p>
+                    <p className="mt-1 text-[11px] text-[#94a3b8] leading-relaxed">{item.body}</p>
+                  </div>
+                ))}
               </div>
             </section>
 
@@ -299,7 +546,7 @@ export default function Settings() {
                 <p className="text-[13px] font-semibold">Market Event Awareness</p>
               </div>
               <p className="mt-2 text-[12px] leading-relaxed text-[#94a3b8]">
-                Market events can override technical setups. TRAXO treats each market type with a different risk lens.
+                Market events can override technical setups. TRAXO treats each market type with a different risk lens so the plan you choose reflects what you trade.
               </p>
 
               <div className="mt-4 space-y-3">
@@ -309,7 +556,7 @@ export default function Settings() {
                     <p className="text-[12px] font-semibold text-[#e5e7eb]">Forex</p>
                   </div>
                   <p className="mt-2 text-[12px] leading-relaxed text-[#94a3b8]">
-                    Use a calendar-first filter around inflation, jobs, GDP, and central bank releases.
+                    Use a calendar-first filter around inflation, jobs, GDP, central bank releases, and session volatility.
                   </p>
                 </div>
 
@@ -319,7 +566,7 @@ export default function Settings() {
                     <p className="text-[12px] font-semibold text-[#e5e7eb]">Crypto</p>
                   </div>
                   <p className="mt-2 text-[12px] leading-relaxed text-[#94a3b8]">
-                    Use a catalyst-first filter for regulation, ETF flows, token unlocks, listings, and protocol upgrades.
+                    Use a catalyst-first filter for regulation, ETF flows, token unlocks, listings, protocol upgrades, and funding spikes.
                   </p>
                 </div>
               </div>

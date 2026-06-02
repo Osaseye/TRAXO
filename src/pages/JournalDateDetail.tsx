@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Clock, DollarSign, Shield, Target, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Clock, DollarSign, Shield, Target, TrendingDown, TrendingUp, Edit2, Check, X, ShieldCheck } from 'lucide-react';
 import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav';
 import { useTradingContextStore, type JournalEntry } from '@/stores/useTradingContextStore';
 
@@ -63,6 +63,11 @@ export default function JournalDateDetail() {
   const { date } = useParams<{ date: string }>();
   const navigate = useNavigate();
   const journal = useTradingContextStore((s) => s.journal);
+  const editJournalEntry = useTradingContextStore((s) => s.editJournalEntry);
+  const triggerBreakEven = useTradingContextStore((s) => s.triggerBreakEven);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
 
   const entries = useMemo(
     () =>
@@ -194,11 +199,22 @@ export default function JournalDateDetail() {
                           <p className="mt-2 text-xl font-bold text-[#f8fafc]">{formatPrice(entry.entry)}</p>
                         </div>
                         <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                          <div className="flex items-center gap-2 text-[#fca5a5]">
-                            <Shield size={14} />
-                            <p className="text-[10px] uppercase tracking-wider">Stop Loss</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-[#fca5a5]">
+                              <Shield size={14} />
+                              <p className="text-[10px] uppercase tracking-wider">Stop Loss</p>
+                            </div>
+                            {entry.breakEvenTriggered && (
+                              <span className="flex items-center gap-1 text-[10px] font-semibold text-[#86efac] border border-[#22c55e]/30 bg-[#22c55e]/10 rounded px-1.5 py-0.5">
+                                <ShieldCheck size={10} />
+                                BE
+                              </span>
+                            )}
                           </div>
-                          <p className="mt-2 text-xl font-bold text-[#fca5a5]">{formatPrice(entry.sl)}</p>
+                          <p className="mt-2 text-xl font-bold text-[#fca5a5]">{formatPrice(entry.currentSl ?? entry.sl)}</p>
+                          {entry.breakEvenTriggered && (
+                            <p className="mt-1 text-[10px] text-[#475569]">Moved to entry</p>
+                          )}
                         </div>
                         <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
                           <div className="flex items-center gap-2 text-[#86efac]">
@@ -233,11 +249,72 @@ export default function JournalDateDetail() {
 
                       <div className="mt-5 space-y-3 text-[12px]">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-[#94a3b8]">Position size</span>
-                          <span className="font-semibold text-[#e5e7eb]">{formatCurrency(entry.suggestedPosition)}</span>
+                          <span className="text-[#94a3b8] flex items-center gap-1.5 cursor-help" title="The total dollar size of your position">
+                            Position size
+                          </span>
+                          {editingId === entry.id ? (
+                            <div className="flex items-center gap-1">
+                              <input 
+                                type="number" 
+                                className="h-6 w-24 bg-[#070709] border border-blue-500/50 rounded px-1.5 text-right text-[#e5e7eb] text-[12px] focus:outline-none"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const val = Number(editValue);
+                                    if (!isNaN(val) && val > 0) {
+                                      const riskPct = Math.abs(entry.entry - entry.sl) / entry.entry;
+                                      editJournalEntry(entry.id, { 
+                                        suggestedPosition: val, 
+                                        riskAmount: val * riskPct 
+                                      });
+                                    }
+                                    setEditingId(null);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingId(null);
+                                  }
+                                }}
+                              />
+                              <button 
+                                onClick={() => {
+                                  const val = Number(editValue);
+                                  if (!isNaN(val) && val > 0) {
+                                    // recalculate riskAmount based on the new position size
+                                    const riskPct = Math.abs(entry.entry - entry.sl) / entry.entry;
+                                    editJournalEntry(entry.id, { 
+                                      suggestedPosition: val, 
+                                      riskAmount: val * riskPct 
+                                    });
+                                  }
+                                  setEditingId(null);
+                                }}
+                                className="p-1 rounded bg-blue-500/20 text-blue-400 hover:bg-blue-500/40"
+                              >
+                                <Check size={12} />
+                              </button>
+                              <button 
+                                onClick={() => setEditingId(null)}
+                                className="p-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/40"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span 
+                              className="font-semibold text-[#e5e7eb] flex items-center gap-1.5 group cursor-pointer hover:text-white"
+                              onClick={() => {
+                                setEditValue(entry.suggestedPosition.toFixed(2));
+                                setEditingId(entry.id);
+                              }}
+                            >
+                              {formatCurrency(entry.suggestedPosition)}
+                              <Edit2 size={10} className="text-[#64748b] group-hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-all" />
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-[#94a3b8]">Risk at SL</span>
+                          <span className="text-[#94a3b8] cursor-help" title="How much you lose if Stop Loss is hit">Risk at SL</span>
                           <span className="font-semibold text-[#fca5a5]">{formatCurrency(entry.riskAmount)}</span>
                         </div>
                         <div className="flex items-center justify-between gap-3">
@@ -249,6 +326,28 @@ export default function JournalDateDetail() {
                           <span className="font-semibold text-[#e5e7eb]">{entry.confidence}%</span>
                         </div>
                       </div>
+
+                      {/* Break-even CTA — only for active pending trades */}
+                      {entry.taken && entry.outcome === 'pending' && (
+                        <div className="mt-4 pt-4 border-t border-white/[0.05]">
+                          {entry.breakEvenTriggered ? (
+                            <div className="flex items-center gap-2 text-[12px] text-[#86efac]">
+                              <ShieldCheck size={14} />
+                              <span className="font-semibold">Break-even active</span>
+                              <span className="text-[#475569]">— SL moved to entry price</span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => triggerBreakEven(entry.id)}
+                              className="w-full h-8 rounded-lg border border-[#22c55e]/30 bg-[#22c55e]/10 text-[#86efac] text-[11px] font-semibold hover:bg-[#22c55e]/20 transition-colors flex items-center justify-center gap-2"
+                              title="Move stop loss to entry price — risk-free from here"
+                            >
+                              <ShieldCheck size={13} />
+                              Set Break-Even
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </article>

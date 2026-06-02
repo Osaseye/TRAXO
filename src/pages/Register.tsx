@@ -1,6 +1,8 @@
 ﻿import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { getFirebaseErrorMessage } from '@/lib/utils'
 
 const ic = 'w-full h-11 px-4 rounded-xl bg-[#0d1117] border border-white/[0.08] text-[13px] text-white placeholder:text-[#2d3748] focus:outline-none focus:border-[#3b82f6]/50 focus:ring-1 focus:ring-[#3b82f6]/20 transition-colors'
 
@@ -38,9 +40,16 @@ export default function Register() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // Wire to auth in Phase 1 backend — navigate to onboarding on success
-    navigate('/onboarding')
+    // Create new user with Firebase auth
+    if (!agreed) return
+    setError(null)
+    signUp(name, email, password).then(() => {
+      navigate('/onboarding')
+    }).catch((err) => setError(getFirebaseErrorMessage(err)))
   }
+
+  const [_error, setError] = useState<string | null>(null)
+  const signUp = useAuthStore((s) => s.signUp)
 
   return (
     <div className="min-h-screen bg-[#070709] text-white flex">
