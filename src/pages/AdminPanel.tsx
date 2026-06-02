@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ShieldAlert, Activity, Cpu, FlaskConical, BarChart2, ExternalLink, CheckCircle2, XCircle, Info } from 'lucide-react'
+import { ShieldAlert, Activity, Cpu, FlaskConical, BarChart2, ExternalLink, CheckCircle2, XCircle, Info, Radio } from 'lucide-react'
 import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
@@ -195,6 +195,20 @@ export default function AdminPanel() {
               <h2 className="text-[13px] font-semibold text-[#e5e7eb]">Quick Actions</h2>
             </div>
             <div className="space-y-3">
+              <Link
+                to="/admin/signals"
+                className="flex items-center justify-between gap-3 rounded-xl border border-[#6366f1]/20 bg-[#6366f1]/05 hover:bg-[#6366f1]/10 px-4 py-3 transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                  <Radio size={15} className="text-[#818cf8]" />
+                  <div>
+                    <p className="text-[12px] font-semibold text-[#e5e7eb]">All System Signals</p>
+                    <p className="text-[11px] text-[#64748b]">Full signal feed across all charts, strategies and timeframes</p>
+                  </div>
+                </div>
+                <ExternalLink size={13} className="text-[#475569] group-hover:text-[#6366f1] transition-colors shrink-0" />
+              </Link>
+
               <Link
                 to="/backtesting"
                 className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-[#0b0f17] hover:bg-white/[0.03] px-4 py-3 transition-colors group"

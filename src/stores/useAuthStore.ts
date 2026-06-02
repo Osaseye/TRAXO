@@ -50,8 +50,27 @@ export const useAuthStore = create<AuthState>((set, get) => {
         console.warn('Failed to hydrate Firestore profile', err)
         set({ user: mapFirebaseUser(fu), isAuthenticated: true, idToken: token, isLoading: false })
       }
+      // Hydrate onboarding preferences and signals from Firestore
+      try {
+        const { useOnboardingStore } = await import('@/stores/useOnboardingStore')
+        useOnboardingStore.getState().setUid(fu.uid)
+        void useOnboardingStore.getState().hydrateFromFirestore(fu.uid)
+      } catch { /* non-fatal */ }
+      try {
+        const { useAnalysisSignalStore } = await import('@/stores/useAnalysisSignalStore')
+        useAnalysisSignalStore.getState().setUid(fu.uid)
+        void useAnalysisSignalStore.getState().hydrateFromFirestore(fu.uid)
+      } catch { /* non-fatal */ }
     } else {
       set({ user: null, isAuthenticated: false, idToken: null, isLoading: false })
+      try {
+        const { useOnboardingStore } = await import('@/stores/useOnboardingStore')
+        useOnboardingStore.getState().setUid(null)
+      } catch { /* non-fatal */ }
+      try {
+        const { useAnalysisSignalStore } = await import('@/stores/useAnalysisSignalStore')
+        useAnalysisSignalStore.getState().setUid(null)
+      } catch { /* non-fatal */ }
     }
   })
 
@@ -139,6 +158,17 @@ export const useAuthStore = create<AuthState>((set, get) => {
           console.warn('Failed to hydrate Firestore profile on sign-in', err)
           set({ user: mapFirebaseUser(fu), isAuthenticated: true, idToken: token, isLoading: false })
         }
+        // Hydrate onboarding preferences and signals from Firestore
+        try {
+          const { useOnboardingStore } = await import('@/stores/useOnboardingStore')
+          useOnboardingStore.getState().setUid(fu.uid)
+          void useOnboardingStore.getState().hydrateFromFirestore(fu.uid)
+        } catch { /* non-fatal */ }
+        try {
+          const { useAnalysisSignalStore } = await import('@/stores/useAnalysisSignalStore')
+          useAnalysisSignalStore.getState().setUid(fu.uid)
+          void useAnalysisSignalStore.getState().hydrateFromFirestore(fu.uid)
+        } catch { /* non-fatal */ }
       } catch (error) {
         set({ isLoading: false })
         throw error

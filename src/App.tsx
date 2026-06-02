@@ -16,6 +16,7 @@ const JournalDateDetail = lazy(() => import('@/pages/JournalDateDetail'))
 const Backtesting = lazy(() => import('@/pages/Backtesting'))
 const AdminPanel = lazy(() => import('@/pages/AdminPanel'))
 const AdminLogin = lazy(() => import('@/pages/AdminLogin'))
+const AdminSignals = lazy(() => import('@/pages/AdminSignals'))
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import PageTransition from '@/components/ui/PageTransition'
 import ScrollToTop from '@/components/ui/ScrollToTop'
@@ -24,6 +25,7 @@ import Loading from '@/components/ui/Loading'
 import ProtectedRoute from '@/components/ui/ProtectedRoute'
 import AdminRoute from '@/components/ui/AdminRoute'
 import { GlobalSignalMonitor } from '@/components/shared/GlobalSignalMonitor'
+import { GlobalMultiSymbolScanner } from '@/components/shared/GlobalMultiSymbolScanner'
 import { SignalToastStack } from '@/components/shared/SignalToastStack'
 
 export default function App() {
@@ -33,6 +35,7 @@ export default function App() {
     <ErrorBoundary>
       <ScrollToTop />
       <GlobalSignalMonitor />
+      <GlobalMultiSymbolScanner />
       <SignalToastStack />
       <Suspense fallback={<Loading />}>
         <PageTransition key={location.key}>
@@ -61,6 +64,7 @@ export default function App() {
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route element={<AdminRoute />}>
               <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/admin/signals" element={<AdminSignals />} />
             </Route>
 
             {/* 404 */}

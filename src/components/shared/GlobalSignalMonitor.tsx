@@ -6,6 +6,7 @@ import { useMarketWebSocket } from '@/hooks/useMarketWebSocket'
 import { useSignalNotification } from '@/hooks/useSignalNotification'
 import { runSignalsForStrategies, type AnalysisSignal } from '@/lib/signalDetection'
 import { useOnboardingStore } from '@/stores/useOnboardingStore'
+import { useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
 
 /**
  * Invisible component mounted in App.tsx (outside routing) that maintains a
@@ -15,9 +16,11 @@ import { useOnboardingStore } from '@/stores/useOnboardingStore'
  */
 export function GlobalSignalMonitor() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const userId = useAuthStore((s) => s.user?.id ?? null)
   const symbol = useTradingContextStore((s) => s.chartSymbol)
   const timeframe = useTradingContextStore((s) => s.chartTimeframe)
   const { plan, selectedStrategyId, selectedStrategyIds } = useOnboardingStore()
+  const addSignals = useAnalysisSignalStore((s) => s.addSignals)
   const activeStrategyIds = useMemo(
     () => plan === 'pro' && selectedStrategyIds.length > 0
       ? selectedStrategyIds
@@ -40,8 +43,12 @@ export function GlobalSignalMonitor() {
       try {
         const loaded = await getCandles(symbol, timeframe)
         if (cancelRef.current) return
+        const computed = runSignalsForStrategies(loaded, symbol, timeframe, activeStrategyIds)
+        const mapped = computed.map((s) => ({ ...s, symbol, timeframe }))
         setCandles(loaded)
-        setSignals(runSignalsForStrategies(loaded, symbol, timeframe, activeStrategyIds))
+        setSignals(computed)
+        addSignals(mapped)
+        if (userId) void useAnalysisSignalStore.getState().saveToFirestore(userId, mapped)
       } catch {
         // silently ignore — Dashboard has its own error handling for the UI
       }
@@ -61,8 +68,12 @@ export function GlobalSignalMonitor() {
     candles,
     enabled: isAuthenticated && candles.length > 0,
     onCandleUpdate: (next) => {
+      const computed = runSignalsForStrategies(next, symbol, timeframe, activeStrategyIds)
+      const mapped = computed.map((s) => ({ ...s, symbol, timeframe }))
       setCandles(next)
-      setSignals(runSignalsForStrategies(next, symbol, timeframe, activeStrategyIds))
+      setSignals(computed)
+      addSignals(mapped)
+      if (userId) void useAnalysisSignalStore.getState().saveToFirestore(userId, mapped)
     },
   })
 
