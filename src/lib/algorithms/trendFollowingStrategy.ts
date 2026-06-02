@@ -45,7 +45,6 @@ import type {
 // ─────────────────────────────────────────────
 
 const MIN_CANDLES = 50   // Hard minimum
-const WARM_CANDLES = 220 // Ideal: EMA-200 fully seeded
 
 // ─────────────────────────────────────────────
 // Session Detection (London / NY heuristic)
@@ -183,6 +182,7 @@ export function analyzeTrendFollowing(ctx: TrendFollowingContext): TrendFollowin
     adxValue, ema20, ema50, ema200,
     atr14, vma20,
   }
+  void trendState
 
   // ── 8. Pullback Detection ─────────────────────────────────────────────────
   const pullback = detectPullback(
@@ -259,11 +259,6 @@ export function analyzeTrendFollowing(ctx: TrendFollowingContext): TrendFollowin
   )
 
   const breakeven = calculateBreakevenPrice(direction, entry.entryPrice, atr14)
-
-  const rr =
-    slResult.riskDistance > 0
-      ? Math.abs(tps.tp1Price - entry.entryPrice) / slResult.riskDistance
-      : 0
 
   // ── 15. Assemble Signal ───────────────────────────────────────────────────
   const ts = new Date().toISOString()

@@ -33,7 +33,6 @@ import {
   SESSION_SCORE_LONDON_OPEN,
   SESSION_SCORE_NY_OPEN,
   NEWS_KILL_PENALTY,
-  NEWS_KILL_WINDOW_MINUTES,
   NEWS_CRITICAL_BLOCK_BEFORE_MINUTES,
   NEWS_CRITICAL_BLOCK_AFTER_MINUTES,
   NEWS_HIGH_BLOCK_MINUTES,
@@ -47,8 +46,6 @@ import type {
   MarketRegime,
   OBTier,
   NewsEvent,
-  OrderBlock,
-  OBCandle,
 } from './types'
 import type { HTFBias } from './types'
 

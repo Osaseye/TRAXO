@@ -8,13 +8,12 @@
 import {
   SL_ATR_BUFFER,
   OTE_HIGH_FIB,
-  OTE_LOW_FIB,
   ENTRY_PROXIMAL_FRACTION,
   ENTRY_OTE_FRACTION,
   DAILY_DRAWDOWN_KILL_PCT,
   STREAK_MITIGATION_LOSSES,
 } from '../strategyConfig'
-import type { OrderBlock, StructureState, LiquidityPool, OBCandle } from './types'
+import type { OrderBlock, StructureState, LiquidityPool } from './types'
 
 // ─────────────────────────────────────────────
 // Stop Loss

@@ -39,7 +39,7 @@ function zonesOverlap(
 export function detectMTFCluster(
   base_ob: OrderBlock,
   htf_candles: Record<string, OBCandle[]>,
-  base_tf: Timeframe,
+  _base_tf: Timeframe,
   base_atr14: number,
 ): OBCluster {
   const sortedTFs = Object.keys(htf_candles).sort((a, b) => tfWeight(b) - tfWeight(a))

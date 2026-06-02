@@ -37,7 +37,7 @@ import {
   calculateBreakoutTPs,
   getBreakoutRiskPct,
 } from './breakout/riskEngine'
-import type { BreakoutContext, BreakoutSignal, BKAssetType } from './breakout/types'
+import type { BreakoutContext, BreakoutSignal } from './breakout/types'
 
 // ─────────────────────────────────────────────
 // Constants

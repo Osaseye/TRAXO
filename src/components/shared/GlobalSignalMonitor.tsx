@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
 import { getCandles, type Candle } from '@/lib/marketData'
@@ -18,9 +18,12 @@ export function GlobalSignalMonitor() {
   const symbol = useTradingContextStore((s) => s.chartSymbol)
   const timeframe = useTradingContextStore((s) => s.chartTimeframe)
   const { plan, selectedStrategyId, selectedStrategyIds } = useOnboardingStore()
-  const activeStrategyIds = plan === 'pro' && selectedStrategyIds.length > 0
-    ? selectedStrategyIds
-    : [selectedStrategyId]
+  const activeStrategyIds = useMemo(
+    () => plan === 'pro' && selectedStrategyIds.length > 0
+      ? selectedStrategyIds
+      : [selectedStrategyId],
+    [plan, selectedStrategyId, selectedStrategyIds],
+  )
 
   const [candles, setCandles] = useState<Candle[]>([])
   const [signals, setSignals] = useState<AnalysisSignal[]>([])
@@ -49,7 +52,7 @@ export function GlobalSignalMonitor() {
     return () => {
       cancelRef.current = true
     }
-  }, [symbol, timeframe, isAuthenticated])
+  }, [symbol, timeframe, isAuthenticated, activeStrategyIds])
 
   // Keep candles updated via WebSocket / polling
   useMarketWebSocket({

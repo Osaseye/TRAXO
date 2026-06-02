@@ -15,7 +15,7 @@
  * already reflects the corrected (flipped) signal direction.
  */
 
-import type { BKCandle, ConsolidationZone, BreakoutEvent, BreakoutDir } from './types'
+import type { BKCandle, ConsolidationZone, BreakoutEvent } from './types'
 import { getTrendlinePrice } from './consolidationEngine'
 
 // ─────────────────────────────────────────────
