@@ -4,9 +4,9 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "server": "node index.js",
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "server": "ts-node index.js",
+    "start": "ts-node index.js",
+    "dev": "nodemon --exec ts-node index.js",
     "seed-admin": "node scripts/seedAdmin.js"
   },
   "engines": {
@@ -22,6 +22,8 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.3"
   }
 }
