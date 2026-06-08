@@ -3,8 +3,8 @@ const candleCache = require('./candleCache');
 const signalStore = require('./signalStore');
 const websocketManager = require('./websocketManager');
 
-// Placeholder for the actual algorithms that will be moved
-const { runTrendFollowingStrategy } = require('../algorithms/trendFollowing/index'); 
+// Corrected import path
+const { runTrendFollowingStrategy } = require('../algorithms/trendFollowingStrategy'); 
 
 const SYMBOLS = ['EUR/USD', 'GBP/USD', 'AUD/USD', /* ...and so on */];
 const TIMEFRAMES = ['5min', '15min', '1h'];
