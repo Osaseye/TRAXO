@@ -166,16 +166,29 @@ export default function AdminSignals() {
   })
   useEffect(() => subscribeScanProgress(setScanProgress), [])
 
-  // Auto-commit new batch after 10 seconds
-  const autoCommitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Local pending batch — shown in preview panel until user commits or dismisses
+  const [pendingBatch, setPendingBatch] = useState<StoredSignal[]>([])
+  const prevNewBatchRef = useRef<StoredSignal[]>([])
   useEffect(() => {
-    if (scanProgress.newBatch.length === 0) return
-    if (autoCommitTimer.current) clearTimeout(autoCommitTimer.current)
-    autoCommitTimer.current = setTimeout(() => {
-      commitNewBatch(userId)
-    }, 10_000)
-    return () => { if (autoCommitTimer.current) clearTimeout(autoCommitTimer.current) }
-  }, [scanProgress.newBatch, userId])
+    if (scanProgress.newBatch.length > 0 && scanProgress.newBatch !== prevNewBatchRef.current) {
+      prevNewBatchRef.current = scanProgress.newBatch
+      setPendingBatch(scanProgress.newBatch)
+    }
+  }, [scanProgress.newBatch])
+
+  function handleCommitBatch() {
+    if (pendingBatch.length === 0) return
+    const store = useAnalysisSignalStore.getState()
+    store.addSignals(pendingBatch)
+    if (userId) void store.saveToFirestore(userId, pendingBatch)
+    setPendingBatch([])
+    commitNewBatch(userId)  // clear module-level batch too
+  }
+
+  function handleDismissBatch() {
+    setPendingBatch([])
+    commitNewBatch(userId)  // clears module-level newBatch without saving
+  }
 
   // Filters
   const [searchSymbol, setSearchSymbol] = useState('')
@@ -315,24 +328,23 @@ export default function AdminSignals() {
         ) : null}
 
         {/* New batch preview panel */}
-        {scanProgress.newBatch.length > 0 && (
+        {pendingBatch.length > 0 && (
           <div className="rounded-2xl border border-[#10b981]/20 bg-[#10b981]/[0.05] overflow-hidden">
             {/* Header */}
             <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#10b981]/10">
               <Zap size={13} className="text-[#34d399] shrink-0" />
               <span className="text-[13px] font-semibold text-[#34d399]">
-                {scanProgress.newBatch.length} new signal{scanProgress.newBatch.length !== 1 ? 's' : ''} found
+                {pendingBatch.length} new signal{pendingBatch.length !== 1 ? 's' : ''} found
               </span>
-              <span className="text-[11px] text-[#065f46] ml-1">— merging in 10s</span>
               <div className="ml-auto flex items-center gap-2">
                 <button
-                  onClick={() => commitNewBatch(userId)}
+                  onClick={handleCommitBatch}
                   className="px-3 py-1 rounded-lg bg-[#10b981]/20 border border-[#10b981]/30 text-[11px] font-semibold text-[#34d399] hover:bg-[#10b981]/30 transition-colors"
                 >
-                  Add to list now
+                  Add to list
                 </button>
                 <button
-                  onClick={() => commitNewBatch(userId)}
+                  onClick={handleDismissBatch}
                   className="p-1 rounded-lg hover:bg-white/[0.05] transition-colors"
                   title="Dismiss"
                 >
@@ -342,7 +354,7 @@ export default function AdminSignals() {
             </div>
             {/* Signal rows */}
             <div className="divide-y divide-white/[0.04] max-h-72 overflow-y-auto">
-              {scanProgress.newBatch.map((sig) => {
+              {pendingBatch.map((sig) => {
                 const isBuy = sig.direction === 'BUY'
                 const color = STRATEGY_COLORS[sig.strategyId] ?? '#6366f1'
                 return (
