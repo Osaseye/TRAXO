@@ -12,6 +12,7 @@ const Profile = lazy(() => import('@/pages/Profile'))
 const StrategyManager = lazy(() => import('@/pages/StrategyManager'))
 const StrategyDetail = lazy(() => import('@/pages/StrategyDetail'))
 const Settings = lazy(() => import('@/pages/Settings'))
+const Notifications = lazy(() => import('@/pages/Notifications'))
 const JournalDateDetail = lazy(() => import('@/pages/JournalDateDetail'))
 const Backtesting = lazy(() => import('@/pages/Backtesting'))
 const AdminPanel = lazy(() => import('@/pages/AdminPanel'))
@@ -57,6 +58,7 @@ export default function App() {
               <Route path="/strategies" element={<StrategyManager />} />
               <Route path="/strategies/:strategyId" element={<StrategyDetail />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/notifications" element={<Notifications />} />
               <Route path="/backtesting" element={<Backtesting />} />
             </Route>
 

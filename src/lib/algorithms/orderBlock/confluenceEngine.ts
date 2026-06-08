@@ -38,6 +38,9 @@ import {
   NEWS_HIGH_BLOCK_MINUTES,
   NEWS_MEDIUM_BLOCK_MINUTES,
   NEWS_MEDIUM_PENALTY,
+  ORDER_BLOCK_VOLUME_CONFIRMATION_RVOL,
+  ORDER_BLOCK_VOLUME_STRONG_RVOL,
+  ORDER_BLOCK_VOLUME_INSTITUTIONAL_RVOL,
 } from '../strategyConfig'
 import type {
   BosQuality,
@@ -333,9 +336,22 @@ export function scoreSignal(inputs: ScoringInputs): ScoringResult {
   reasons.push(eq.label)
 
   // ── Volume ───────────────────────────────────
-  if (inputs.volume_ratio < 0.7) {
+  if (inputs.volume_ratio >= ORDER_BLOCK_VOLUME_INSTITUTIONAL_RVOL) {
+    raw += 2
+    reasons.push(`VOLUME_INSTITUTIONAL (+2, ${inputs.volume_ratio.toFixed(1)}× VMA20)`)
+  } else if (inputs.volume_ratio >= ORDER_BLOCK_VOLUME_STRONG_RVOL) {
+    raw += 1
+    reasons.push(`VOLUME_STRONG (+1, ${inputs.volume_ratio.toFixed(1)}× VMA20)`)
+  } else if (inputs.volume_ratio >= ORDER_BLOCK_VOLUME_CONFIRMATION_RVOL) {
+    reasons.push(`VOLUME_CONFIRMATION (+0, ${inputs.volume_ratio.toFixed(1)}× VMA20)`)
+  } else if (inputs.volume_ratio < 0.8) {
     raw += SCORE_VOLUME_LOW_PENALTY
-    reasons.push('VOLUME_LOW (-1)')
+    reasons.push(`VOLUME_LOW (-1, ${inputs.volume_ratio.toFixed(1)}× VMA20)`)
+  }
+
+  if (inputs.all_conditions) {
+    raw += 1
+    reasons.push('OB_FULL_CONFLUENCE (+1)')
   }
 
   // ── News ─────────────────────────────────────

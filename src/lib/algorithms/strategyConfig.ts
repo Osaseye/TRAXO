@@ -206,6 +206,16 @@ export const SCORE_WRONG_ZONE_PENALTY        = -2
 export const SCORE_VOLUME_LOW_PENALTY        = -1
 export const SCORE_ASIA_SESSION_PENALTY      = -1
 
+/** Breakout RVOL thresholds. */
+export const BREAKOUT_VOLUME_CONFIRMATION_RVOL = 1.2
+export const BREAKOUT_VOLUME_STRONG_RVOL = 2.0
+export const BREAKOUT_VOLUME_INSTITUTIONAL_RVOL = 3.0
+
+/** Order-block volume-to-VMA20 thresholds. */
+export const ORDER_BLOCK_VOLUME_CONFIRMATION_RVOL = 1.3
+export const ORDER_BLOCK_VOLUME_STRONG_RVOL = 1.75
+export const ORDER_BLOCK_VOLUME_INSTITUTIONAL_RVOL = 2.25
+
 /** Hard kill — news event within this many minutes wipes the signal */
 export const NEWS_KILL_PENALTY               = -3
 export const NEWS_KILL_WINDOW_MINUTES        = 30

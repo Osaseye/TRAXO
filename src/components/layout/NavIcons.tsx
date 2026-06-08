@@ -61,3 +61,14 @@ export function NavSettingsIcon(props: IconProps) {
     </BaseIcon>
   )
 }
+
+export function NavBellIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M8.5 17.2h7" />
+      <path d="M10 17.2c0 1.4 1 2.3 2 2.3s2-.9 2-2.3" />
+      <path d="M7.2 15.2c.8-1.1 1.3-2.4 1.3-4V9.5a3.5 3.5 0 0 1 7 0v1.7c0 1.6.5 2.9 1.3 4" />
+      <path d="M6.4 15.2h11.2" />
+    </BaseIcon>
+  )
+}

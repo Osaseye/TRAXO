@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import {
   AlertTriangle,
   BarChart3,
@@ -75,15 +75,6 @@ const PLAN_CARDS = [
   },
 ] as const
 
-const MARKET_CONTEXT = [
-  'Forex majors',
-  'Gold (XAU)',
-  'Bitcoin',
-  'Ethereum',
-  'Indices',
-  'Commodities',
-]
-
 const AUTOPILOT_BENEFITS = [
   {
     title: 'Strategy-aware routing',
@@ -98,6 +89,16 @@ const AUTOPILOT_BENEFITS = [
     body: 'Per-trade risk, daily loss caps, and trade limits remain enforced before any execution handoff.',
   },
 ]
+
+const NOTIF_SYMBOL_GROUPS = [
+  { label: 'Forex', symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'EURJPY', 'GBPJPY', 'EURGBP'] },
+  { label: 'Indices', symbols: ['SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'FRA40', 'AUS200'] },
+  { label: 'Metals & Energy', symbols: ['XAUUSD', 'XAGUSD', 'WTI', 'BRENT', 'NATGAS'] },
+  { label: 'Crypto', symbols: ['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT'] },
+  { label: 'Stocks & Futures', symbols: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI', 'MNQ'] },
+] as const
+
+const NOTIF_TIMEFRAMES = ['1m', '5m', '15m', '1H', '4H', '1D'] as const
 
 function SignOutButton() {
   const logout = useAuthStore((s) => s.logout)
@@ -116,6 +117,7 @@ function SignOutButton() {
       navigate('/')
     }
   }
+
 
   return (
     <button
@@ -151,214 +153,140 @@ export default function Settings() {
   const setNotifSoundEnabled = useTradingContextStore((s) => s.setNotifSoundEnabled)
   const notifPushEnabled = useTradingContextStore((s) => s.notifPushEnabled)
   const setNotifPushEnabled = useTradingContextStore((s) => s.setNotifPushEnabled)
-  const [pushPermission, setPushPermission] = useState<NotificationPermission>(
-    typeof Notification !== 'undefined' ? Notification.permission : 'default'
-  )
+  const notifMinConfidencePct = useTradingContextStore((s) => s.notifMinConfidencePct)
+  const setNotifMinConfidencePct = useTradingContextStore((s) => s.setNotifMinConfidencePct)
+  const notifSymbolFilters = useTradingContextStore((s) => s.notifSymbolFilters)
+  const setNotifSymbolFilters = useTradingContextStore((s) => s.setNotifSymbolFilters)
+  const toggleNotifSymbolFilter = useTradingContextStore((s) => s.toggleNotifSymbolFilter)
+  const notifTimeframeFilters = useTradingContextStore((s) => s.notifTimeframeFilters)
+  const setNotifTimeframeFilters = useTradingContextStore((s) => s.setNotifTimeframeFilters)
+  const toggleNotifTimeframeFilter = useTradingContextStore((s) => s.toggleNotifTimeframeFilter)
+  const notifStrategyFilters = useTradingContextStore((s) => s.notifStrategyFilters)
+  const setNotifStrategyFilters = useTradingContextStore((s) => s.setNotifStrategyFilters)
+  const toggleNotifStrategyFilter = useTradingContextStore((s) => s.toggleNotifStrategyFilter)
 
-  const activeStrategies = useMemo(() => {
-    const ids = plan === 'pro' ? selectedStrategyIds : [selectedStrategyId]
-    return ids
-      .map((id) => ONBOARDING_STRATEGIES.find((strategy) => strategy.id === id)?.name)
-      .filter((name): name is NonNullable<typeof name> => Boolean(name))
-  }, [plan, selectedStrategyId, selectedStrategyIds])
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default')
 
-  const activeStrategyText = useMemo(() => {
-    if (plan === 'pro') {
-      return `${selectedStrategyIds.length} strategies active for blended chart suggestions.`
+  useEffect(() => {
+    if ('Notification' in window) {
+      setPushPermission(Notification.permission)
     }
+  }, [])
 
-    return `${activeStrategies[0] ?? 'No strategy'} is active for chart suggestions.`
-  }, [activeStrategies, plan, selectedStrategyIds])
+  const riskBudget = (accountBalance * riskPerTradePct) / 100
+  const dailyLossBudget = (accountBalance * maxDailyLossPct) / 100
 
-  const riskBudget = accountBalance * (riskPerTradePct / 100)
-  const dailyLossBudget = accountBalance * (maxDailyLossPct / 100)
+    const activeStrategies = useMemo(() => {
+  const ids = plan === 'free' ? [selectedStrategyId] : selectedStrategyIds
+  return ONBOARDING_STRATEGIES
+    .filter((s) => ids?.includes(s.id as OnboardingStrategyId))
+    .map((s) => s.name)
+}, [plan, selectedStrategyId, selectedStrategyIds])
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white pb-24 lg:pb-8">
-      <header className="h-14 border-b border-white/[0.05] bg-[#070709]/95 backdrop-blur px-3 sm:px-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <img src="/TRAXO-icon.png" alt="TRAXO" className="w-6 h-6 object-contain shrink-0" />
-          <span className="text-[10px] font-black tracking-[0.2em] uppercase text-white hidden sm:inline">TRAXO</span>
-          <span className="hidden sm:block h-4 w-px bg-white/[0.1]" />
-          <h1 className="text-[14px] font-semibold text-[#e5e7eb] truncate">Settings</h1>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="flex h-full w-full flex-col font-sans">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.08] bg-[#070709] px-4 md:px-6">
+        <h1 className="text-[14px] font-semibold text-[#f8fafc]">Settings</h1>
+        <div className="flex items-center gap-4">
           <DesktopWorkspaceNav />
           <SignOutButton />
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
-        <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.16em] text-[#64748b]">Control Center</p>
-              <h2 className="mt-2 text-2xl font-bold text-[#f8fafc]">Trading preferences and access</h2>
-              <p className="mt-2 text-[13px] text-[#94a3b8] max-w-3xl">
-                Configure plan access, strategy routing, risk limits, and market-event behavior from one focused workspace.
-              </p>
-            </div>
+      <div className="flex-1 overflow-y-auto bg-[#030303] p-4 sm:p-6 lg:p-8">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+          
+          <div className="lg:col-span-2 space-y-6">
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full lg:w-auto lg:min-w-[38rem]">
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Plan</p>
-                <p className="mt-1 text-[14px] font-bold text-[#f8fafc] capitalize">{plan}</p>
+            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6 space-y-5">
+              <div className="flex items-center gap-2">
+                <Crown size={16} className="text-[#bfdbfe]" />
+                <p className="text-[13px] font-semibold text-white">Subscription Plan</p>
               </div>
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Strategies</p>
-                <p className="mt-1 text-[14px] font-bold text-[#f8fafc]">{activeStrategies.length}</p>
-              </div>
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Risk Trade</p>
-                <p className="mt-1 text-[14px] font-bold text-[#f8fafc]">{riskPerTradePct.toFixed(1)}%</p>
-              </div>
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Daily Cap</p>
-                <p className="mt-1 text-[14px] font-bold text-[#f8fafc]">{maxDailyLossPct.toFixed(1)}%</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_24rem] gap-5">
-          <div className="space-y-5">
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Crown size={16} className="text-[#fde68a]" />
-                    <p className="text-[13px] font-semibold">Plan and Access</p>
-                  </div>
-                  <p className="mt-2 text-[12px] text-[#94a3b8]">{activeStrategyText}</p>
-                </div>
-
-              </div>
-
-              <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
-                {PLAN_CARDS.map((card) => {
-                  const active = card.id === plan
-                  const disabled = card.id === 'elite'
-
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {PLAN_CARDS.map((p) => {
+                  const isSelected = p.id === plan
+                  const isElite = p.id === 'elite'
                   return (
-                    <button
-                      key={card.name}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => !disabled && setPlan(card.id)}
-                      className={`relative flex h-full flex-col rounded-2xl border p-5 text-left transition-all ${
-                        active
-                          ? 'border-[#3b82f6]/45 bg-[#0d1626] shadow-[0_0_0_1px_rgba(59,130,246,0.15)]'
-                          : 'border-white/[0.08] bg-[#0b0f17] hover:border-white/[0.18]'
-                      } ${disabled ? 'opacity-90' : ''}`}
-                    >
-                      {card.badge && (
-                        <span className={`absolute -top-3 left-4 rounded-full px-3 py-1 text-[10px] font-bold tracking-wide ${card.id === 'pro' ? 'bg-[#3b82f6] text-white' : 'bg-[#1e293b] text-[#cbd5e1]'}`}>
-                          {card.badge}
-                        </span>
-                      )}
-                      <p className="text-[11px] font-semibold tracking-[0.12em] uppercase text-[#64748b]">{card.name}</p>
-                      <div className="mt-3 flex items-end gap-1.5">
-                        <span className="text-3xl font-extrabold text-white tracking-tight">{card.price}</span>
-                        <span className="text-[12px] text-[#374151] mb-1.5">{card.period}</span>
+                    <div key={p.id} className={`rounded-xl border p-4 flex flex-col ${isSelected ? 'border-[#3b82f6]/50 bg-[#3b82f6]/10' : 'border-white/[0.08] bg-[#0b0f17]'} ${isElite ? 'opacity-60 grayscale' : ''}`}>
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="text-[14px] font-bold text-white">{p.name}</p>
+                          <p className="text-[11px] text-[#94a3b8]">{p.badge}</p>
+                        </div>
+                        {isSelected && <Check size={16} className="text-[#3b82f6]" />}
                       </div>
-                      <p className="mt-3 text-[12px] text-[#94a3b8] leading-relaxed">{card.description}</p>
-                      <ul className="mt-5 space-y-2.5">
-                        {card.features.map((feature) => (
-                          <li key={feature} className="flex items-start gap-2.5">
-                            <Check size={13} className={`mt-0.5 shrink-0 ${active ? 'text-[#3b82f6]' : 'text-[#374151]'}`} />
-                            <span className="text-[12px] text-[#cbd5e1] leading-snug">{feature}</span>
+                      <p className="text-[20px] font-bold text-[#f8fafc] mt-2">{p.price} <span className="text-[11px] text-[#64748b] font-normal">{p.period}</span></p>
+                      <p className="text-[12px] text-[#94a3b8] mt-3 flex-1">{p.description}</p>
+                      <ul className="mt-4 space-y-2 mb-5">
+                        {p.features.map(f => (
+                          <li key={f} className="text-[11px] text-[#cbd5e1] flex items-start gap-1.5 whitespace-normal">
+                            <span className="text-[#64748b] mt-0.5">•</span>
+                            <span>{f}</span>
                           </li>
                         ))}
                       </ul>
-                      <div className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-[12px] font-semibold text-white">
-                        {disabled ? 'Coming soon' : card.cta}
-                      </div>
+                      <button
+                         type="button"
+                         disabled={isElite || isSelected}
+                         onClick={() => {
+                            if (!isElite && !isSelected) {
+                               setPlan(p.id)
+                            }
+                         }}
+                         className={`w-full py-2 rounded-lg text-[12px] font-semibold transition-colors mt-auto ${isSelected ? 'bg-[#3b82f6] text-white cursor-default' : isElite ? 'bg-white/[0.04] text-[#64748b] cursor-not-allowed' : 'bg-white/[0.08] text-white hover:bg-white/[0.12]'}`}
+                      >
+                        {isSelected ? 'Active Plan' : p.cta}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6 space-y-5">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal size={16} className="text-[#a5b4fc]" />
+                  <p className="text-[13px] font-semibold text-white">Active Strategies</p>
+                </div>
+                {plan === 'free' && <span className="text-[10px] uppercase font-bold text-[#f59e0b] tracking-wider px-2 py-1 rounded bg-[#f59e0b]/10 border border-[#f59e0b]/20">Pro to unlock all</span>}
+              </div>
+              <p className="text-[12px] text-[#94a3b8]">Select the setups you want to monitor concurrently. Your plan allows up to {plan === 'free' ? '1' : '5'} strategies.</p>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {ONBOARDING_STRATEGIES.map((strategy) => {
+                  const isSelected = plan === 'free' ? selectedStrategyId === strategy.id : selectedStrategyIds?.includes(strategy.id)
+                  return (
+                    <button
+                      key={strategy.id}
+                      type="button"
+                      onClick={() => {
+                         if (plan === 'free') setSelectedStrategy(strategy.id)
+                         else toggleSelectedStrategy(strategy.id)
+                      }}
+                      className={`flex flex-col text-left p-4 rounded-xl border transition-colors ${isSelected ? 'border-[#3b82f6]/50 bg-[#3b82f6]/10 cursor-default' : 'border-white/[0.08] bg-[#0b0f17] hover:border-white/[0.2]'}`}
+                    >
+                       <div className="flex justify-between items-start w-full">
+                         <p className="text-[13px] font-semibold text-white">{strategy.name}</p>
+                         {isSelected && <Check size={14} className="text-[#3b82f6]" />}
+                       </div>
+                       <div className="flex gap-3 text-[11px] text-[#94a3b8] mt-2">
+                         <span title="Historical Win Rate">WR: {strategy.winRate}</span>
+                         <span title="Est. signals per day">Signals: ~{strategy.signalsPerDay}/d</span>
+                       </div>
                     </button>
                   )
                 })}
               </div>
-
-              <div className="mt-4 rounded-2xl border border-white/[0.08] bg-[#0b0f17] p-4">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Market coverage</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {MARKET_CONTEXT.map((market) => (
-                    <span key={market} className="rounded-full border border-white/[0.08] bg-[#09090d] px-3 py-1 text-[11px] text-[#cbd5e1]">
-                      {market}
-                    </span>
-                  ))}
-                </div>
-              </div>
             </section>
 
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Layers3 size={16} className="text-[#93c5fd]" />
-                    <p className="text-[13px] font-semibold">Strategy Selection</p>
-                  </div>
-                  <p className="mt-2 text-[12px] text-[#94a3b8]">
-                    Choose which frameworks are allowed to influence chart suggestions.
-                  </p>
-                </div>
-                <span className="h-8 px-3 rounded-lg border border-white/[0.08] bg-[#0b0f17] text-[11px] font-semibold text-[#cbd5e1] inline-flex items-center justify-center w-fit">
-                  Selected {activeStrategies.length}/{plan === 'pro' ? 5 : 1}
-                </span>
-              </div>
-
-              {plan === 'free' ? (
-                <label className="mt-5 block text-[12px] text-[#94a3b8]">
-                  Active strategy
-                  <select
-                    value={selectedStrategyId}
-                    onChange={(event) => setSelectedStrategy(event.target.value as OnboardingStrategyId)}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
-                  >
-                    {ONBOARDING_STRATEGIES.map((strategy) => (
-                      <option key={strategy.id} value={strategy.id}>
-                        {strategy.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {ONBOARDING_STRATEGIES.map((strategy) => {
-                    const isSelected = selectedStrategyIds.includes(strategy.id)
-                    const canDeselect = selectedStrategyIds.length > 1
-                    const canSelect = selectedStrategyIds.length < 5
-                    const disabled = isSelected ? !canDeselect : !canSelect
-
-                    return (
-                      <button
-                        key={strategy.id}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => toggleSelectedStrategy(strategy.id as OnboardingStrategyId)}
-                        className={`rounded-lg border p-3 text-left transition-colors ${
-                          isSelected
-                            ? 'border-[#93c5fd]/50 bg-[#1e3a8a]/20 text-[#dbeafe]'
-                            : 'border-white/[0.12] bg-[#0b0f17] text-[#cbd5e1] hover:border-white/[0.26]'
-                        } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-[13px] font-semibold">{strategy.name}</span>
-                          <span className="text-[10px] text-[#94a3b8]">{strategy.winRate}</span>
-                        </div>
-                        <p className="mt-1 text-[11px] text-[#94a3b8]">{strategy.signalsPerDay} signals per day</p>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </section>
-
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6">
+            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6 space-y-5">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-[#86efac]" />
-                <p className="text-[13px] font-semibold">Risk Controls</p>
+                <p className="text-[13px] font-semibold text-white">System Configuration</p>
               </div>
-              <p className="mt-2 text-[12px] text-[#94a3b8]">
+              <p className="text-[12px] text-[#94a3b8]">
                 These values drive dashboard position sizing and capital protection guidance.
               </p>
 
@@ -420,7 +348,7 @@ export default function Settings() {
                 <p className="text-[13px] font-semibold">Signal Alerts</p>
               </div>
               <p className="text-[12px] text-[#94a3b8] mb-5">
-                Get notified the moment a live signal is detected on the current candle.
+                Control how TRAXO notifies you and which markets are allowed to send alerts.
               </p>
 
               <div className="space-y-3">
@@ -443,6 +371,40 @@ export default function Settings() {
                       }`}
                     />
                   </button>
+                </div>
+
+                <div className="rounded-xl border border-white/[0.08] bg-[#0b0f17] px-4 py-3 space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-[12px] font-semibold text-[#e5e7eb]">Minimum confidence</p>
+                      <p className="text-[11px] text-[#64748b] mt-0.5">Only notify on signals at or above this confidence score</p>
+                    </div>
+                    <div className="w-24 shrink-0">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={notifMinConfidencePct}
+                        onChange={(event) => setNotifMinConfidencePct(Number(event.target.value))}
+                        className="h-9 w-full rounded-lg border border-white/[0.12] bg-[#070709] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
+                      />
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={notifMinConfidencePct}
+                    onChange={(event) => setNotifMinConfidencePct(Number(event.target.value))}
+                    className="w-full accent-[#3b82f6]"
+                  />
+                  <div className="flex items-center justify-between text-[11px] text-[#64748b]">
+                    <span>0%</span>
+                    <span className="font-semibold text-[#93c5fd]">{notifMinConfidencePct}% and above</span>
+                    <span>100%</span>
+                  </div>
                 </div>
 
                 {/* Sound toggle */}
@@ -469,11 +431,9 @@ export default function Settings() {
                 {/* Browser push toggle */}
                 <div className="flex items-start justify-between gap-4 rounded-xl border border-white/[0.08] bg-[#0b0f17] px-4 py-3">
                   <div>
-                    <p className="text-[12px] font-semibold text-[#e5e7eb]">Browser push</p>
-                    <p className="text-[11px] text-[#64748b] mt-0.5">Fires even when the tab is minimised</p>
-                    {pushPermission === 'denied' && (
-                      <p className="text-[10px] text-[#ef4444] mt-1">Permission blocked — enable in browser site settings</p>
-                    )}
+                    <p className="text-[12px] font-semibold text-[#e5e7eb]">Browser alerts</p>
+                    <p className="text-[11px] text-[#64748b] mt-0.5">Uses the browser notification permission so your device gets a system alert too</p>
+                    {pushPermission === 'denied' && <p className="text-[10px] text-[#ef4444] mt-1">Permission blocked — enable in browser site settings</p>}
                     {pushPermission === 'default' && notifPushEnabled && (
                       <button
                         type="button"
@@ -487,9 +447,7 @@ export default function Settings() {
                         Request permission
                       </button>
                     )}
-                    {pushPermission === 'granted' && (
-                      <p className="text-[10px] text-[#22c55e] mt-1">Permission granted</p>
-                    )}
+                    {pushPermission === 'granted' && <p className="text-[10px] text-[#22c55e] mt-1">Permission granted</p>}
                   </div>
                   <button
                     type="button"
@@ -504,16 +462,74 @@ export default function Settings() {
                         })
                       }
                     }}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                      notifPushEnabled && pushPermission === 'granted' ? 'bg-[#3b82f6]' : 'bg-[#1e293b]'
-                    } disabled:opacity-40`}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${notifPushEnabled && pushPermission === 'granted' ? 'bg-[#3b82f6]' : 'bg-[#1e293b]'} disabled:opacity-40`}
                   >
-                    <span
-                      className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                        notifPushEnabled && pushPermission === 'granted' ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
+                    <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${notifPushEnabled && pushPermission === 'granted' ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/[0.08] bg-[#0b0f17] p-4 space-y-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Layers3 size={16} className="text-[#c4b5fd]" />
+                    <p className="text-[13px] font-semibold">Notification Scope</p>
+                  </div>
+                  <p className="mt-2 text-[12px] text-[#94a3b8]">Leave a category empty to receive all charts in that category. The alerts page still keeps full inbox history.</p>
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[11px] uppercase tracking-wider text-[#64748b]">Timeframes</p>
+                    <button type="button" onClick={() => setNotifTimeframeFilters([])} className={`rounded-full px-3 py-1 text-[11px] font-semibold border ${notifTimeframeFilters.length === 0 ? 'bg-[#3b82f6]/15 border-[#3b82f6]/30 text-[#93c5fd]' : 'border-white/[0.08] text-[#94a3b8]'}`}>All</button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {NOTIF_TIMEFRAMES.map((tf) => {
+                      const active = notifTimeframeFilters.includes(tf)
+                      return (
+                        <button key={tf} type="button" onClick={() => toggleNotifTimeframeFilter(tf)} className={`rounded-full px-3 py-1 text-[11px] font-semibold border ${active ? 'bg-[#3b82f6]/15 border-[#3b82f6]/30 text-[#93c5fd]' : 'border-white/[0.08] text-[#94a3b8]'}`}>
+                          {tf}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-[11px] uppercase tracking-wider text-[#64748b]">Strategies</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setNotifStrategyFilters([])} className={`rounded-full px-3 py-1 text-[11px] font-semibold border ${notifStrategyFilters.length === 0 ? 'bg-[#3b82f6]/15 border-[#3b82f6]/30 text-[#93c5fd]' : 'border-white/[0.08] text-[#94a3b8]'}`}>All</button>
+                    {ONBOARDING_STRATEGIES.map((strategyItem) => {
+                      const active = notifStrategyFilters.includes(strategyItem.id)
+                      return (
+                        <button key={strategyItem.id} type="button" onClick={() => toggleNotifStrategyFilter(strategyItem.id)} className={`rounded-full px-3 py-1 text-[11px] font-semibold border ${active ? 'bg-[#3b82f6]/15 border-[#3b82f6]/30 text-[#93c5fd]' : 'border-white/[0.08] text-[#94a3b8]'}`}>
+                          {strategyItem.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-[11px] uppercase tracking-wider text-[#64748b]">Charts</p>
+                  <button type="button" onClick={() => setNotifSymbolFilters([])} className={`rounded-xl border px-3 py-2 text-[11px] font-semibold ${notifSymbolFilters.length === 0 ? 'border-[#3b82f6]/30 bg-[#3b82f6]/10 text-[#93c5fd]' : 'border-white/[0.08] bg-[#070709] text-[#94a3b8]'}`}>All charts</button>
+                  <div className="mt-3 space-y-3 max-h-72 overflow-y-auto pr-1">
+                    {NOTIF_SYMBOL_GROUPS.map((group) => (
+                      <div key={group.label} className="rounded-xl border border-white/[0.06] bg-[#070709] p-3">
+                        <p className="text-[11px] uppercase tracking-wider text-[#64748b]">{group.label}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {group.symbols.map((symbol) => {
+                            const active = notifSymbolFilters.includes(symbol)
+                            return (
+                              <button key={symbol} type="button" onClick={() => toggleNotifSymbolFilter(symbol)} className={`rounded-full px-3 py-1 text-[11px] font-semibold border ${active ? 'bg-[#3b82f6]/15 border-[#3b82f6]/30 text-[#93c5fd]' : 'border-white/[0.08] text-[#94a3b8]'}`}>
+                                {symbol}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </section>
@@ -597,8 +613,8 @@ export default function Settings() {
               </div>
             </section>
           </aside>
-        </section>
-      </main>
+       </div>
+      </div>
 
       <MobileFloatingWorkspaceNav />
     </div>

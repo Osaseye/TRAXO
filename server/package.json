@@ -4,8 +4,13 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
+    "server": "node index.js",
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "seed-admin": "node scripts/seedAdmin.js"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "@upstash/redis": "^1.34.9",

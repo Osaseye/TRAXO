@@ -1,34 +1,27 @@
 /**
  * GlobalMultiSymbolScanner
  *
- * Invisible background component that automatically scans a curated set of
- * markets across key timeframes, regardless of which chart the user has open.
+ * Invisible background component that continuously scans the chart universe in
+ * a rolling queue and notifies the user as soon as a fresh signal is found.
  *
  * Why this exists:
  *   GlobalSignalMonitor only watches the single chart that is currently active.
- *   This scanner fills the gap by periodically cycling through all priority
- *   markets so signals are generated proactively, not just on manual visits.
+ *   This scanner fills the gap by walking all supported symbols/timeframes so
+ *   alerts are independent of what chart the user has open.
  *
  * Rate-limit safety:
  *   Each getCandles() call already goes through the key-rotation throttle in
- *   marketData.ts (7.5 s gap per key, up to 4 keys).  We simply queue each
- *   pair sequentially — the throttle layer handles the actual timing.
- *   The in-memory candle cache means recently-fetched pairs return instantly
- *   without hitting the API at all.
- *
- * Scan schedule:
- *   - 1H candles: re-scan every 60 minutes
- *   - 4H candles: re-scan every 4 hours
- *   - 1D candles: re-scan every 12 hours
- *   On first mount a full scan runs immediately (staggered 2 s after auth).
+ *   marketData.ts. We process one pair at a time, once per second, and let the
+ *   cache + throttle layer decide whether the call is instant or queued.
  */
 
 import { useEffect, useRef } from 'react'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useOnboardingStore } from '@/stores/useOnboardingStore'
-import { useAnalysisSignalStore, type StoredSignal } from '@/stores/useAnalysisSignalStore'
 import { getCandles } from '@/lib/marketData'
 import { runSignalsForStrategies } from '@/lib/signalDetection'
+import { notifySignal } from '@/hooks/useSignalNotification'
+import type { StoredSignal } from '@/stores/useAnalysisSignalStore'
 import type { ChartSymbol, ChartTimeframe } from '@/stores/useTradingContextStore'
 
 // ---------------------------------------------------------------------------
@@ -37,32 +30,28 @@ import type { ChartSymbol, ChartTimeframe } from '@/stores/useTradingContextStor
 
 /** Symbols that will be scanned automatically in the background. */
 const SCAN_SYMBOLS: ChartSymbol[] = [
-  // Major Forex
-  'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD',
-  // Metals / commodities
-  'XAUUSD', 'XAGUSD', 'WTI', 'BRENT',
-  // Indices
-  'SPX500', 'NAS100', 'US30', 'DE40',
-  // Crypto
-  'BTCUSDT', 'ETHUSD', 'SOLUSDT',
+  'EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'XAGUSD', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD',
+  'EURJPY', 'GBPJPY', 'EURGBP', 'SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'FRA40',
+  'AUS200', 'WTI', 'BRENT', 'NATGAS', 'BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT',
+  'DOGEUSDT', 'BNBUSDT', 'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX',
+  'AMD', 'COIN', 'MSTR', 'SMCI', 'MNQ',
 ]
 
 /** Timeframes to scan per symbol. Lower TFs are excluded to protect API quota. */
 const SCAN_TIMEFRAMES: ChartTimeframe[] = ['1H', '4H', '1D']
 
-/** How long to wait between full scan cycles (ms) per timeframe. */
-const RESCAN_INTERVAL: Record<ChartTimeframe, number> = {
-  '1m':  5  * 60 * 1000,
-  '5m':  5  * 60 * 1000,
-  '15m': 15 * 60 * 1000,
-  '1H':  60 * 60 * 1000,
-  '4H':  4  * 60 * 60 * 1000,
-  '1D':  12 * 60 * 60 * 1000,
-}
+/** Full queue of pairs scanned in a rolling loop. */
+const SCAN_PAIRS: Array<[ChartSymbol, ChartTimeframe]> = SCAN_TIMEFRAMES.flatMap((tf) =>
+  SCAN_SYMBOLS.map((symbol) => [symbol, tf] as [ChartSymbol, ChartTimeframe]),
+)
 
-/** Milliseconds to wait after login before the first scan starts (avoids
- *  competing with the initial chart load in GlobalSignalMonitor). */
-const STARTUP_DELAY_MS = 4_000
+/** One tick per second. The scanner advances one pair per tick. */
+const TICK_INTERVAL_MS = 1_000
+
+/** Milliseconds to wait after login before the first scan starts. */
+const STARTUP_DELAY_MS = 2_000
+
+const globalNotifiedIds = new Set<string>()
 
 // ---------------------------------------------------------------------------
 // Store for scan state — shared so AdminSignals can read it
@@ -97,12 +86,9 @@ function emitProgress(p: Partial<ScanProgress>) {
  * Called by AdminSignals (or any consumer) to commit the pending newBatch into
  * the main signal store and save to Firestore.
  */
-export function commitNewBatch(userId: string | null) {
-  const batch = _progress.newBatch
-  if (batch.length === 0) return
-  const store = useAnalysisSignalStore.getState()
-  store.addSignals(batch)
-  if (userId) void store.saveToFirestore(userId, batch)
+export function commitNewBatch(_userId: string | null) {
+  // Client no longer writes global-scan results to Firestore.
+  // Keep this API as a no-op so existing Admin UI wiring doesn't crash.
   emitProgress({ newBatch: [] })
 }
 
@@ -122,95 +108,81 @@ export function GlobalMultiSymbolScanner() {
   const cancelRef = useRef(false)
 
   useEffect(() => {
-    if (!isAuthenticated) return
+    if (!isAuthenticated) {
+      globalNotifiedIds.clear()
+      return
+    }
+
     cancelRef.current = false
 
-    // Determine strategy set once (re-run if plan/strategy changes)
     const activeStrategyIds =
       plan === 'pro' && selectedStrategyIds.length > 0
         ? selectedStrategyIds
         : [selectedStrategyId]
 
-    /** Process a single symbol/timeframe pair. Returns new signals found. */
+    let pairIndex = 0
+    let cycleBatch: StoredSignal[] = []
+
     async function scanPair(symbol: ChartSymbol, timeframe: ChartTimeframe): Promise<StoredSignal[]> {
       if (cancelRef.current) return []
       try {
         const candles = await getCandles(symbol, timeframe)
         if (cancelRef.current) return []
         const computed = runSignalsForStrategies(candles, symbol, timeframe, activeStrategyIds)
-        if (computed.length === 0) return []
         return computed.map((s) => ({ ...s, symbol, timeframe }))
       } catch {
-        // silently ignore per-pair errors (rate limit, network)
         return []
       }
     }
 
-    /** Build the work queue — only pairs that are due for a re-scan. */
-    function buildQueue(): Array<[ChartSymbol, ChartTimeframe]> {
-      const now = Date.now()
-      const queue: Array<[ChartSymbol, ChartTimeframe]> = []
-      for (const tf of SCAN_TIMEFRAMES) {
-        for (const sym of SCAN_SYMBOLS) {
-          const key = `${sym}:${tf}`
-          const last = lastScannedAt.current.get(key) ?? 0
-          if (now - last >= RESCAN_INTERVAL[tf]) {
-            queue.push([sym, tf])
+    async function tick() {
+      if (scanRunning.current || cancelRef.current) return
+      scanRunning.current = true
+
+      const [symbol, timeframe] = SCAN_PAIRS[pairIndex]
+      if (pairIndex === 0) {
+        cycleBatch = []
+        emitProgress({ running: true, done: 0, total: SCAN_PAIRS.length, current: '', newBatch: [] })
+      }
+
+      emitProgress({ current: `${symbol} / ${timeframe}`, done: pairIndex })
+      const found = await scanPair(symbol, timeframe)
+
+      // No Firestore persistence. Only notify (and keep a local preview batch for Admin UI).
+      if (found.length > 0) {
+        for (const signal of found) {
+          if (globalNotifiedIds.has(signal.id)) continue
+          const didNotify = notifySignal(signal)
+          if (didNotify) {
+            globalNotifiedIds.add(signal.id)
+            cycleBatch.push(signal)
           }
         }
       }
-      return queue
-    }
 
-    /** Run one full scan cycle — processes each pair sequentially so the
-     *  throttle layer inside getCandles() keeps us within API rate limits.
-     *  Signals are collected during the cycle and emitted as a single batch
-     *  at the end, so AdminSignals can preview them before they merge. */
-    async function runScan() {
-      if (scanRunning.current) return
-      scanRunning.current = true
+      lastScannedAt.current.set(`${symbol}:${timeframe}`, Date.now())
+      pairIndex = (pairIndex + 1) % SCAN_PAIRS.length
 
-      const queue = buildQueue()
-      if (queue.length === 0) {
-        scanRunning.current = false
-        return
+      if (pairIndex === 0) {
+        emitProgress({
+          running: false,
+          done: SCAN_PAIRS.length,
+          current: '',
+          lastCompletedAt: Date.now(),
+          newBatch: cycleBatch,
+        })
       }
 
-      emitProgress({ running: true, done: 0, total: queue.length, current: '', newBatch: [] })
-
-      // Accumulate signals for the whole cycle before showing them
-      const cycleBatch: StoredSignal[] = []
-
-      for (let i = 0; i < queue.length; i++) {
-        if (cancelRef.current) break
-        const [sym, tf] = queue[i]
-        emitProgress({ current: `${sym} / ${tf}`, done: i })
-        const found = await scanPair(sym, tf)
-        cycleBatch.push(...found)
-        lastScannedAt.current.set(`${sym}:${tf}`, Date.now())
-      }
-
-      // Emit the full batch — AdminSignals will show it as a preview.
-      // commitNewBatch() (called by the UI or auto-timer) merges them into the store.
-      emitProgress({
-        running: false,
-        done: queue.length,
-        current: '',
-        lastCompletedAt: Date.now(),
-        newBatch: cycleBatch,
-      })
       scanRunning.current = false
     }
 
-    // Delay the initial scan so it doesn't fight the active chart load
     const startTimer = setTimeout(() => {
-      void runScan()
+      void tick()
     }, STARTUP_DELAY_MS)
 
-    // Schedule periodic re-scans — check every minute if any pair is due
     const pollTimer = setInterval(() => {
-      void runScan()
-    }, 60_000)
+      void tick()
+    }, TICK_INTERVAL_MS)
 
     return () => {
       cancelRef.current = true

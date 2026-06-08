@@ -12,9 +12,9 @@ interface AnalysisSignalState {
   addSignals: (signals: StoredSignal[]) => void
   clearSignals: () => void
   setUid: (uid: string | null) => void
-  hydrateFromFirestore: (uid: string) => Promise<void>
-  saveToFirestore: (uid: string, signals: StoredSignal[]) => Promise<void>
-  clearFirestoreSignals: (uid: string) => Promise<void>
+  hydrateFromFirestore: (uid?: string | null) => Promise<void>
+  saveToFirestore: (uid: string | null, signals: StoredSignal[]) => Promise<void>
+  clearFirestoreSignals: (uid?: string | null) => Promise<void>
 }
 
 export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
@@ -37,11 +37,8 @@ export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
     try {
       const { collection, getDocs, query, orderBy, limit } = await import('firebase/firestore')
       const { db } = await import('@/lib/firebase')
-      const q = query(
-        collection(db, 'users', uid, 'signals'),
-        orderBy('time', 'desc'),
-        limit(500),
-      )
+      const colRef = uid ? collection(db, 'users', uid, 'signals') : collection(db, 'signals')
+      const q = query(colRef, orderBy('time', 'desc'), limit(500))
       const snap = await getDocs(q)
       if (!snap.empty) {
         const signals: StoredSignal[] = snap.docs.map((d) => d.data() as StoredSignal)
@@ -53,16 +50,26 @@ export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
   },
 
   saveToFirestore: async (uid, signals) => {
-    if (!uid || signals.length === 0) return
+    if (signals.length === 0) return
     try {
       const { doc, writeBatch } = await import('firebase/firestore')
       const { db } = await import('@/lib/firebase')
+      // If no uid provided, prefer a build-time admin UID (Vite env var) to seed into admin's collection
+      let targetUid = uid ?? null
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const envAdmin = (typeof import.meta !== 'undefined' ? (import.meta as any).env?.VITE_ADMIN_UID : undefined)
+        if (!targetUid && envAdmin) targetUid = envAdmin
+      } catch {
+        // ignore env lookup failures
+      }
+
       // Firestore writeBatch limit is 500 ops
       for (let i = 0; i < signals.length; i += 500) {
         const chunk = signals.slice(i, i + 500)
         const batch = writeBatch(db)
         for (const signal of chunk) {
-          const ref = doc(db, 'users', uid, 'signals', signal.id)
+          const ref = targetUid ? doc(db, 'users', targetUid, 'signals', signal.id) : doc(db, 'signals', signal.id)
           batch.set(ref, signal)
         }
         await batch.commit()
@@ -73,17 +80,17 @@ export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
   },
 
   clearFirestoreSignals: async (uid) => {
-    if (!uid) return
     try {
       const { collection, getDocs, query, writeBatch, doc } = await import('firebase/firestore')
       const { db } = await import('@/lib/firebase')
-      const snap = await getDocs(query(collection(db, 'users', uid, 'signals')))
+      const colRef = uid ? collection(db, 'users', uid, 'signals') : collection(db, 'signals')
+      const snap = await getDocs(query(colRef))
       if (snap.empty) return
       for (let i = 0; i < snap.docs.length; i += 500) {
         const batch = writeBatch(db)
         snap.docs
           .slice(i, i + 500)
-          .forEach((d) => batch.delete(doc(db, 'users', uid, 'signals', d.id)))
+          .forEach((d) => batch.delete(uid ? doc(db, 'users', uid, 'signals', d.id) : doc(db, 'signals', d.id)))
         await batch.commit()
       }
     } catch {

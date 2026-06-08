@@ -103,9 +103,20 @@ interface TradingContextState {
   notifToastEnabled: boolean
   notifSoundEnabled: boolean
   notifPushEnabled: boolean
+  notifMinConfidencePct: number
+  notifSymbolFilters: ChartSymbol[]
+  notifTimeframeFilters: ChartTimeframe[]
+  notifStrategyFilters: string[]
   setNotifToastEnabled: (v: boolean) => void
   setNotifSoundEnabled: (v: boolean) => void
   setNotifPushEnabled: (v: boolean) => void
+  setNotifMinConfidencePct: (v: number) => void
+  setNotifSymbolFilters: (symbols: ChartSymbol[]) => void
+  toggleNotifSymbolFilter: (symbol: ChartSymbol) => void
+  setNotifTimeframeFilters: (timeframes: ChartTimeframe[]) => void
+  toggleNotifTimeframeFilter: (timeframe: ChartTimeframe) => void
+  setNotifStrategyFilters: (strategyIds: string[]) => void
+  toggleNotifStrategyFilter: (strategyId: string) => void
 }
 
 export const useTradingContextStore = create<TradingContextState>()(persist((set) => ({
@@ -153,9 +164,35 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
   notifToastEnabled: true,
   notifSoundEnabled: true,
   notifPushEnabled: false,
+  notifMinConfidencePct: 0,
+  notifSymbolFilters: [],
+  notifTimeframeFilters: [],
+  notifStrategyFilters: [],
   setNotifToastEnabled: (v) => set({ notifToastEnabled: v }),
   setNotifSoundEnabled: (v) => set({ notifSoundEnabled: v }),
   setNotifPushEnabled: (v) => set({ notifPushEnabled: v }),
+  setNotifMinConfidencePct: (v) => set({ notifMinConfidencePct: Math.max(0, Math.min(100, Number(v) || 0)) }),
+  setNotifSymbolFilters: (symbols) => set({ notifSymbolFilters: symbols }),
+  toggleNotifSymbolFilter: (symbol) =>
+    set((state) => ({
+      notifSymbolFilters: state.notifSymbolFilters.includes(symbol)
+        ? state.notifSymbolFilters.filter((item) => item !== symbol)
+        : [...state.notifSymbolFilters, symbol],
+    })),
+  setNotifTimeframeFilters: (timeframes) => set({ notifTimeframeFilters: timeframes }),
+  toggleNotifTimeframeFilter: (timeframe) =>
+    set((state) => ({
+      notifTimeframeFilters: state.notifTimeframeFilters.includes(timeframe)
+        ? state.notifTimeframeFilters.filter((item) => item !== timeframe)
+        : [...state.notifTimeframeFilters, timeframe],
+    })),
+  setNotifStrategyFilters: (strategyIds) => set({ notifStrategyFilters: strategyIds }),
+  toggleNotifStrategyFilter: (strategyId) =>
+    set((state) => ({
+      notifStrategyFilters: state.notifStrategyFilters.includes(strategyId)
+        ? state.notifStrategyFilters.filter((item) => item !== strategyId)
+        : [...state.notifStrategyFilters, strategyId],
+    })),
 
   setAccountBalance: (value) => set({ accountBalance: Math.max(0, Number(value) || 0) }),
   setRiskPerTradePct: (value) =>
@@ -252,5 +289,9 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
     notifToastEnabled: state.notifToastEnabled,
     notifSoundEnabled: state.notifSoundEnabled,
     notifPushEnabled: state.notifPushEnabled,
+    notifMinConfidencePct: state.notifMinConfidencePct,
+    notifSymbolFilters: state.notifSymbolFilters,
+    notifTimeframeFilters: state.notifTimeframeFilters,
+    notifStrategyFilters: state.notifStrategyFilters,
   }),
 }))

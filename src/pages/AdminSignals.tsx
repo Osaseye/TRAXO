@@ -68,11 +68,6 @@ function fmtDate(ts: number): string {
   })
 }
 
-function riskColor(risk: string) {
-  if (risk === 'Low') return 'text-[#86efac] bg-[#86efac]/10 border-[#86efac]/20'
-  if (risk === 'High') return 'text-[#fca5a5] bg-[#fca5a5]/10 border-[#fca5a5]/20'
-  return 'text-[#fde68a] bg-[#fde68a]/10 border-[#fde68a]/20'
-}
 
 function confColor(c: number) {
   if (c >= 75) return 'text-[#86efac]'
@@ -164,7 +159,11 @@ export default function AdminSignals() {
   const [scanProgress, setScanProgress] = useState<ScanProgress>({
     running: false, current: '', done: 0, total: 0, lastCompletedAt: null, newBatch: [],
   })
-  useEffect(() => subscribeScanProgress(setScanProgress), [])
+  useEffect(() => {
+    // subscribeScanProgress is legacy and may return boolean (not a cleanup fn).
+    // React effect cleanup must be void or a function; ignore return value.
+    subscribeScanProgress(setScanProgress)
+  }, [])
 
   // Local pending batch — shown in preview panel until user commits or dismisses
   const [pendingBatch, setPendingBatch] = useState<StoredSignal[]>([])
@@ -180,7 +179,8 @@ export default function AdminSignals() {
     if (pendingBatch.length === 0) return
     const store = useAnalysisSignalStore.getState()
     store.addSignals(pendingBatch)
-    if (userId) void store.saveToFirestore(userId, pendingBatch)
+    // Always attempt to save; store will use configured admin UID when `userId` is null
+    void store.saveToFirestore(userId ?? null, pendingBatch)
     setPendingBatch([])
     commitNewBatch(userId)  // clear module-level batch too
   }

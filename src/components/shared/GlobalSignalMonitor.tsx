@@ -16,7 +16,6 @@ import { useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
  */
 export function GlobalSignalMonitor() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const userId = useAuthStore((s) => s.user?.id ?? null)
   const symbol = useTradingContextStore((s) => s.chartSymbol)
   const timeframe = useTradingContextStore((s) => s.chartTimeframe)
   const { plan, selectedStrategyId, selectedStrategyIds } = useOnboardingStore()
@@ -48,7 +47,7 @@ export function GlobalSignalMonitor() {
         setCandles(loaded)
         setSignals(computed)
         addSignals(mapped)
-        if (userId) void useAnalysisSignalStore.getState().saveToFirestore(userId, mapped)
+        // No Firestore persistence for global scanning; keep only in-memory signals + notifications.
       } catch {
         // silently ignore — Dashboard has its own error handling for the UI
       }
@@ -73,7 +72,7 @@ export function GlobalSignalMonitor() {
       setCandles(next)
       setSignals(computed)
       addSignals(mapped)
-      if (userId) void useAnalysisSignalStore.getState().saveToFirestore(userId, mapped)
+      // No Firestore persistence for global scanning; keep only in-memory signals + notifications.
     },
   })
 
@@ -83,6 +82,7 @@ export function GlobalSignalMonitor() {
       id: s.id,
       symbol,
       timeframe,
+      strategyId: s.strategyId,
       strategyLabel: s.strategyLabel,
       direction: s.direction,
       entry: s.entry,
@@ -91,6 +91,7 @@ export function GlobalSignalMonitor() {
       rr: s.rr,
       confidence: s.confidence,
       time: s.time,
+      reason: s.reason,
     })),
     symbol,
     timeframe,

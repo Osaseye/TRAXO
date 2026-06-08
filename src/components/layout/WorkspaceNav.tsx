@@ -1,8 +1,10 @@
 import { NavLink } from 'react-router'
 import { BarChart2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useNotificationStore } from '@/stores/useNotificationStore'
 import {
   NavDashboardIcon,
+  NavBellIcon,
   NavJournalIcon,
   NavProfileIcon,
   NavSettingsIcon,
@@ -13,6 +15,7 @@ const BacktestIcon = ({ className }: { className?: string }) => <BarChart2 class
 const DESKTOP_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: NavDashboardIcon },
   { to: '/strategies', label: 'Strategies', icon: NavStrategyIcon },
+  { to: '/notifications', label: 'Alerts', icon: NavBellIcon },
   { to: '/journal', label: 'Journal', icon: NavJournalIcon },
   { to: '/backtesting', label: 'Backtest', icon: BacktestIcon },
   { to: '/profile', label: 'Profile', icon: NavProfileIcon },
@@ -22,12 +25,15 @@ const DESKTOP_ITEMS = [
 const MOBILE_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: NavDashboardIcon },
   { to: '/strategies', label: 'Strategies', icon: NavStrategyIcon },
+  { to: '/notifications', label: 'Alerts', icon: NavBellIcon },
   { to: '/journal', label: 'Journal', icon: NavJournalIcon },
   { to: '/backtesting', label: 'Backtest', icon: BacktestIcon },
   { to: '/settings', label: 'Settings', icon: NavSettingsIcon },
 ]
 
 export function DesktopWorkspaceNav() {
+  const unreadCount = useNotificationStore((s) => s.notifications.filter((notification) => !notification.read).length)
+
   return (
     <nav className="hidden lg:flex items-center gap-1 rounded-xl border border-white/[0.12] bg-[#0d1117] p-1">
       {DESKTOP_ITEMS.map((item) => (
@@ -43,6 +49,11 @@ export function DesktopWorkspaceNav() {
         >
           <item.icon className="w-3.5 h-3.5" />
           {item.label}
+          {item.to === '/notifications' && unreadCount > 0 && (
+            <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ef4444] px-1 text-[9px] font-bold text-white">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
         </NavLink>
       ))}
     </nav>

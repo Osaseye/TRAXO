@@ -10,6 +10,11 @@
  */
 
 import type { ConsolidationZone, BreakoutEvent, BKAssetType, BKTier } from './types'
+import {
+  BREAKOUT_VOLUME_CONFIRMATION_RVOL,
+  BREAKOUT_VOLUME_STRONG_RVOL,
+  BREAKOUT_VOLUME_INSTITUTIONAL_RVOL,
+} from '../strategyConfig'
 
 // ─────────────────────────────────────────────
 // Result Types
@@ -95,17 +100,20 @@ export function scoreBreakout(opts: ScoringOptions): ScoringResult {
 
   // ── Volume Expansion ──────────────────────────────────────────────────────
   if (hasRealVolume) {
-    if (event.volumeRatio >= 3.0) {
+    if (event.volumeRatio >= BREAKOUT_VOLUME_INSTITUTIONAL_RVOL) {
       score += 3
       reason.push(`+3 Institutional-grade volume (${event.volumeRatio.toFixed(1)}× RVOL)`)
-    } else if (event.volumeRatio >= 2.0) {
+    } else if (event.volumeRatio >= BREAKOUT_VOLUME_STRONG_RVOL) {
       score += 2
       reason.push(`+2 Strong volume expansion (${event.volumeRatio.toFixed(1)}× RVOL)`)
-    } else if (event.volumeRatio < 1.5) {
-      score -= 2
-      reason.push(`-2 Weak volume (${event.volumeRatio.toFixed(1)}× RVOL) — institutional absent`)
+    } else if (event.volumeRatio >= BREAKOUT_VOLUME_CONFIRMATION_RVOL) {
+      score += 1
+      reason.push(`+1 Confirmed volume expansion (${event.volumeRatio.toFixed(1)}× RVOL)`)
+    } else if (event.volumeRatio < 0.9) {
+      score -= 1
+      reason.push(`-1 Weak volume (${event.volumeRatio.toFixed(1)}× RVOL) — institutional absent`)
     }
-    // 1.5 ≤ rvol < 2.0: no bonus, no penalty (acceptable but not ideal)
+    // 0.9 ≤ rvol < confirmation threshold: neutral (acceptable but not ideal)
   }
   // No real volume data: skip gate entirely (neutral)
 
@@ -144,9 +152,9 @@ export function scoreBreakout(opts: ScoringOptions): ScoringResult {
   }
 
   // ── Asset-Type Specific Overrides (§5.1) ─────────────────────────────────
-  if (assetType === 'STOCKS' && hasRealVolume && event.volumeRatio < 2.5) {
+  if (assetType === 'STOCKS' && hasRealVolume && event.volumeRatio < 2.0) {
     score -= 1
-    reason.push('-1 Stocks require ≥ 2.5× volume for institutional participation')
+    reason.push('-1 Stocks require stronger volume participation')
   }
 
   // ── Pattern Maturity ──────────────────────────────────────────────────────

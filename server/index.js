@@ -6,6 +6,9 @@ require('dotenv').config()
 const newsRouter = require('./routes/news')
 const { startNewsPoller } = require('./services/newsPoller')
 
+const globalSignalsRouter = require('./routes/globalSignals')
+const { startGlobalSignalScannerIfNeeded } = require('./services/globalSignalScanner')
+
 const app = express()
 app.use(cors())
 app.use(express.json())
@@ -48,6 +51,12 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }))
 
 // News
 app.use('/api/news', newsRouter)
+
+// Global signals (server-driven scan + persistence scaffolding)
+app.use('/api/global-signals', globalSignalsRouter)
+
+// Start scanner lazily (no-op placeholder until fully implemented)
+startGlobalSignalScannerIfNeeded()
 
 function requireAdminCredentials() {
   return Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS)

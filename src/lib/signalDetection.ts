@@ -13,6 +13,7 @@ import { analyzeBreakout } from '@/lib/algorithms/breakoutStrategy'
 import type { BreakoutContext, BKAssetType } from '@/lib/algorithms/breakout/types'
 import { analyzeSupplyDemand } from '@/lib/algorithms/supplyDemandStrategy'
 import type { SupplyDemandContext, SDAssetType } from '@/lib/algorithms/supplyDemand/types'
+import { annotateSignalLifecycle, type SignalLifecycleStatus, type SignalResolution } from './signalLifecycle'
 
 export type RiskLabel = 'Low' | 'Medium' | 'High'
 
@@ -29,6 +30,9 @@ export interface AnalysisSignal {
   confidence: number
   risk: RiskLabel
   reason: string[]
+  status?: SignalLifecycleStatus
+  resolution?: SignalResolution
+  expiryCandles?: number
 }
 
 const CRYPTO_SYMBOLS: ChartSymbol[] = ['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT']
@@ -612,7 +616,7 @@ export function runSignalsForStrategies(
   if (activeStrategyIds.includes('breakout')) {
     results.push(...runBreakoutOnCandles(candles, sym, activeTimeframe))
   }
-  if (activeStrategyIds.includes('supply-demand') || activeStrategyIds.includes('supply_demand')) {
+  if (activeStrategyIds.includes('supply-demand')) {
     results.push(...runSupplyDemandOnCandles(candles, sym, activeTimeframe))
   }
 
@@ -624,5 +628,6 @@ export function runSignalsForStrategies(
       seen.add(s.id)
       return true
     })
+    .map((signal) => annotateSignalLifecycle(candles, signal))
     .sort((a, b) => b.confidence - a.confidence)
 }

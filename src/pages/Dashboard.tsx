@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Time, UTCTimestamp } from 'lightweight-charts'
 import { ChevronDown, X } from 'lucide-react'
+import { useSearchParams } from 'react-router'
 import { useOnboardingStore } from '@/stores/useOnboardingStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
@@ -183,6 +184,7 @@ function generateLevels(entry: number, action: TradeAction, range: number, digit
 
 export default function Dashboard() {
   const displayName = useAuthStore((s) => s.user?.displayName || s.user?.fullName || s.user?.email || 'Trader')
+  const [searchParams] = useSearchParams()
   const { plan, selectedStrategyId, selectedStrategyIds } = useOnboardingStore()
   const {
     accountBalance,
@@ -220,17 +222,33 @@ export default function Dashboard() {
   const [dismissedNoticeKeys, setDismissedNoticeKeys] = useState<string[]>([])
   const dragOffsetRef = useRef({ x: 0, y: 0 })
 
+  useEffect(() => {
+    const nextSymbol = searchParams.get('symbol')
+    const nextTimeframe = searchParams.get('timeframe')
+
+    if (nextSymbol) {
+      setSymbol(nextSymbol as typeof symbol)
+    }
+    if (nextTimeframe) {
+      setTimeframe(nextTimeframe as typeof timeframe)
+    }
+  }, [searchParams, setSymbol, setTimeframe])
+
   const hoveredSignal = useMemo(
-    () => signals.find((s) => s.id === hoveredSignalId) ?? null,
+    () => signals.find((s) => s.id === hoveredSignalId && s.status === 'live') ?? null,
     [signals, hoveredSignalId]
   )
 
   const lockedSignal = useMemo(
-    () => signals.find((s) => s.id === lockedSignalId) ?? null,
+    () => signals.find((s) => s.id === lockedSignalId && s.status === 'live') ?? null,
     [signals, lockedSignalId]
   )
 
   const activeSignal = lockedSignal ?? hoveredSignal
+  const liveSignals = useMemo(
+    () => signals.filter((signal) => signal.status === 'live'),
+    [signals]
+  )
   const marketRiskContext = useMemo(
     () => getMarketRiskContext(symbol, timeframe, activeStrategyIds.length),
     [symbol, timeframe, activeStrategyIds.length]
@@ -370,7 +388,7 @@ export default function Dashboard() {
   const marketFilter = stockMarketFilter
 
   const chartMarkers = useMemo(() => {
-    const suggestionMarkers: ChartPanelMarker[] = signals.map((s) => ({
+    const suggestionMarkers: ChartPanelMarker[] = liveSignals.map((s) => ({
       time: s.time,
       position: s.direction === 'BUY' ? 'belowBar' : 'aboveBar',
       shape: s.direction === 'BUY' ? 'arrowUp' : 'arrowDown',
@@ -387,7 +405,7 @@ export default function Dashboard() {
     }))
 
     return [...suggestionMarkers, ...historicalMarkers]
-  }, [signals, journalMarkers])
+  }, [liveSignals, journalMarkers])
 
   const chartActiveSignal: ChartPanelActiveSignal | null = activeSignal
     ? {
@@ -409,12 +427,12 @@ export default function Dashboard() {
     : null
 
   const handleCrosshairMove = (time: UTCTimestamp | null) => {
-    if (signals.length === 0 || time == null) {
+    if (liveSignals.length === 0 || time == null) {
       if (!lockedSignalId) setHoveredSignalId(null)
       return
     }
 
-    const closest = signals.find((s) => s.time === time) ?? null
+    const closest = liveSignals.find((s) => s.time === time) ?? null
 
     if (closest) {
       setHoveredSignalId(closest.id)
@@ -429,7 +447,7 @@ export default function Dashboard() {
     const clickedTime = typeof time === 'number' ? (time as UTCTimestamp) : null
 
     if (clickedTime != null) {
-      const nearestSignal = signals.find((s) => s.time === clickedTime) ?? null
+      const nearestSignal = liveSignals.find((s) => s.time === clickedTime) ?? null
 
       if (nearestSignal) {
         setLockedSignalId(nearestSignal.id)

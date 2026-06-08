@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
+import type { UTCTimestamp } from 'lightweight-charts'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
 import { useToastStore } from '@/stores/useToastStore'
+import { useNotificationStore } from '@/stores/useNotificationStore'
 import { intervalSeconds } from '@/lib/marketData'
 
 // Module-level: shared across all instances so Dashboard + GlobalSignalMonitor never double-fire
@@ -12,6 +14,7 @@ export interface SignalForNotification {
   id: string
   symbol: string
   timeframe: string
+  strategyId?: string
   strategyLabel: string
   direction: 'BUY' | 'SELL'
   entry: number
@@ -19,6 +22,7 @@ export interface SignalForNotification {
   tp: number
   rr: number
   confidence: number
+  reason?: string[]
   /** UTC seconds of the signal's candle. Used to filter out pre-session signals. */
   time?: number
 }
@@ -73,6 +77,79 @@ function firePushNotification(signal: SignalForNotification) {
   }
 }
 
+export function notifySignal(signal: SignalForNotification): boolean {
+  if (globalSeenIds.has(signal.id)) return false
+
+  const { notifToastEnabled, notifSoundEnabled, notifPushEnabled } =
+    useTradingContextStore.getState()
+  const { notifSymbolFilters, notifTimeframeFilters, notifStrategyFilters, notifMinConfidencePct } = useTradingContextStore.getState()
+  const addToast = useToastStore.getState().addToast
+  const addNotifications = useNotificationStore.getState().addNotifications
+
+  const symbolAllowed = notifSymbolFilters.length === 0 || notifSymbolFilters.includes(signal.symbol as any)
+  const timeframeAllowed = notifTimeframeFilters.length === 0 || notifTimeframeFilters.includes(signal.timeframe as any)
+  const strategyAllowed = notifStrategyFilters.length === 0 || !signal.strategyId || notifStrategyFilters.includes(signal.strategyId)
+  const confidenceAllowed = signal.confidence >= notifMinConfidencePct
+  const intervalS = intervalSeconds(signal.timeframe as Parameters<typeof intervalSeconds>[0])
+  const nowS = Math.floor(Date.now() / 1000)
+  const signalAgeS = signal.time !== undefined ? nowS - signal.time : 0
+  const freshnessAllowed = signal.time === undefined || signalAgeS <= intervalS * 2
+
+  if (!symbolAllowed || !timeframeAllowed || !strategyAllowed || !confidenceAllowed || !freshnessAllowed) {
+    if (!freshnessAllowed) {
+      globalSeenIds.add(signal.id)
+    }
+    return false
+  }
+
+  globalSeenIds.add(signal.id)
+
+  const inboxItem = {
+    id: signal.id,
+    symbol: signal.symbol,
+    timeframe: signal.timeframe,
+    strategyId: signal.strategyId ?? 'unknown',
+    strategyLabel: signal.strategyLabel,
+    direction: signal.direction,
+    entry: signal.entry,
+    sl: signal.sl,
+    tp: signal.tp,
+    rr: signal.rr,
+    confidence: signal.confidence,
+    reason: signal.reason ?? [],
+    time: signal.time as UTCTimestamp | undefined,
+    read: false,
+    createdAt: Date.now(),
+  }
+
+  addNotifications([inboxItem])
+
+  if (notifToastEnabled) {
+    addToast({
+      id: signal.id,
+      symbol: signal.symbol,
+      timeframe: signal.timeframe,
+      strategyLabel: signal.strategyLabel,
+      direction: signal.direction,
+      entry: signal.entry,
+      sl: signal.sl,
+      tp: signal.tp,
+      rr: signal.rr,
+      confidence: signal.confidence,
+    })
+  }
+
+  if (notifSoundEnabled) {
+    playSignalChime(signal.direction)
+  }
+
+  if (notifPushEnabled) {
+    firePushNotification(signal)
+  }
+
+  return true
+}
+
 interface UseSignalNotificationParams {
   signals: SignalForNotification[]
   symbol: string
@@ -100,9 +177,6 @@ export function useSignalNotification({ signals, symbol, timeframe }: UseSignalN
     }
 
     const intervalS = intervalSeconds(timeframe as Parameters<typeof intervalSeconds>[0])
-    const { notifToastEnabled, notifSoundEnabled, notifPushEnabled } =
-      useTradingContextStore.getState()
-    const addToast = useToastStore.getState().addToast
 
     for (const signal of signals) {
       if (globalSeenIds.has(signal.id)) continue
@@ -111,35 +185,18 @@ export function useSignalNotification({ signals, symbol, timeframe }: UseSignalN
       // A signal on candle time T means the candle closed at roughly T + intervalS.
       // Allow up to 1 interval of grace so a candle that was just closing when
       // the session started still triggers.
+      const nowS = Math.floor(Date.now() / 1000)
       if (signal.time !== undefined && signal.time < SESSION_START_S - intervalS) {
         globalSeenIds.add(signal.id) // mark as seen so we never revisit it
         continue
       }
 
-      globalSeenIds.add(signal.id)
-
-      if (notifToastEnabled) {
-        addToast({
-          id: signal.id,
-          symbol: signal.symbol,
-          timeframe: signal.timeframe,
-          strategyLabel: signal.strategyLabel,
-          direction: signal.direction,
-          entry: signal.entry,
-          sl: signal.sl,
-          tp: signal.tp,
-          rr: signal.rr,
-          confidence: signal.confidence,
-        })
+      if (signal.time !== undefined && nowS - signal.time > intervalS * 2) {
+        globalSeenIds.add(signal.id)
+        continue
       }
 
-      if (notifSoundEnabled) {
-        playSignalChime(signal.direction)
-      }
-
-      if (notifPushEnabled) {
-        firePushNotification(signal)
-      }
+      notifySignal(signal)
     }
   }, [signals])
 }

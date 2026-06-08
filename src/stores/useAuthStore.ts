@@ -61,6 +61,11 @@ export const useAuthStore = create<AuthState>((set, get) => {
         useAnalysisSignalStore.getState().setUid(fu.uid)
         void useAnalysisSignalStore.getState().hydrateFromFirestore(fu.uid)
       } catch { /* non-fatal */ }
+      try {
+        const { useNotificationStore } = await import('@/stores/useNotificationStore')
+        useNotificationStore.getState().setUid(fu.uid)
+        void useNotificationStore.getState().hydrateFromFirestore(fu.uid)
+      } catch { /* non-fatal */ }
     } else {
       set({ user: null, isAuthenticated: false, idToken: null, isLoading: false })
       try {
@@ -70,6 +75,11 @@ export const useAuthStore = create<AuthState>((set, get) => {
       try {
         const { useAnalysisSignalStore } = await import('@/stores/useAnalysisSignalStore')
         useAnalysisSignalStore.getState().setUid(null)
+      } catch { /* non-fatal */ }
+      try {
+        const { useNotificationStore } = await import('@/stores/useNotificationStore')
+        useNotificationStore.getState().setUid(null)
+        useNotificationStore.setState({ notifications: [] })
       } catch { /* non-fatal */ }
     }
   })
@@ -169,6 +179,11 @@ export const useAuthStore = create<AuthState>((set, get) => {
           useAnalysisSignalStore.getState().setUid(fu.uid)
           void useAnalysisSignalStore.getState().hydrateFromFirestore(fu.uid)
         } catch { /* non-fatal */ }
+        try {
+          const { useNotificationStore } = await import('@/stores/useNotificationStore')
+          useNotificationStore.getState().setUid(fu.uid)
+          void useNotificationStore.getState().hydrateFromFirestore(fu.uid)
+        } catch { /* non-fatal */ }
       } catch (error) {
         set({ isLoading: false })
         throw error
@@ -178,6 +193,11 @@ export const useAuthStore = create<AuthState>((set, get) => {
       set({ isLoading: true })
       await fbSignOut(auth)
       set({ user: null, isAuthenticated: false, onboardingComplete: false, idToken: null, isLoading: false })
+      try {
+        const { useNotificationStore } = await import('@/stores/useNotificationStore')
+        useNotificationStore.getState().setUid(null)
+        useNotificationStore.setState({ notifications: [] })
+      } catch { /* non-fatal */ }
     },
   }
 })
