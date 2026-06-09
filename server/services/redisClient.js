@@ -1,7 +1,9 @@
 const Redis = require('ioredis');
 
 // Upstash Redis URL will be loaded from environment variables.
-const REDIS_URL = process.env.UPSTASH_REDIS_URL;
+// Support both UPSTASH_REDIS_URL and UPSTASH_REDIS_REST_URL (your .env uses the latter).
+const REDIS_URL = process.env.UPSTASH_REDIS_URL || process.env.UPSTASH_REDIS_REST_URL;
+
 
 let redis;
 
