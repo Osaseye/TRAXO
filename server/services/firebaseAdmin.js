@@ -6,9 +6,13 @@ const SERVICE_ACCOUNT_JSON = process.env.FIREBASE_SERVICE_ACCOUNT;
 
 let firestore;
 
-if (SERVICE_ACCOUNT_JSON) {
+if (SERVICE_ACCOUNT_JSON && SERVICE_ACCOUNT_JSON.trim() !== '') {
   try {
-    const serviceAccount = JSON.parse(SERVICE_ACCOUNT_JSON);
+    // Some env files wrap JSON in extra quotes; strip a single leading/trailing quote if present.
+    const raw = SERVICE_ACCOUNT_JSON.trim();
+    const maybeUnquoted = (raw.startsWith('"') && raw.endsWith('"')) ? raw.slice(1, -1) : raw;
+    const serviceAccount = JSON.parse(maybeUnquoted);
+
 
     // Check if the app is already initialized to prevent errors.
     if (!admin.apps.length) {

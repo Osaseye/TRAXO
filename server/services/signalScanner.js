@@ -3,8 +3,9 @@ const candleCache = require('./candleCache');
 const signalStore = require('./signalStore');
 const websocketManager = require('./websocketManager');
 
-// Corrected import path
-const { runTrendFollowingStrategy } = require('../algorithms/trendFollowingStrategy'); 
+// CommonJS adapter for the TS/ESM trend-following strategy
+const { runTrendFollowingStrategy } = require('../algorithms/trendFollowingStrategyAdapter');
+
 
 const SYMBOLS = ['EUR/USD', 'GBP/USD', 'AUD/USD', /* ...and so on */];
 const TIMEFRAMES = ['5min', '15min', '1h'];
@@ -27,7 +28,8 @@ async function runScan() {
         }
 
         // 2. Run the strategy algorithm
-        const newSignal = runTrendFollowingStrategy(candles, symbol, timeframe);
+        const newSignal = await runTrendFollowingStrategy(candles, symbol, timeframe);
+
 
         if (newSignal) {
           console.log(`New signal found for ${symbol}:${timeframe}!`);

@@ -3,6 +3,9 @@ const http = require('http');
 const cors = require('cors');
 require('dotenv').config();
 
+// Enable TS support at runtime so adapters can import .ts strategy modules.
+require('ts-node/register/transpile-only');
+
 // --- New Service Imports ---
 const { initWebSocketServer } = require('./services/websocketManager');
 const { startCron } = require('./services/scannerCron');
