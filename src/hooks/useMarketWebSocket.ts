@@ -1,13 +1,13 @@
-import { useEffect, useRef } from \'react\';
-import { useAuthStore } from \'@/stores/useAuthStore\';
-import type { StoredSignal } from \'@/stores/useAnalysisSignalStore\';
+import { useEffect, useRef } from 'react';
+import { useAuthStore } from '@/stores/useAuthStore';
+import type { StoredSignal } from '@/stores/useAnalysisSignalStore';
 
 interface UseMarketWebSocketParams {
   onSignal: (signal: StoredSignal) => void;
   enabled: boolean;
 }
 
-const WEBSOCKET_URL = \'ws://localhost:8080\';
+const WEBSOCKET_URL = 'ws://localhost:8080';
 
 export function useMarketWebSocket({ onSignal, enabled }: UseMarketWebSocketParams) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -34,7 +34,7 @@ export function useMarketWebSocket({ onSignal, enabled }: UseMarketWebSocketPara
       socketRef.current = socket;
 
       socket.onopen = () => {
-        console.log(\'[WebSocket] Connected to server\');
+        console.log('[WebSocket] Connected to server');
         backoffMs = 1000; // Reset backoff on successful connection
       };
 
@@ -42,23 +42,23 @@ export function useMarketWebSocket({ onSignal, enabled }: UseMarketWebSocketPara
         try {
           const message = JSON.parse(event.data);
           // Assuming the server sends signals with a specific type
-          if (message?.type === \'signal\') {
+          if (message?.type === 'signal') {
             onSignalRef.current(message.data as StoredSignal);
           }
         } catch (error) {
-          console.error(\'[WebSocket] Error parsing message:\', error);
+          console.error('[WebSocket] Error parsing message:', error);
         }
       };
 
       socket.onerror = (error) => {
-        console.error(\'[WebSocket] Error:\', error);
+        console.error('[WebSocket] Error:', error);
         socket.close(); // Triggers onclose
       };
 
       socket.onclose = () => {
         if (isClosed) return;
         
-        console.log(\`[WebSocket] Disconnected. Reconnecting in ${backoffMs}ms...\`);
+        console.log(`[WebSocket] Disconnected. Reconnecting in ${backoffMs}ms...`);
         socketRef.current = null;
         reconnectTimer = window.setTimeout(connect, backoffMs);
         backoffMs = Math.min(backoffMs * 2, 15000); // Exponential backoff
@@ -68,7 +68,7 @@ export function useMarketWebSocket({ onSignal, enabled }: UseMarketWebSocketPara
     connect();
 
     return () => {
-      console.log(\'[WebSocket] Closing connection\');
+      console.log('[WebSocket] Closing connection');
       isClosed = true;
       if (reconnectTimer) {
         window.clearTimeout(reconnectTimer);

@@ -26,7 +26,6 @@ import Loading from '@/components/ui/Loading'
 import ProtectedRoute from '@/components/ui/ProtectedRoute'
 import AdminRoute from '@/components/ui/AdminRoute'
 import { GlobalSignalMonitor } from '@/components/shared/GlobalSignalMonitor'
-import { GlobalMultiSymbolScanner } from '@/components/shared/GlobalMultiSymbolScanner'
 import { SignalToastStack } from '@/components/shared/SignalToastStack'
 
 export default function App() {
@@ -36,7 +35,6 @@ export default function App() {
     <ErrorBoundary>
       <ScrollToTop />
       <GlobalSignalMonitor />
-      <GlobalMultiSymbolScanner />
       <SignalToastStack />
       <Suspense fallback={<Loading />}>
         <PageTransition key={location.key}>

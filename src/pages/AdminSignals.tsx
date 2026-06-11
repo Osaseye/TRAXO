@@ -1,5 +1,5 @@
-import { useEffect, useRef, useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   ShieldAlert,
   Radio,
@@ -17,17 +17,11 @@ import {
   Clock,
   Search,
   X,
-  Loader2,
-  RefreshCw,
 } from 'lucide-react'
 import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
 import { useAnalysisSignalStore, type StoredSignal } from '@/stores/useAnalysisSignalStore'
-import { subscribeScanProgress, commitNewBatch, type ScanProgress } from '@/components/shared/GlobalMultiSymbolScanner'
-import { useAuthStore } from '@/stores/useAuthStore'
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+// ... (Keep all constants, helpers, and sub-components as they are)
 
 const STRATEGY_COLORS: Record<string, string> = {
   'wick-rejection':  '#f59e0b',
@@ -49,10 +43,6 @@ const ALL_TIMEFRAMES = ['1m', '5m', '15m', '1H', '4H', '1D'] as const
 
 type SortKey = 'time' | 'confidence' | 'rr' | 'symbol' | 'strategy'
 type SortDir = 'asc' | 'desc'
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function timeAgo(ts: number): string {
   const diff = Math.floor(Date.now() / 1000) - ts
@@ -91,7 +81,7 @@ function exportCSV(signals: StoredSignal[]) {
     s.risk,
     s.reason.join(' | '),
   ])
-  const csv = [headers, ...rows].map((r) => r.map((v) => `"${v}"`).join(',')).join('\n')
+  const csv = [headers, ...rows].map((r) => r.map((v) => `\"${v}\"`).join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -100,10 +90,6 @@ function exportCSV(signals: StoredSignal[]) {
   a.click()
   URL.revokeObjectURL(url)
 }
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 function SortHeader({
   label, sortKey, current, dir, onSort,
@@ -147,48 +133,8 @@ function StatCard({ label, value, sub, icon: Icon, color }: {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Main page
-// ---------------------------------------------------------------------------
-
 export default function AdminSignals() {
   const allSignals = useAnalysisSignalStore((s) => s.signals)
-  const userId = useAuthStore((s) => s.user?.id ?? null)
-
-  // Subscribe to background scanner progress
-  const [scanProgress, setScanProgress] = useState<ScanProgress>({
-    running: false, current: '', done: 0, total: 0, lastCompletedAt: null, newBatch: [],
-  })
-  useEffect(() => {
-    // subscribeScanProgress is legacy and may return boolean (not a cleanup fn).
-    // React effect cleanup must be void or a function; ignore return value.
-    subscribeScanProgress(setScanProgress)
-  }, [])
-
-  // Local pending batch — shown in preview panel until user commits or dismisses
-  const [pendingBatch, setPendingBatch] = useState<StoredSignal[]>([])
-  const prevNewBatchRef = useRef<StoredSignal[]>([])
-  useEffect(() => {
-    if (scanProgress.newBatch.length > 0 && scanProgress.newBatch !== prevNewBatchRef.current) {
-      prevNewBatchRef.current = scanProgress.newBatch
-      setPendingBatch(scanProgress.newBatch)
-    }
-  }, [scanProgress.newBatch])
-
-  function handleCommitBatch() {
-    if (pendingBatch.length === 0) return
-    const store = useAnalysisSignalStore.getState()
-    store.addSignals(pendingBatch)
-    // Always attempt to save; store will use configured admin UID when `userId` is null
-    void store.saveToFirestore(userId ?? null, pendingBatch)
-    setPendingBatch([])
-    commitNewBatch(userId)  // clear module-level batch too
-  }
-
-  function handleDismissBatch() {
-    setPendingBatch([])
-    commitNewBatch(userId)  // clears module-level newBatch without saving
-  }
 
   // Filters
   const [searchSymbol, setSearchSymbol] = useState('')
@@ -310,81 +256,6 @@ export default function AdminSignals() {
           <StatCard label="Avg R:R" value={stats.avgRR} icon={BarChart2} color="#a855f7" />
           <StatCard label="Symbols Seen" value={stats.symbols} sub={`${allStrategies.length} strategies`} icon={Clock} color="#3b82f6" />
         </div>
-
-        {/* Scan status banner */}
-        {scanProgress.running ? (
-          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-[#6366f1]/20 bg-[#6366f1]/[0.07] text-[12px] text-[#818cf8]">
-            <Loader2 size={13} className="animate-spin shrink-0" />
-            <span className="font-medium">Background scan running</span>
-            <span className="text-[#4f46e5]">·</span>
-            <span className="text-[#6366f1]">{scanProgress.current}</span>
-            <span className="ml-auto text-[#4f46e5] tabular-nums">{scanProgress.done} / {scanProgress.total}</span>
-          </div>
-        ) : scanProgress.lastCompletedAt ? (
-          <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/[0.05] bg-white/[0.02] text-[11px] text-[#475569]">
-            <RefreshCw size={11} className="shrink-0 text-[#334155]" />
-            <span>Last scan completed {timeAgo(Math.floor(scanProgress.lastCompletedAt / 1000))}</span>
-          </div>
-        ) : null}
-
-        {/* New batch preview panel */}
-        {pendingBatch.length > 0 && (
-          <div className="rounded-2xl border border-[#10b981]/20 bg-[#10b981]/[0.05] overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#10b981]/10">
-              <Zap size={13} className="text-[#34d399] shrink-0" />
-              <span className="text-[13px] font-semibold text-[#34d399]">
-                {pendingBatch.length} new signal{pendingBatch.length !== 1 ? 's' : ''} found
-              </span>
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  onClick={handleCommitBatch}
-                  className="px-3 py-1 rounded-lg bg-[#10b981]/20 border border-[#10b981]/30 text-[11px] font-semibold text-[#34d399] hover:bg-[#10b981]/30 transition-colors"
-                >
-                  Add to list
-                </button>
-                <button
-                  onClick={handleDismissBatch}
-                  className="p-1 rounded-lg hover:bg-white/[0.05] transition-colors"
-                  title="Dismiss"
-                >
-                  <X size={13} className="text-[#475569]" />
-                </button>
-              </div>
-            </div>
-            {/* Signal rows */}
-            <div className="divide-y divide-white/[0.04] max-h-72 overflow-y-auto">
-              {pendingBatch.map((sig) => {
-                const isBuy = sig.direction === 'BUY'
-                const color = STRATEGY_COLORS[sig.strategyId] ?? '#6366f1'
-                return (
-                  <div key={sig.id} className="flex items-center gap-3 px-4 py-2.5 text-[12px]">
-                    {/* Direction badge */}
-                    <span className={`shrink-0 w-10 text-center py-0.5 rounded font-bold text-[10px] ${isBuy ? 'bg-[#86efac]/10 text-[#86efac]' : 'bg-[#fca5a5]/10 text-[#fca5a5]'}`}>
-                      {sig.direction}
-                    </span>
-                    {/* Symbol + strategy */}
-                    <span className="font-semibold text-[#e5e7eb] w-20 shrink-0">{sig.symbol}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium shrink-0" style={{ color, borderColor: `${color}30`, background: `${color}10` }}>
-                      {STRATEGY_LABELS[sig.strategyId] ?? sig.strategyId}
-                    </span>
-                    {/* Timeframe */}
-                    <span className="text-[#64748b] text-[11px] shrink-0">{sig.timeframe}</span>
-                    {/* Entry / SL / TP */}
-                    <span className="text-[#94a3b8] ml-auto tabular-nums">
-                      {sig.entry} · SL {sig.sl} · TP {sig.tp}
-                    </span>
-                    {/* RR + confidence */}
-                    <span className={`shrink-0 tabular-nums text-[11px] font-semibold ${confColor(sig.confidence)}`}>
-                      {sig.confidence}%
-                    </span>
-                    <span className="shrink-0 text-[#94a3b8] text-[11px]">{sig.rr.toFixed(1)}R</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Filters row */}
         <div className="rounded-2xl border border-white/[0.07] bg-[#0d1117] p-4">
