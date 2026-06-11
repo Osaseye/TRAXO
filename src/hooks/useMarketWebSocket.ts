@@ -41,9 +41,8 @@ export function useMarketWebSocket({ onSignal, enabled }: UseMarketWebSocketPara
       socket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          // Assuming the server sends signals with a specific type
-          if (message?.type === 'signal') {
-            onSignalRef.current(message.data as StoredSignal);
+          if (message?.type === 'NEW_SIGNAL') {
+            onSignalRef.current(message.payload as StoredSignal);
           }
         } catch (error) {
           console.error('[WebSocket] Error parsing message:', error);
