@@ -3,7 +3,18 @@ import type { UTCTimestamp } from 'lightweight-charts'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
 import { useToastStore } from '@/stores/useToastStore'
 import { useNotificationStore } from '@/stores/useNotificationStore'
-import { intervalSeconds } from '@/lib/marketData'
+
+function intervalSeconds(timeframe: string): number {
+  switch (timeframe) {
+    case '1m': return 60;
+    case '5m': return 300;
+    case '15m': return 900;
+    case '1H': return 3600;
+    case '4H': return 14400;
+    case '1D': return 86400;
+    default: return 60;
+  }
+}
 
 // Module-level: shared across all instances so Dashboard + GlobalSignalMonitor never double-fire
 const globalSeenIds = new Set<string>()
