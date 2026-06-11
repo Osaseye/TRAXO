@@ -1,7 +1,8 @@
+import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore';
-import { useMarketWebSocket } from '@/hooks/useMarketWebSocket';
 import { notifySignal } from '@/hooks/useSignalNotification';
+import webSocketService from '@/lib/websocket';
 
 /**
  * Invisible component that listens for real-time signals from the server
@@ -9,17 +10,25 @@ import { notifySignal } from '@/hooks/useSignalNotification';
  */
 export function GlobalSignalMonitor() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const addSignals = useAnalysisSignalStore((s) => s.addSignals);
 
-  useMarketWebSocket({
-    enabled: isAuthenticated,
-    onSignal: (signal) => {
-      // 1. Add the signal to the central analysis store
-      addSignals([signal]);
-      // 2. Trigger a toast, sound, or push notification if user settings allow
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    const handleSignal = (signal: any) => {
+      // Use getState() to access the store action. This is stable and won't cause re-renders.
+      useAnalysisSignalStore.getState().addSignals([signal]);
       notifySignal(signal);
-    },
-  });
+    };
+
+    const unsubscribe = webSocketService.subscribe('signal', handleSignal);
+
+    // The useEffect cleanup function will properly unsubscribe.
+    return () => {
+      unsubscribe();
+    };
+  }, [isAuthenticated]); // The dependency array is now stable.
 
   return null;
 }
