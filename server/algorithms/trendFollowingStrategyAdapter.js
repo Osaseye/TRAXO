@@ -1,6 +1,10 @@
-// CommonJS adapter for trendFollowingStrategy.ts
-// The server is CommonJS, while the strategy implementation is TypeScript/ESM.
-// This adapter safely loads the TS module and re-exports a CommonJS entrypoint.
+/**
+ * CommonJS adapter for trendFollowingStrategy.ts
+ *
+ * The server is CommonJS. The strategy implementation is TypeScript using ES imports.
+ * This adapter loads the TS module via require() so ts-node (registered in index.js)
+ * can transpile it on the fly.
+ */
 
 const path = require('path');
 
@@ -24,31 +28,23 @@ async function runTrendFollowingStrategy(candles, symbol, timeframe) {
     rollingDrawdownPct: 0,
   };
 
-  // Dynamic import so Node can load TS/ESM depending on your runtime config.
-  // If your project already transpiles TS -> JS, you can switch to that compiled file.
   const tsModulePath = path.join(__dirname, 'trendFollowingStrategy.ts');
 
-  // Use native ESM loader when available.
-  const mod = await import(pathToFileUrl(tsModulePath));
+  // ts-node is expected to be registered in TRAXO/server/index.js
+  // so requiring the TS module works at runtime.
+  // eslint-disable-next-line import/no-dynamic-require
+  const mod = require(tsModulePath);
 
-  const analyze = mod.analyzeTrendFollowing || mod.default || mod.runTrendFollowingStrategy;
+  const analyze =
+    mod.analyzeTrendFollowing ||
+    mod.default ||
+    mod.runTrendFollowingStrategy;
+
   if (typeof analyze !== 'function') {
     throw new Error('trendFollowingStrategyAdapter: could not find analyzeTrendFollowing export');
   }
 
   return analyze(ctx);
-}
-
-function pathToFileUrl(p) {
-  const normalized = p.replace(/\\/g, '/');
-  // For Windows absolute paths, prepend file:///C:/...
-  const match = normalized.match(/^([a-zA-Z]):\/(.*)$/);
-  if (match) {
-    const drive = match[1].toUpperCase();
-    const rest = match[2];
-    return `file:///${drive}:/${rest}`;
-  }
-  return `file://${normalized}`;
 }
 
 module.exports = { runTrendFollowingStrategy };
