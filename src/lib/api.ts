@@ -1,9 +1,9 @@
-import { getToken } from './firebase'; // Assuming you have a function to get the user's auth token
+import { auth } from './firebase'; // Assuming you have a function to get the user's auth token
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
-async function request(endpoint, options = {}) {
-  const token = await getToken();
+async function request(endpoint: string, options: any = {}) {
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,
@@ -39,7 +39,7 @@ export const getLiveSignals = () => {
   return request('/api/signals/live');
 };
 
-export const getCandleData = (symbol, timeframe, outputsize = 200) => {
+export const getCandleData = (symbol: string, timeframe: string, outputsize = 200) => {
   return request(`/api/candles?symbol=${symbol}&timeframe=${timeframe}&outputsize=${outputsize}`);
 };
 

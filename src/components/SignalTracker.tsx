@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { getHistoricalSignals, getLiveSignals } from '../lib/api';
 import webSocketService from '../lib/websocket';
 
 // A simple display component for a single signal
-const Signal = ({ signal }) => (
+const Signal = ({ signal }: { signal: any }) => (
   <div style={{ border: '1px solid #ccc', borderRadius: '8px', padding: '16px', margin: '8px 0' }}>
     <p><strong>{signal.symbol}</strong> - {signal.timeframe}</p>
     <p>Strategy: {signal.strategy.name}</p>
@@ -14,8 +14,8 @@ const Signal = ({ signal }) => (
 
 // The main component to track and display signals
 const SignalTracker = () => {
-  const [liveSignals, setLiveSignals] = useState([]);
-  const [historicalSignals, setHistoricalSignals] = useState([]);
+  const [liveSignals, setLiveSignals] = useState<any[]>([]);
+  const [historicalSignals, setHistoricalSignals] = useState<any[]>([]);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -31,7 +31,7 @@ const SignalTracker = () => {
         setLiveSignals(live);
         setHistoricalSignals(historical.signals || []);
         setError(null);
-      } catch (err) {
+      } catch (err: any) {
         setError(err.message);
       } finally {
         setIsLoading(false);
@@ -41,7 +41,7 @@ const SignalTracker = () => {
     fetchData();
 
     // Subscribe to real-time updates
-    const unsubscribe = webSocketService.subscribe('new-signal', (newSignal) => {
+    const unsubscribe = webSocketService.subscribe('new-signal', (newSignal: any) => {
       console.log('Received new signal via WebSocket:', newSignal);
       // Add to live signals and update historical list
       setLiveSignals(prev => [newSignal, ...prev]);

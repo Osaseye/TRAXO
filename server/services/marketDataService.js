@@ -20,9 +20,22 @@ function fetchCandles(symbol, interval, outputsize = 200) {
       return reject(new Error('TWELVEDATA_API_KEY is not set in environment variables.'));
     }
 
+    let tdSymbol = symbol;
+    if (symbol.length === 6 && !symbol.includes('/') && !['SPX500', 'NAS100'].includes(symbol)) {
+      tdSymbol = `${symbol.substring(0, 3)}/${symbol.substring(3)}`;
+    } else if (symbol.endsWith('USDT')) {
+      tdSymbol = symbol.replace('USDT', '/USD');
+    }
+
+    let tdInterval = interval.toLowerCase();
+    if (tdInterval === '1m') tdInterval = '1min';
+    else if (tdInterval === '5m') tdInterval = '5min';
+    else if (tdInterval === '15m') tdInterval = '15min';
+    else if (tdInterval === '1d') tdInterval = '1day';
+
     const params = new URLSearchParams({
-      symbol,
-      interval,
+      symbol: tdSymbol,
+      interval: tdInterval,
       outputsize,
       apikey: API_KEY,
       timezone: 'UTC', // Standardize on UTC for all server-side operations
@@ -45,7 +58,7 @@ function fetchCandles(symbol, interval, outputsize = 200) {
           if (res.statusCode < 200 || res.statusCode >= 300) {
             return reject(new Error(`TwelveData API responded with status ${res.statusCode}: ${data}`));
           }
-          
+
           const parsedData = JSON.parse(data);
 
           if (parsedData.status === 'error' || !parsedData.values) {

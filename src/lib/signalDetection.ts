@@ -28,6 +28,11 @@ export interface AnalysisSignal {
   confidence: number;
   risk: RiskLabel;
   reason: string[];
+  status?: 'live' | 'expired';
+}
+
+export function priceDigits(symbol: string): number {
+  return symbol.includes('JPY') ? 3 : 5;
 }
 
 const CRYPTO_SYMBOLS = ['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT'];
@@ -146,7 +151,8 @@ export function runSignalsForStrategies(
           confirmationCandle: strategyContextCandles[strategyContextCandles.length - 1] as any,
           atr14,
           volumeMa20,
-          htfBias: 'neutral'
+          htfBias: 'neutral',
+          nearestZone: null
         });
       }
 

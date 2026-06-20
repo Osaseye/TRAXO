@@ -10,7 +10,7 @@ import {
 import type { IPriceLine, SeriesMarker, Time, UTCTimestamp } from 'lightweight-charts'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { ChartTimeframe } from '@/stores/useTradingContextStore'
-import type { Candle } from '@/lib/marketData'
+import type { Candle } from '@/lib/signalDetection'
 
 export type ChartPanelMarker = SeriesMarker<Time>
 
@@ -147,7 +147,7 @@ export function ChartPanel({
     if (candles.length === 0) return
 
     const timeScale = chartRef.current?.timeScale()
-    seriesRef.current.setData(candles)
+    seriesRef.current.setData(candles as any)
     createSeriesMarkers(seriesRef.current, markers)
 
     if (!hasSetInitialDataRef.current) {

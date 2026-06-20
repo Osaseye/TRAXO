@@ -1,6 +1,6 @@
 import io from 'socket.io-client';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 class WebSocketService {
   socket;
@@ -35,7 +35,7 @@ class WebSocketService {
     });
   }
 
-  subscribe(eventName, callback) {
+  subscribe(eventName: string, callback: any) {
     if (typeof callback !== 'function') {
       console.error(`[WebSocketService] Attempted to subscribe to event "${eventName}" with a non-function callback.`);
       return () => {}; // Return a no-op for safety
@@ -57,7 +57,7 @@ class WebSocketService {
     };
   }
 
-  unsubscribe(eventName, callback) {
+  unsubscribe(eventName: string, callback: any) {
     const eventListeners = this.listeners.get(eventName);
     if (eventListeners) {
       eventListeners.delete(callback);

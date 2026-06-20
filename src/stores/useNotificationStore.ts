@@ -79,7 +79,7 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
     }),
 
   clearNotifications: () =>
-    set((state) => {
+    set(() => {
       const uid = get()._uid
       if (uid) {
         void get().clearFirestoreNotifications(uid)

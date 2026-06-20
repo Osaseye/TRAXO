@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react'
 import { BarChart2, ChevronDown, Play, TrendingUp, Clock, Zap, Award, AlertTriangle } from 'lucide-react'
 import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
-import { getCandles } from '@/lib/marketData'
-import { runBacktest, runOrderBlockBacktest, runTrendFollowingBacktest, runBreakoutBacktest, runSDBacktest } from '@/lib/algorithms/backtesting'
-import type { BacktestSummary, BacktestSignalResult } from '@/lib/algorithms/backtesting'
+import { getCandleData as getCandles } from '@/lib/api'
+import { runBacktest, runOrderBlockBacktest, runTrendFollowingBacktest, runBreakoutBacktest, runSDBacktest } from '../../server/algorithms/backtesting'
+import type { BacktestSummary, BacktestSignalResult } from '../../server/algorithms/backtesting'
 import type { ChartSymbol, ChartTimeframe } from '@/stores/useTradingContextStore'
-import type { WickRejectionAssetType } from '@/lib/algorithms/wickRejection'
+import type { WickRejectionAssetType } from '../../server/algorithms/wickRejection'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -99,7 +99,7 @@ function SignalRow({ sig, idx }: { sig: BacktestSignalResult; idx: number }) {
             <div><span className="text-[#64748b]">Liquidity sweep:</span> <span className={sig.liquidity_sweep ? 'text-[#86efac] font-semibold' : 'text-[#475569]'}>{sig.liquidity_sweep ? 'Yes' : 'No'}</span></div>
           </div>
           <div className="rounded-lg bg-[#0b0f17] border border-white/[0.05] p-3 space-y-1">
-            {sig.reason.map((r, i) => (
+            {sig.reason.map((r: string, i: number) => (
               <p key={i} className="text-[11px] text-[#64748b]">• {r}</p>
             ))}
           </div>
@@ -132,7 +132,7 @@ export default function Backtesting() {
       if (!candles || candles.length < 30) {
         throw new Error('Not enough candle data returned. Check your API key in .env.')
       }
-      const mapped = candles.map((c) => ({
+      const mapped = candles.map((c: any) => ({
         time: c.time,
         open: c.open,
         high: c.high,
@@ -156,7 +156,7 @@ export default function Backtesting() {
   }, [symbol, timeframe, lookback, strategy])
 
   const filtered = result
-    ? filter === 'all' ? result.signals : result.signals.filter((s) => s.outcome === filter)
+    ? filter === 'all' ? result.signals : result.signals.filter((s: any) => s.outcome === filter)
     : []
 
   const expectancyColor = result && result.expectancy > 0 ? 'green' : result && result.expectancy < 0 ? 'red' : 'default'
@@ -296,9 +296,9 @@ export default function Backtesting() {
               <h3 className="text-[12px] font-semibold text-[#e5e7eb] mb-4">Signal Quality Breakdown</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-[12px]">
                 {(['prime', 'standard', 'aggressive'] as const).map((tier) => {
-                  const tierSigs = result.signals.filter((s) => s.tier === tier)
-                  const tierWins = tierSigs.filter((s) => s.outcome === 'win').length
-                  const tierSettled = tierSigs.filter((s) => s.outcome !== 'pending').length
+                  const tierSigs = result.signals.filter((s: any) => s.tier === tier)
+                  const tierWins = tierSigs.filter((s: any) => s.outcome === 'win').length
+                  const tierSettled = tierSigs.filter((s: any) => s.outcome !== 'pending').length
                   const tierWR = tierSettled > 0 ? (tierWins / tierSettled * 100).toFixed(0) : '—'
                   return (
                     <div key={tier} className="rounded-lg border border-white/[0.06] bg-[#0b0f17] p-3">
@@ -310,13 +310,13 @@ export default function Backtesting() {
                 })}
                 <div className="rounded-lg border border-white/[0.06] bg-[#0b0f17] p-3">
                   <p className="text-[11px] font-semibold uppercase text-[#a78bfa]">OB Confluence</p>
-                  <p className="mt-1 text-lg font-bold text-[#f8fafc]">{result.signals.filter((s) => s.order_block_confluence).length}</p>
+                  <p className="mt-1 text-lg font-bold text-[#f8fafc]">{result.signals.filter((s: any) => s.order_block_confluence).length}</p>
                   <p className="mt-0.5 text-[10px] text-[#64748b]">with order block</p>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-[12px]">
-                <div className="flex items-center gap-2"><TrendingUp size={13} className="text-[#86efac]" /><span className="text-[#64748b]">Structure TPs:</span><span className="font-semibold text-[#e5e7eb]">{result.signals.filter((s) => s.tp1_source === 'structure').length}</span></div>
-                <div className="flex items-center gap-2"><Zap size={13} className="text-[#fde68a]" /><span className="text-[#64748b]">Liquidity sweeps:</span><span className="font-semibold text-[#e5e7eb]">{result.signals.filter((s) => s.liquidity_sweep).length}</span></div>
+                <div className="flex items-center gap-2"><TrendingUp size={13} className="text-[#86efac]" /><span className="text-[#64748b]">Structure TPs:</span><span className="font-semibold text-[#e5e7eb]">{result.signals.filter((s: any) => s.tp1_source === 'structure').length}</span></div>
+                <div className="flex items-center gap-2"><Zap size={13} className="text-[#fde68a]" /><span className="text-[#64748b]">Liquidity sweeps:</span><span className="font-semibold text-[#e5e7eb]">{result.signals.filter((s: any) => s.liquidity_sweep).length}</span></div>
                 <div className="flex items-center gap-2"><Clock size={13} className="text-[#93c5fd]" /><span className="text-[#64748b]">Max consec. losses:</span><span className="font-semibold text-[#fca5a5]">{result.maxConsecLosses}</span></div>
               </div>
             </section>
@@ -358,7 +358,7 @@ export default function Backtesting() {
                 {filtered.length === 0 ? (
                   <p className="py-8 text-center text-[12px] text-[#475569]">No {filter !== 'all' ? filter : ''} signals to show.</p>
                 ) : (
-                  filtered.map((sig, i) => <SignalRow key={sig.id} sig={sig} idx={i} />)
+                  filtered.map((sig: any, i: number) => <SignalRow key={sig.id} sig={sig} idx={i} />)
                 )}
               </div>
             </section>
