@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getWickRejectionAnchorTimeframe, resolveWickRejectionSession } from '../src/lib/algorithms/wickRejectionContext.ts'
 import { clearHtfCache, getHtfCache, setHtfCache } from '../src/lib/htfCache.ts'
 

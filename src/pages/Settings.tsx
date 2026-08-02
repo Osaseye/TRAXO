@@ -112,7 +112,7 @@ function SignOutButton() {
       await logout()
       navigate('/login')
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('Sign out failed', err)
       navigate('/')
     }
@@ -169,7 +169,8 @@ export default function Settings() {
 
   useEffect(() => {
     if ('Notification' in window) {
-      setPushPermission(Notification.permission)
+      const t = setTimeout(() => setPushPermission(Notification.permission), 0)
+      return () => clearTimeout(t)
     }
   }, [])
 

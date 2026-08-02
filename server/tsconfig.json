@@ -1,12 +1,16 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "target": "es2020",
-    "rootDir": ".",
+    "target": "es2022",
+    "lib": ["es2022"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../src/*"]
+    },
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "ignoreDeprecations": "6.0"
+    "strict": false
   },
   "include": [
     "**/*.ts"

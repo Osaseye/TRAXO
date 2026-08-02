@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -48,6 +48,7 @@ export default function Register() {
     }).catch((err) => setError(getFirebaseErrorMessage(err)))
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_error, setError] = useState<string | null>(null)
   const signUp = useAuthStore((s) => s.signUp)
 

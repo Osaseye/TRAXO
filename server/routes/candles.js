@@ -17,15 +17,16 @@ router.get('/', async (req, res) => {
   }
 
   try {
+    const parsedOutputsize = parseInt(outputsize, 10);
     // 1. Check the cache first
-    let candles = await candleCache.getCachedCandles(symbol, timeframe);
+    let candles = await candleCache.getCachedCandles(symbol, timeframe, parsedOutputsize);
 
     // 2. If not in cache, fetch from the API and cache the result
     if (!candles) {
-      console.log(`Cache miss for ${symbol}:${timeframe} via API request. Fetching...`);
-      candles = await marketDataService.fetchCandles(symbol, timeframe, parseInt(outputsize, 10));
+      console.log(`Cache miss for ${symbol}:${timeframe} (size ${parsedOutputsize}) via API request. Fetching...`);
+      candles = await marketDataService.fetchCandles(symbol, timeframe, parsedOutputsize);
       // Cache the freshly fetched data
-      await candleCache.cacheCandles(symbol, timeframe, candles);
+      await candleCache.cacheCandles(symbol, timeframe, candles, parsedOutputsize);
     }
 
     res.json(candles);

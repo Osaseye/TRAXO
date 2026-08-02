@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { auth } from './firebase'; // Assuming you have a function to get the user's auth token
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -45,4 +46,8 @@ export const getCandleData = (symbol: string, timeframe: string, outputsize = 20
 
 export const getScannerStatus = () => {
   return request('/api/scanner/status');
+};
+
+export const getScannerRejects = (symbol: string, timeframe: string) => {
+  return request(`/api/scanner/rejects?symbol=${symbol}&timeframe=${timeframe}`);
 };

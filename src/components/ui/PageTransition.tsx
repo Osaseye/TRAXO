@@ -4,7 +4,6 @@ export default function PageTransition({ children }: { children: React.ReactNode
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
-    setVisible(false)
     const id = setTimeout(() => setVisible(true), 30)
     return () => clearTimeout(id)
   }, [])

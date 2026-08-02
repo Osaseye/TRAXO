@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { analyzeBreakout } from '../../server/algorithms/breakoutStrategy';
 import { analyzeOrderBlock } from '../../server/algorithms/orderBlockStrategy';
 import { analyzeSupplyDemand } from '../../server/algorithms/supplyDemandStrategy';
@@ -89,6 +90,7 @@ export function runSignalsForStrategies(
 ): AnalysisSignal[] {
   if (candles.length === 0) return [];
 
+  const normalizedStrategyIds = activeStrategyIds.map((id) => id.replace(/-/g, '_'));
   const assetType = getAssetType(symbol);
   const lastCandle = candles[candles.length - 1];
   const lastTime = typeof lastCandle.time === 'string' ? Math.floor(new Date(lastCandle.time).getTime() / 1000) : lastCandle.time;
@@ -108,7 +110,7 @@ export function runSignalsForStrategies(
 
   const results: AnalysisSignal[] = [];
 
-  for (const id of activeStrategyIds) {
+  for (const id of normalizedStrategyIds) {
     let rawSignal: any = null;
 
     try {
@@ -167,7 +169,15 @@ export function runSignalsForStrategies(
         const rr = riskDist > 0 ? Number((rewardDist / riskDist).toFixed(2)) : 0;
 
         results.push({
-          id: rawSignal.id,
+          id: [
+            'sig',
+            id,
+            symbol,
+            timeframe,
+            rawSignal.signal,
+            lastTime,
+            Number(entry || 0).toPrecision(8),
+          ].join(':'),
           time: lastTime,
           strategyId: id,
           strategyLabel: id.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),

@@ -28,3 +28,8 @@ dist-ssr
 # Environment Variables
 .env
 .env.local
+
+# Secrets / Service Account Keys
+**/*firebase-adminsdk*.json
+**/service-account*.json
+**/*-private-key*.json

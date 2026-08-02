@@ -6,6 +6,7 @@
  * can transpile it on the fly.
  */
 
+/* eslint-disable */
 const path = require('path');
 
 /**

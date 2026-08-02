@@ -1,55 +1,68 @@
-const WebSocket = require('ws');
+const { Server } = require('socket.io');
 
-let wss;
+let io;
 
 /**
- * Initializes the WebSocket server.
+ * Initializes the Socket.io server and attaches it to the HTTP server.
+ * The frontend uses socket.io-client, so this must match.
  *
- * @param {http.Server} server - The Node.js HTTP server to attach the WebSocket server to.
+ * @param {http.Server} server - The Node.js HTTP server to attach Socket.io to.
  */
 function initWebSocketServer(server) {
-  wss = new WebSocket.Server({ server });
+  io = new Server(server, {
+    cors: {
+      origin: '*', // Allow all origins in development; restrict in production
+      methods: ['GET', 'POST'],
+    },
+  });
 
-  wss.on('connection', (ws) => {
-    console.log('Client connected to WebSocket server.');
+  io.on('connection', (socket) => {
+    console.log(`Client connected to WebSocket server. [id: ${socket.id}]`);
 
-    // The primary purpose is server-to-client push. We can add
-    // client-to-server message handling here if needed later.
-    ws.on('message', (message) => {
-      console.log('Received message from client:', message);
+    socket.on('disconnect', (reason) => {
+      console.log(`Client disconnected. [id: ${socket.id}, reason: ${reason}]`);
     });
 
-    ws.on('close', () => {
-      console.log('Client disconnected.');
-    });
-
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+    socket.on('error', (error) => {
+      console.error(`WebSocket error [id: ${socket.id}]:`, error);
     });
   });
 
-  console.log('WebSocket server initialized and attached to HTTP server.');
+  console.log('Socket.io server initialized and attached to HTTP server.');
 }
 
 /**
- * Broadcasts a message to all connected WebSocket clients.
- * This will be used by the signal scanner to push new signals.
+ * Broadcasts a message to all connected Socket.io clients.
+ * Maps payload type to the event name the frontend subscribes to.
  *
- * @param {object} message - The message object to broadcast. It will be stringified to JSON.
+ * Frontend listeners:
+ *   - 'new-signal'  → SignalTracker.tsx
+ *   - 'signal'      → GlobalSignalMonitor.tsx
+ *   - 'new-candle'  → useMarketWebSocket.ts
+ *
+ * @param {object} message - Must have a `type` field (e.g. 'NEW_SIGNAL', 'NEW_CANDLE').
  */
 function broadcast(message) {
-  if (!wss) {
-    console.error('WebSocket server is not initialized. Cannot broadcast message.');
+  if (!io) {
+    console.error('Socket.io server is not initialized. Cannot broadcast message.');
     return;
   }
 
-  const jsonMessage = JSON.stringify(message);
+  // Map server-side type → frontend event name
+  const EVENT_MAP = {
+    NEW_SIGNAL: ['new-signal', 'signal'], // emit to both listeners
+    NEW_CANDLE: ['new-candle'],
+    SIGNAL_UPDATED: ['signal-updated'],
+  };
 
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(jsonMessage);
-    }
-  });
+  const events = EVENT_MAP[message.type];
+
+  if (events) {
+    events.forEach((event) => io.emit(event, message.payload));
+  } else {
+    // Fallback: emit the raw message under its type as the event name
+    io.emit(message.type, message.payload ?? message);
+  }
 }
 
 module.exports = {

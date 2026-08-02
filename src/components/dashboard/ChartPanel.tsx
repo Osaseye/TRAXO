@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef } from 'react'
 import {
   CandlestickSeries,
@@ -186,7 +187,7 @@ export function ChartPanel({
       lineWidth: 1,
       lineStyle: LineStyle.SparseDotted,
       axisLabelVisible: true,
-      title: activeSignal.locked ? 'Entry · Locked' : 'Entry',
+      title: activeSignal.locked ? 'Entry - Locked' : 'Entry',
     })
 
     activeSlLineRef.current = series.createPriceLine({
@@ -233,7 +234,7 @@ export function ChartPanel({
       lineWidth: 2,
       lineStyle: LineStyle.Solid,
       axisLabelVisible: true,
-      title: `Entry · ${manualSetup.action}`,
+      title: `Entry - ${manualSetup.action}`,
     })
 
     if (!manualSetup.generated || manualSetup.sl == null || manualSetup.tp == null) return

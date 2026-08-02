@@ -2,7 +2,7 @@ const redis = require('./redisClient');
 const { firestore } = require('./firebaseAdmin'); // Assuming a shared Firebase Admin client
 
 // Redis keys for live signals
-const getLiveSignalKey = (symbol, interval) => `signals:live:${symbol}:${interval}`;
+const getLiveSignalKey = (symbol, interval, strategyId) => `signals:live:${symbol}:${interval}:${strategyId || 'any'}`;
 
 /**
  * Caches a new signal to Redis as a live signal.
@@ -12,7 +12,7 @@ const getLiveSignalKey = (symbol, interval) => `signals:live:${symbol}:${interva
  */
 async function cacheLiveSignal(signal) {
   // Live signals are keyed by symbol and interval for quick lookup by the scanner.
-  const key = getLiveSignalKey(signal.symbol, signal.interval);
+  const key = getLiveSignalKey(signal.symbol, signal.timeframe || signal.interval, signal.strategyId);
   const ttlSeconds = 3600; // Cache live signals for 1 hour, scanner will overwrite.
 
   try {
@@ -30,8 +30,8 @@ async function cacheLiveSignal(signal) {
  * @param {string} interval - The candle interval.
  * @returns {Promise<object|null>} The parsed signal object or null.
  */
-async function getLiveSignal(symbol, interval) {
-  const key = getLiveSignalKey(symbol, interval);
+async function getLiveSignal(symbol, interval, strategyId) {
+  const key = getLiveSignalKey(symbol, interval, strategyId);
   try {
     const data = await redis.get(key);
     return data ? JSON.parse(data) : null;
@@ -53,15 +53,25 @@ async function saveHistoricalSignal(signal) {
     const signalWithTimestamp = {
       ...signal,
       createdAt: new Date(), // Add a server-side timestamp for reliable sorting
-      status: 'live', // All new signals start as live
+      status: signal.status || 'live', // All new signals start as live
     };
     
     // Signals are stored in a top-level 'signals' collection.
-    // Firestore will automatically generate a unique ID for the document.
-    await firestore.collection('signals').add(signalWithTimestamp);
+    // Use deterministic IDs so recurring scans update the same setup instead of duplicating it.
+    await firestore.collection('signals').doc(signal.id).set(signalWithTimestamp, { merge: true });
 
   } catch (error) {
     console.error(`Error saving historical signal for ${signal.symbol} to Firestore:`, error);
+  }
+}
+
+async function hasHistoricalSignal(signalId) {
+  try {
+    const snapshot = await firestore.collection('signals').doc(signalId).get();
+    return snapshot.exists;
+  } catch (error) {
+    console.error(`Error checking historical signal ${signalId} in Firestore:`, error);
+    return false;
   }
 }
 
@@ -81,9 +91,29 @@ async function updateSignalStatus(signalId, status) {
 }
 
 
+async function getActiveLiveSignals(symbol, timeframe) {
+  try {
+    const snapshot = await firestore
+      .collection('signals')
+      .where('symbol', '==', symbol)
+      .where('timeframe', '==', timeframe)
+      .where('status', '==', 'live')
+      .get();
+    
+    if (snapshot.empty) return [];
+    
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error(`Error fetching active live signals for ${symbol}:${timeframe}:`, error);
+    return [];
+  }
+}
+
 module.exports = {
   cacheLiveSignal,
   getLiveSignal,
+  hasHistoricalSignal,
   saveHistoricalSignal,
   updateSignalStatus,
+  getActiveLiveSignals,
 };

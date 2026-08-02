@@ -17,7 +17,10 @@ export default function VerifyOTP() {
   const filled = digits.every((d) => d !== '')
 
   useEffect(() => {
-    if (timer <= 0) { setCanResend(true); return }
+    if (timer <= 0) { 
+      const t = setTimeout(() => setCanResend(true), 0)
+      return () => clearTimeout(t) 
+    }
     const id = setTimeout(() => setTimer((t) => t - 1), 1000)
     return () => clearTimeout(id)
   }, [timer])

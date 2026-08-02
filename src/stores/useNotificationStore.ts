@@ -24,14 +24,36 @@ interface NotificationState {
 }
 
 function dedupeNotifications(next: StoredNotification[]) {
-  const seen = new Set<string>()
-  const ordered: StoredNotification[] = []
+  const bySetup = new Map<string, StoredNotification>()
   for (const notification of next) {
-    if (seen.has(notification.id)) continue
-    seen.add(notification.id)
-    ordered.push(notification)
+    const key = [
+      notification.strategyId,
+      notification.symbol,
+      notification.timeframe,
+      notification.direction,
+      notification.time ?? 'no-time',
+      Number(notification.entry || 0).toPrecision(8),
+      Number(notification.sl || 0).toPrecision(8),
+      Number(notification.tp || 0).toPrecision(8),
+    ].join(':')
+    const existing = bySetup.get(key)
+
+    if (!existing) {
+      bySetup.set(key, notification)
+      continue
+    }
+
+    bySetup.set(key, {
+      ...notification,
+      id: existing.id,
+      read: existing.read && notification.read,
+      createdAt: Math.min(existing.createdAt, notification.createdAt),
+    })
   }
-  return ordered.slice(0, 300)
+
+  return Array.from(bySetup.values())
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 300)
 }
 
 export const useNotificationStore = create<NotificationState>()((set, get) => ({
@@ -42,12 +64,9 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
 
   addNotifications: (incoming) =>
     set((state) => {
-      const existing = new Map(state.notifications.map((notification) => [notification.id, notification]))
-      for (const notification of incoming) {
-        existing.set(notification.id, notification)
-      }
       const merged = dedupeNotifications([
-        ...Array.from(existing.values()).sort((a, b) => b.createdAt - a.createdAt),
+        ...incoming,
+        ...state.notifications,
       ])
       const uid = get()._uid
       if (uid && incoming.length > 0) {
@@ -99,7 +118,7 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
       const snap = await getDocs(q)
       if (!snap.empty) {
         const notifications = snap.docs.map((doc) => doc.data() as StoredNotification)
-        set({ notifications })
+        set({ notifications: dedupeNotifications(notifications) })
       } else {
         set({ notifications: [] })
       }

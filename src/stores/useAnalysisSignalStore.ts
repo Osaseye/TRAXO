@@ -11,10 +11,41 @@ interface AnalysisSignalState {
   _uid: string | null
   addSignals: (signals: StoredSignal[]) => void
   clearSignals: () => void
+  updateSignalStatus: (signalId: string, status: string) => void
   setUid: (uid: string | null) => void
   hydrateFromFirestore: (uid?: string | null) => Promise<void>
   saveToFirestore: (uid: string | null, signals: StoredSignal[]) => Promise<void>
   clearFirestoreSignals: (uid?: string | null) => Promise<void>
+}
+
+function signalFingerprint(signal: StoredSignal) {
+  return [
+    signal.strategyId,
+    signal.symbol,
+    signal.timeframe,
+    signal.direction,
+    signal.time,
+  ].join(':')
+}
+
+function dedupeSignals(signals: StoredSignal[]) {
+  const byFingerprint = new Map<string, StoredSignal>()
+
+  for (const signal of signals) {
+    const key = signalFingerprint(signal)
+    const existing = byFingerprint.get(key)
+
+    if (!existing) {
+      byFingerprint.set(key, signal)
+      continue
+    }
+
+    if (existing.status !== 'live' && signal.status === 'live') {
+      byFingerprint.set(key, signal)
+    }
+  }
+
+  return Array.from(byFingerprint.values()).sort((a, b) => b.time - a.time)
 }
 
 export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
@@ -25,13 +56,23 @@ export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
 
   addSignals: (newSignals) =>
     set((state) => {
-      const existingIds = new Set(state.signals.map((s) => s.id))
-      const fresh = newSignals.filter((s) => !existingIds.has(s.id))
-      if (fresh.length === 0) return state
-      return { signals: [...fresh, ...state.signals].slice(0, 500) }
+      const next = dedupeSignals([...newSignals, ...state.signals]).slice(0, 500)
+      if (next.length === state.signals.length && next.every((s, i) => s.id === state.signals[i]?.id && s.status === state.signals[i]?.status)) {
+        return state
+      }
+      return { signals: next }
     }),
 
   clearSignals: () => set({ signals: [] }),
+
+  updateSignalStatus: (signalId, status) =>
+    set((state) => {
+      const idx = state.signals.findIndex((s) => s.id === signalId)
+      if (idx === -1) return state
+      const nextSignals = [...state.signals]
+      nextSignals[idx] = { ...nextSignals[idx], status }
+      return { signals: nextSignals }
+    }),
 
   hydrateFromFirestore: async (uid) => {
     try {
@@ -42,7 +83,7 @@ export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
       const snap = await getDocs(q)
       if (!snap.empty) {
         const signals: StoredSignal[] = snap.docs.map((d) => d.data() as StoredSignal)
-        set({ signals })
+        set({ signals: dedupeSignals(signals).slice(0, 500) })
       }
     } catch {
       // silently ignore

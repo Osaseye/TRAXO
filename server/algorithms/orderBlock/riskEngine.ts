@@ -66,7 +66,7 @@ export function calculateTPs(
   const riskSize = Math.abs(entry - sl)
 
   // TP1: nearest opposing pool
-  let tp1 = 0
+  let tp1: number
   let tp1_source: 'structure' | 'rr' = 'rr'
 
   const targets =
@@ -86,7 +86,7 @@ export function calculateTPs(
   }
 
   // TP2: next pool beyond TP1 or 3R
-  let tp2 = 0
+  let tp2: number
   let tp2_source: 'structure' | 'rr' = 'rr'
 
   if (targets.length >= 2) {
@@ -97,7 +97,7 @@ export function calculateTPs(
   }
 
   // TP3: structural extreme or 5R
-  let tp3 = 0
+  let tp3: number
   let tp3_source: 'structure' | 'rr' = 'rr'
 
   const extremeSwing =

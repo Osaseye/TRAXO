@@ -71,6 +71,7 @@ type ScanProgressListener = (p: ScanProgress) => void
 const _listeners = new Set<ScanProgressListener>()
 let _progress: ScanProgress = { running: false, current: '', done: 0, total: 0, lastCompletedAt: null, newBatch: [] }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function subscribeScanProgress(fn: ScanProgressListener) {
   _listeners.add(fn)
   fn(_progress)   // emit current state immediately
@@ -86,6 +87,7 @@ function emitProgress(p: Partial<ScanProgress>) {
  * Called by AdminSignals (or any consumer) to commit the pending newBatch into
  * the main signal store and save to Firestore.
  */
+// eslint-disable-next-line react-refresh/only-export-components, @typescript-eslint/no-unused-vars
 export function commitNewBatch(_userId: string | null) {
   // Client no longer writes global-scan results to Firestore.
   // Keep this API as a no-op so existing Admin UI wiring doesn't crash.

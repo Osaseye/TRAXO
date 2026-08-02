@@ -17,9 +17,14 @@ import {
   Clock,
   Search,
   X,
+  AlertCircle,
+  RefreshCw,
+  CheckCircle2,
 } from 'lucide-react'
 import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
 import { useAnalysisSignalStore, type StoredSignal } from '@/stores/useAnalysisSignalStore'
+import { getScannerRejects } from '@/lib/api'
+import { useEffect } from 'react'
 
 // ... (Keep all constants, helpers, and sub-components as they are)
 
@@ -81,7 +86,7 @@ function exportCSV(signals: StoredSignal[]) {
     s.risk,
     s.reason.join(' | '),
   ])
-  const csv = [headers, ...rows].map((r) => r.map((v) => `\"${v}\"`).join(',')).join('\n')
+  const csv = [headers, ...rows].map((r) => r.map((v) => `"${v}"`).join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -145,6 +150,24 @@ export default function AdminSignals() {
   const [sortKey, setSortKey] = useState<SortKey>('time')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [page, setPage] = useState(0)
+  const [activeTab, setActiveTab] = useState<'signals' | 'rejects'>('signals')
+  const [rejectSymbol, setRejectSymbol] = useState('EURUSD')
+  const [rejectTimeframe, setRejectTimeframe] = useState('15m')
+  const [rejectsData, setRejectsData] = useState<Record<string, string[]> | null>(null)
+  const [isLoadingRejects, setIsLoadingRejects] = useState(false)
+
+
+
+  useEffect(() => {
+    if (activeTab === 'rejects') {
+      setIsLoadingRejects(true)
+      getScannerRejects(rejectSymbol, rejectTimeframe)
+        .then((res) => setRejectsData(res.rejects))
+        .catch(console.error)
+        .finally(() => setIsLoadingRejects(false))
+    }
+  }, [activeTab, rejectSymbol, rejectTimeframe])
+
   const PAGE_SIZE = 50
 
   // Derived collections
@@ -225,12 +248,27 @@ export default function AdminSignals() {
           <span className="hidden sm:block h-4 w-px bg-white/[0.1]" />
           <ShieldAlert size={14} className="text-[#fca5a5] shrink-0" />
           <Radio size={14} className="text-[#6366f1] shrink-0" />
-          <h1 className="text-[14px] font-semibold text-[#e5e7eb] truncate">All Signals — Admin View</h1>
-          {allSignals.length > 0 && (
-            <span className="shrink-0 px-2 py-0.5 rounded-full bg-[#6366f1]/15 border border-[#6366f1]/25 text-[10px] font-semibold text-[#818cf8]">
-              {allSignals.length.toLocaleString()} total
-            </span>
-          )}
+          <h1 className="text-[14px] font-semibold text-[#e5e7eb] truncate">Admin View</h1>
+
+          {/* Tab switcher */}
+          <div className="flex items-center bg-[#0b0f17] rounded-lg border border-white/[0.08] p-0.5 ml-2">
+            <button
+              onClick={() => setActiveTab('signals')}
+              className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                activeTab === 'signals' ? 'bg-[#6366f1] text-white' : 'text-[#64748b] hover:text-[#94a3b8]'
+              }`}
+            >
+              Signals {allSignals.length > 0 && `(${allSignals.length})`}
+            </button>
+            <button
+              onClick={() => setActiveTab('rejects')}
+              className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                activeTab === 'rejects' ? 'bg-[#f59e0b] text-black' : 'text-[#64748b] hover:text-[#94a3b8]'
+              }`}
+            >
+              Scan Rejects
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -247,6 +285,109 @@ export default function AdminSignals() {
 
       <main className="max-w-[1400px] mx-auto px-3 sm:px-6 py-5 sm:py-7 space-y-5">
 
+        {/* ─── Scan Rejects Tab ─── */}
+        {activeTab === 'rejects' && (
+          <div className="space-y-4">
+            {/* Controls */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] text-[#64748b] uppercase tracking-wider">Symbol</label>
+                <input
+                  value={rejectSymbol}
+                  onChange={(e) => setRejectSymbol(e.target.value.toUpperCase())}
+                  placeholder="e.g. EURUSD"
+                  className="h-8 px-3 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-semibold text-white focus:outline-none focus:border-[#f59e0b]/50 w-32"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] text-[#64748b] uppercase tracking-wider">Timeframe</label>
+                <select
+                  value={rejectTimeframe}
+                  onChange={(e) => setRejectTimeframe(e.target.value)}
+                  className="h-8 px-3 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-semibold text-white focus:outline-none focus:border-[#f59e0b]/50"
+                >
+                  {['1m','5m','15m','1H','4H','1D'].map((tf) => <option key={tf} value={tf}>{tf}</option>)}
+                </select>
+              </div>
+              <button
+                onClick={() => {
+                  setIsLoadingRejects(true)
+                  getScannerRejects(rejectSymbol, rejectTimeframe)
+                    .then((res) => setRejectsData(res.rejects))
+                    .catch(console.error)
+                    .finally(() => setIsLoadingRejects(false))
+                }}
+                className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#f59e0b]/30 bg-[#f59e0b]/10 text-[11px] font-semibold text-[#fcd34d] hover:bg-[#f59e0b]/20 transition-all"
+              >
+                <RefreshCw size={11} className={isLoadingRejects ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+              <p className="text-[11px] text-[#475569]">
+                Showing why each strategy rejected a signal for <span className="text-[#e5e7eb] font-semibold">{rejectSymbol}</span> on <span className="text-[#e5e7eb] font-semibold">{rejectTimeframe}</span>
+              </p>
+            </div>
+
+            {/* Results */}
+            {isLoadingRejects ? (
+              <div className="flex items-center justify-center py-16">
+                <RefreshCw size={20} className="animate-spin text-[#f59e0b]" />
+              </div>
+            ) : !rejectsData ? (
+              <div className="rounded-xl border border-white/[0.06] bg-[#0d1117] p-8 text-center">
+                <AlertCircle size={28} className="text-[#475569] mx-auto mb-2" />
+                <p className="text-[#64748b] text-sm">No scan data found.</p>
+                <p className="text-[#475569] text-[12px] mt-1">The scanner may not have run yet, or this symbol/timeframe hasn't been scanned.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                {Object.entries(rejectsData).map(([strategyId, reasons]) => {
+                  const label = {
+                    breakout: 'Breakout',
+                    order_block: 'Order Block',
+                    supply_demand: 'Supply & Demand',
+                    trend_following: 'Trend Following',
+                    wick_rejection: 'Wick Rejection',
+                  }[strategyId] ?? strategyId
+                  const color = {
+                    breakout: '#6366f1',
+                    order_block: '#10b981',
+                    supply_demand: '#3b82f6',
+                    trend_following: '#a855f7',
+                    wick_rejection: '#f59e0b',
+                  }[strategyId] ?? '#94a3b8'
+                  return (
+                    <div key={strategyId} className="rounded-xl border border-white/[0.07] bg-[#0d1117] p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                        <span className="text-[13px] font-bold text-[#e5e7eb]">{label}</span>
+                        <span className="ml-auto px-1.5 py-0.5 rounded-md bg-[#ef4444]/10 border border-[#ef4444]/20 text-[9px] font-bold text-[#fca5a5] uppercase">REJECTED</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {(Array.isArray(reasons) ? reasons : [reasons]).map((r, i) => (
+                          <div key={i} className="flex items-start gap-2 text-[11px] text-[#94a3b8] leading-relaxed">
+                            <X size={11} className="text-[#ef4444] mt-0.5 shrink-0" />
+                            <span>{r}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+                {Object.keys(rejectsData).length === 0 && (
+                  <div className="col-span-full rounded-xl border border-[#22c55e]/20 bg-[#22c55e]/5 p-8 text-center">
+                    <CheckCircle2 size={28} className="text-[#86efac] mx-auto mb-2" />
+                    <p className="text-[#86efac] text-sm font-semibold">All strategies fired a signal!</p>
+                    <p className="text-[#4ade80] text-[12px] mt-1">No rejections were recorded for this combination.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── Signals Tab ─── */}
+        {activeTab === 'signals' && (
+          <div className="space-y-5">
         {/* Stats bar */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <StatCard label="Total Signals" value={stats.total.toLocaleString()} icon={Zap} color="#6366f1" />
@@ -391,9 +532,13 @@ export default function AdminSignals() {
               {/* Rows */}
               <div className="divide-y divide-white/[0.03]">
                 {pageSlice.map((sig) => {
+                  const entry = Number(sig.entry) || 0
+                  const sl = Number(sig.sl) || 0
+                  const tp = Number(sig.tp) || 0
+                  const rr = Number(sig.rr) || 0
                   const color = STRATEGY_COLORS[sig.strategyId] ?? '#6366f1'
                   const isBuy = sig.direction === 'BUY'
-                  const digits = sig.entry >= 1000 ? 1 : sig.entry >= 10 ? 2 : sig.entry >= 1 ? 4 : 5
+                  const digits = entry >= 1000 ? 1 : entry >= 10 ? 2 : entry >= 1 ? 4 : 5
                   return (
                     <div
                       key={sig.id}
@@ -411,7 +556,7 @@ export default function AdminSignals() {
                             {STRATEGY_LABELS[sig.strategyId]?.split(' ')[0] ?? sig.strategyId}
                           </span>
                         </div>
-                        <p className="text-[10px] text-[#475569] mt-0.5 truncate">{sig.reason[0] ?? ''}</p>
+                        <p className="text-[10px] text-[#475569] mt-0.5 truncate">{(sig.reason?.[0]) ?? ''}</p>
                       </div>
 
                       {/* Timeframe */}
@@ -427,22 +572,22 @@ export default function AdminSignals() {
 
                       {/* Entry */}
                       <span className="text-[12px] font-mono text-[#e5e7eb] self-center">
-                        {sig.entry.toFixed(digits)}
+                        {entry.toFixed(digits)}
                       </span>
 
                       {/* SL */}
                       <span className="text-[12px] font-mono text-[#fca5a5] self-center">
-                        {sig.sl.toFixed(digits)}
+                        {sl.toFixed(digits)}
                       </span>
 
                       {/* TP */}
                       <span className="text-[12px] font-mono text-[#86efac] self-center">
-                        {sig.tp.toFixed(digits)}
+                        {tp.toFixed(digits)}
                       </span>
 
                       {/* RR */}
                       <span className="text-[12px] font-semibold text-[#fde68a] self-center">
-                        {sig.rr.toFixed(2)}R
+                        {rr.toFixed(2)}R
                       </span>
 
                       {/* Confidence */}
@@ -524,6 +669,8 @@ export default function AdminSignals() {
               </button>
             </div>
           </>
+        )}
+          </div>
         )}
       </main>
 

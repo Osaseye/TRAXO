@@ -1,4 +1,5 @@
 const { runScan } = require('./signalScanner');
+const { updateScanState } = require('./globalSignalScanner');
 
 // A simple in-memory lock to prevent concurrent scans.
 let isScanRunning = false;
@@ -13,10 +14,14 @@ async function triggerScan() {
   }
 
   isScanRunning = true;
+  updateScanState({ running: true, lastError: null });
+
   try {
     await runScan();
+    updateScanState({ running: false, lastCompletedAt: new Date().toISOString() });
   } catch (error) {
     console.error('An unexpected error occurred during the scan execution:', error);
+    updateScanState({ running: false, lastError: error.message || String(error) });
   } finally {
     isScanRunning = false;
   }
@@ -32,11 +37,10 @@ function startCron() {
   console.log('Starting cron service. Initial scan will run now.');
   triggerScan();
 
-  // Then, run a scan every 60 seconds.
-  // This interval can be adjusted based on desired signal frequency.
+  // Then, run a scan every 1 minute for real-time chart updates.
   setInterval(triggerScan, 60 * 1000);
 
-  console.log('Cron job scheduled to run every 60 seconds.');
+  console.log('Cron job scheduled to run every 1 minute.');
 }
 
 module.exports = {

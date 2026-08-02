@@ -285,6 +285,7 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
     maxDailyLossPct: state.maxDailyLossPct,
     chartSymbol: state.chartSymbol,
     chartTimeframe: state.chartTimeframe,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     journal: state.journal.map(({ attachmentUrl: _url, ...j }) => j),
     notifToastEnabled: state.notifToastEnabled,
     notifSoundEnabled: state.notifSoundEnabled,

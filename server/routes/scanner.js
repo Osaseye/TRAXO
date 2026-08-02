@@ -23,4 +23,26 @@ router.get('/status', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/scanner/rejects
+ * Fetch the latest scan rejection reasons for a given symbol and timeframe.
+ */
+router.get('/rejects', async (req, res) => {
+  const { symbol, timeframe } = req.query;
+  if (!symbol || !timeframe) {
+    return res.status(400).json({ status: 'error', message: 'Missing symbol or timeframe' });
+  }
+
+  try {
+    const data = await redis.get(`scan_rejects:${symbol}:${timeframe}`);
+    if (!data) {
+      return res.json({ status: 'ok', rejects: null });
+    }
+    res.json({ status: 'ok', rejects: JSON.parse(data) });
+  } catch (error) {
+    console.error('Error fetching scan rejects from Redis:', error);
+    res.status(500).json({ status: 'error', message: 'Internal Server Error' });
+  }
+});
+
 module.exports = router;

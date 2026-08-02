@@ -1,21 +1,42 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { UTCTimestamp } from 'lightweight-charts'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
 import { useToastStore } from '@/stores/useToastStore'
 import { useNotificationStore } from '@/stores/useNotificationStore'
 
 function intervalSeconds(timeframe: string): number {
-  switch (timeframe) {
-    case '1m': return 60;
-    case '5m': return 300;
-    case '15m': return 900;
-    case '1H': return 3600;
-    case '4H': return 14400;
-    case '1D': return 86400;
-    default: return 60;
+  switch (timeframe.toLowerCase()) {
+    case '1m':
+    case '1min':   return 60;
+    case '5m':
+    case '5min':   return 300;
+    case '15m':
+    case '15min':  return 900;
+    case '1h':
+    case '1H':     return 3600;
+    case '4h':
+    case '4H':     return 14400;
+    case '1d':
+    case '1D':
+    case '1day':   return 86400;
+    default:       return 3600; // safe fallback: treat as 1H so signals don't die too fast
   }
 }
 
 const globalSeenIds = new Set<string>()
+
+function notificationFingerprint(signal: SignalForNotification) {
+  return [
+    signal.strategyId ?? 'unknown',
+    signal.symbol,
+    signal.timeframe,
+    signal.direction,
+    signal.time ?? 'no-time',
+    Number(signal.entry || 0).toPrecision(8),
+    Number(signal.sl || 0).toPrecision(8),
+    Number(signal.tp || 0).toPrecision(8),
+  ].join(':')
+}
 
 export interface SignalForNotification {
   id: string
@@ -59,8 +80,8 @@ function playSignalChime(direction: 'BUY' | 'SELL') {
 function firePushNotification(signal: SignalForNotification) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
 
-  const title = `${signal.direction === 'BUY' ? '🟢 BUY' : '🔴 SELL'} ${signal.symbol} — ${signal.strategyLabel}`
-  const body = `Entry ${signal.entry} · SL ${signal.sl} · TP ${signal.tp} · ${signal.confidence}% confidence`
+  const title = `${signal.direction} ${signal.symbol} - ${signal.strategyLabel}`
+  const body = `Entry ${signal.entry} - SL ${signal.sl} - TP ${signal.tp} - ${signal.confidence}% confidence`
 
   try {
     new Notification(title, { body, tag: signal.id, icon: '/favicon.ico', silent: true })
@@ -68,7 +89,8 @@ function firePushNotification(signal: SignalForNotification) {
 }
 
 export function notifySignal(signal: SignalForNotification): boolean {
-  if (globalSeenIds.has(signal.id)) return false
+  const fingerprint = notificationFingerprint(signal)
+  if (globalSeenIds.has(fingerprint)) return false
 
   const {
     notifToastEnabled, notifSoundEnabled, notifPushEnabled, notifSymbolFilters,
@@ -86,12 +108,12 @@ export function notifySignal(signal: SignalForNotification): boolean {
   const intervalS = intervalSeconds(signal.timeframe)
   const nowS = Math.floor(Date.now() / 1000)
   const signalAgeS = signal.time ? nowS - signal.time : 0
-  if (signal.time && signalAgeS > intervalS * 2) {
-      globalSeenIds.add(signal.id) // Mark stale signals as seen to prevent re-triggering
+  if (signal.time && signalAgeS > intervalS * 4) {
+      globalSeenIds.add(fingerprint) // Mark stale signals as seen to prevent re-triggering
       return false
   }
 
-  globalSeenIds.add(signal.id)
+  globalSeenIds.add(fingerprint)
 
   useNotificationStore.getState().addNotifications([{
     ...signal,

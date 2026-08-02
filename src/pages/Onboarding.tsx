@@ -368,7 +368,7 @@ function StepPersonal({ onNext, onBack }: { onNext: () => void; onBack: () => vo
       })
       onNext()
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error(err)
       setError('We could not save your profile. Please try again.')
     } finally {

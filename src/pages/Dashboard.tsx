@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Time, UTCTimestamp } from 'lightweight-charts'
 import { ChevronDown, X } from 'lucide-react'
@@ -10,7 +11,8 @@ import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/la
 import { getMarketRiskContext } from '@/lib/marketRisk'
 import { getCandles, type Candle } from '@/lib/marketData'
 import { useMarketWebSocket } from '@/hooks/useMarketWebSocket'
-import { runSignalsForStrategies, riskFromConfidence, priceDigits, type AnalysisSignal, type RiskLabel } from '@/lib/signalDetection'
+import { useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
+import { riskFromConfidence, priceDigits, type RiskLabel } from '@/lib/signalDetection'
 
 type SymbolOption =
   | 'EURUSD'
@@ -182,9 +184,13 @@ function generateLevels(entry: number, action: TradeAction, range: number, digit
   }
 }
 
+function signalMarkerKey(signal: { strategyId: string; direction: string; time: number }) {
+  return `${signal.strategyId}:${signal.direction}:${signal.time}`
+}
+
 export default function Dashboard() {
   const displayName = useAuthStore((s) => s.user?.displayName || s.user?.fullName || s.user?.email || 'Trader')
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { plan, selectedStrategyId, selectedStrategyIds } = useOnboardingStore()
   const {
     accountBalance,
@@ -212,7 +218,21 @@ export default function Dashboard() {
   const setTimeframe = useTradingContextStore((s) => s.setChartTimeframe)
   const [loading, setLoading] = useState(true)
   const [candles, setCandles] = useState<Candle[]>([])
-  const [signals, setSignals] = useState<AnalysisSignal[]>([])
+  const allSignals = useAnalysisSignalStore((s) => s.signals)
+  const chartSignals = useMemo(() => {
+    const bySetup = new Map<string, typeof allSignals[number]>()
+    for (const signal of allSignals) {
+      if (signal.symbol !== symbol || signal.timeframe !== timeframe) continue
+      const key = signalMarkerKey(signal)
+      const existing = bySetup.get(key)
+      if (!existing || (existing.status !== 'live' && signal.status === 'live')) {
+        bySetup.set(key, signal)
+      }
+    }
+    return Array.from(bySetup.values()).sort((a, b) => b.time - a.time)
+  }, [allSignals, symbol, timeframe])
+  
+  const signals = chartSignals
   const [hoveredSignalId, setHoveredSignalId] = useState<string | null>(null)
   const [lockedSignalId, setLockedSignalId] = useState<string | null>(null)
   const [mouse, setMouse] = useState({ x: 24, y: 120 })
@@ -222,20 +242,17 @@ export default function Dashboard() {
   const [dismissedNoticeKeys, setDismissedNoticeKeys] = useState<string[]>([])
   const dragOffsetRef = useRef({ x: 0, y: 0 })
 
-  useEffect(() => {
-    const nextSymbol = searchParams.get('symbol')
-    const nextTimeframe = searchParams.get('timeframe')
 
-    if (nextSymbol) {
-      setSymbol(nextSymbol as typeof symbol)
-    }
-    if (nextTimeframe) {
-      setTimeframe(nextTimeframe as typeof timeframe)
-    }
-  }, [searchParams, setSymbol, setTimeframe])
+
+  useEffect(() => {
+    const urlSymbol = searchParams.get('symbol')
+    const urlTimeframe = searchParams.get('timeframe')
+    if (urlSymbol && urlSymbol !== symbol) setSymbol(urlSymbol as typeof symbol)
+    if (urlTimeframe && urlTimeframe !== timeframe) setTimeframe(urlTimeframe as typeof timeframe)
+  }, [searchParams, symbol, timeframe, setSymbol, setTimeframe])
 
   const hoveredSignal = useMemo(
-    () => signals.find((s) => s.id === hoveredSignalId && s.status === 'live') ?? null,
+    () => signals.find((s) => s.id === hoveredSignalId) ?? null,
     [signals, hoveredSignalId]
   )
 
@@ -245,14 +262,12 @@ export default function Dashboard() {
   )
 
   const activeSignal = lockedSignal ?? hoveredSignal
-  const liveSignals = useMemo(
-    () => signals.filter((signal) => signal.status === 'live'),
-    [signals]
-  )
+  const activeLiveSignal = activeSignal?.status === 'live' ? activeSignal : null
   const marketRiskContext = useMemo(
     () => getMarketRiskContext(symbol, timeframe, activeStrategyIds.length),
     [symbol, timeframe, activeStrategyIds.length]
   )
+
 
   useMarketWebSocket({
     symbol,
@@ -261,7 +276,6 @@ export default function Dashboard() {
     enabled: candles.length > 0,
     onCandleUpdate: (nextCandles: any) => {
       setCandles(nextCandles)
-      setSignals(runSignalsForStrategies(nextCandles, symbol, timeframe, activeStrategyIds))
     },
   })
 
@@ -301,6 +315,7 @@ export default function Dashboard() {
       .slice(0, 12)
       .map((j) => ({
         id: `hist-${j.id}`,
+        // eslint-disable-next-line react-hooks/purity
         time: j.createdAt ? (Math.floor(j.createdAt / 1000) as UTCTimestamp) : (Math.floor(Date.now() / 1000) as UTCTimestamp),
         pnl: j.outcome === 'loss' ? 'LOSS' : 'WIN',
       })) satisfies TradeHistoryMarker[]
@@ -388,13 +403,20 @@ export default function Dashboard() {
   const marketFilter = stockMarketFilter
 
   const chartMarkers = useMemo(() => {
-    const suggestionMarkers: ChartPanelMarker[] = liveSignals.map((s) => ({
-      time: s.time as UTCTimestamp,
-      position: s.direction === 'BUY' ? 'belowBar' : 'aboveBar',
-      shape: s.direction === 'BUY' ? 'arrowUp' : 'arrowDown',
-      color: s.direction === 'BUY' ? '#22c55e' : '#ef4444',
-      text: `${s.strategyLabel.split(' ')[0]} ${s.direction} ${s.confidence}%`,
-    }))
+    const markerBySetup = new Map<string, ChartPanelMarker>()
+
+    for (const s of signals) {
+      const isLive = s.status === 'live'
+      markerBySetup.set(signalMarkerKey(s), {
+        time: s.time as UTCTimestamp,
+        position: s.direction === 'BUY' ? 'belowBar' : 'aboveBar',
+        shape: s.direction === 'BUY' ? 'arrowUp' : 'arrowDown',
+        color: isLive ? (s.direction === 'BUY' ? '#22c55e' : '#ef4444') : '#64748b',
+        text: `${isLive ? '' : 'Prev '}${s.strategyLabel === 'Supply & Demand' ? 'S&D' : s.strategyLabel.split(' ')[0]} ${s.direction} ${s.confidence}%`,
+      })
+    }
+
+    const suggestionMarkers = Array.from(markerBySetup.values())
 
     const historicalMarkers: ChartPanelMarker[] = journalMarkers.map((m) => ({
       time: m.time,
@@ -405,13 +427,13 @@ export default function Dashboard() {
     }))
 
     return [...suggestionMarkers, ...historicalMarkers]
-  }, [liveSignals, journalMarkers])
+  }, [signals, journalMarkers])
 
-  const chartActiveSignal: ChartPanelActiveSignal | null = activeSignal
+  const chartActiveSignal: ChartPanelActiveSignal | null = activeLiveSignal
     ? {
-      entry: activeSignal.entry,
-      sl: activeSignal.sl,
-      tp: activeSignal.tp,
+      entry: activeLiveSignal.entry,
+      sl: activeLiveSignal.sl,
+      tp: activeLiveSignal.tp,
       locked: Boolean(lockedSignal),
     }
     : null
@@ -427,12 +449,12 @@ export default function Dashboard() {
     : null
 
   const handleCrosshairMove = (time: UTCTimestamp | null) => {
-    if (liveSignals.length === 0 || time == null) {
+    if (signals.length === 0 || time == null) {
       if (!lockedSignalId) setHoveredSignalId(null)
       return
     }
 
-    const closest = liveSignals.find((s) => s.time === time) ?? null
+    const closest = signals.find((s) => Math.abs(s.time - time) <= 60) ?? null
 
     if (closest) {
       setHoveredSignalId(closest.id)
@@ -447,10 +469,10 @@ export default function Dashboard() {
     const clickedTime = typeof time === 'number' ? (time as UTCTimestamp) : null
 
     if (clickedTime != null) {
-      const nearestSignal = liveSignals.find((s) => s.time === clickedTime) ?? null
+      const nearestSignal = signals.find((s) => s.time === clickedTime) ?? null
 
       if (nearestSignal) {
-        setLockedSignalId(nearestSignal.id)
+        setLockedSignalId(nearestSignal.status === 'live' ? nearestSignal.id : null)
         setHoveredSignalId(nearestSignal.id)
         setManualSetup(null)
         return
@@ -510,19 +532,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setHoveredSignalId(null)
-    setLockedSignalId(null)
-    setManualSetup(null)
-    setCandles([])
-    setSignals([])
+    const initTimer = setTimeout(() => {
+      setLoading(true)
+      setHoveredSignalId(null)
+      setLockedSignalId(null)
+      setManualSetup(null)
+      setCandles([])
+    }, 0)
 
     const loadCandles = async () => {
-      const generatedCandles = await getCandles(symbol, timeframe)
+      // Fetch 2000 candles to provide much more chart history than the default 200
+      const generatedCandles = await getCandles(symbol, timeframe, 2000)
       if (cancelled) return
-      const generatedSignals = runSignalsForStrategies(generatedCandles, symbol, timeframe, activeStrategyIds)
       setCandles(generatedCandles)
-      setSignals(generatedSignals)
       setLoading(false)
     }
 
@@ -530,6 +552,7 @@ export default function Dashboard() {
 
     return () => {
       cancelled = true
+      clearTimeout(initTimer)
     }
   }, [symbol, timeframe, activeStrategyIds, marketRiskContext.confidencePenalty])
 
@@ -627,15 +650,22 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!manualSetup) {
-      setPopupPosition(null)
-      setDraggingPopup(false)
-      return
+      const t = setTimeout(() => {
+        setPopupPosition(null)
+        setDraggingPopup(false)
+      }, 0)
+      return () => clearTimeout(t)
     }
     if (popupPosition) return
     const width = getPopupWidth()
     const x = window.innerWidth - width - (window.innerWidth < 640 ? 8 : 16)
     const y = window.innerWidth < 640 ? 70 : 84
-    setPopupPosition(clampPopupPosition(x, y))
+    const t2 = setTimeout(() => {
+       
+      setPopupPosition(clampPopupPosition(x, y))
+    }, 0)
+    return () => clearTimeout(t2)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manualSetup, popupPosition])
 
   useEffect(() => {
@@ -655,6 +685,7 @@ export default function Dashboard() {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', stop)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draggingPopup])
 
   return (
@@ -678,13 +709,15 @@ export default function Dashboard() {
               value={marketFilter}
               onChange={(e) => {
                 const m = e.target.value as 'forex' | 'crypto' | 'stocks' | 'metals' | 'indices' | 'energy' | 'futures'
-                if (m === 'forex') setSymbol(FX_SYMBOLS[0])
-                if (m === 'metals') setSymbol(METAL_SYMBOLS[0])
-                if (m === 'indices') setSymbol(INDEX_SYMBOLS[0])
-                if (m === 'energy') setSymbol(ENERGY_SYMBOLS[0])
-                if (m === 'crypto') setSymbol(CRYPTO_SYMBOLS[0])
-                if (m === 'stocks') setSymbol(STOCK_SYMBOLS[0])
-                if (m === 'futures') setSymbol(FUTURES_SYMBOLS[0])
+                let nextSymbol = symbol
+                if (m === 'forex') nextSymbol = FX_SYMBOLS[0]
+                if (m === 'metals') nextSymbol = METAL_SYMBOLS[0]
+                if (m === 'indices') nextSymbol = INDEX_SYMBOLS[0]
+                if (m === 'energy') nextSymbol = ENERGY_SYMBOLS[0]
+                if (m === 'crypto') nextSymbol = CRYPTO_SYMBOLS[0]
+                if (m === 'stocks') nextSymbol = STOCK_SYMBOLS[0]
+                if (m === 'futures') nextSymbol = FUTURES_SYMBOLS[0]
+                setSearchParams({ symbol: nextSymbol, timeframe }, { replace: true })
               }}
               className="appearance-none h-9 pl-3 pr-8 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-bold text-white focus:outline-none focus:border-[#3b82f6]/50 uppercase"
             >
@@ -702,7 +735,7 @@ export default function Dashboard() {
           <div className="relative">
             <select
               value={symbol}
-              onChange={(e) => setSymbol(e.target.value as SymbolOption)}
+              onChange={(e) => setSearchParams({ symbol: e.target.value, timeframe }, { replace: true })}
               className="appearance-none h-9 pl-3 pr-8 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-semibold text-white focus:outline-none focus:border-[#3b82f6]/50"
             >
               {(stockMarketFilter === 'forex'
@@ -731,7 +764,7 @@ export default function Dashboard() {
 
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <span className="hidden xl:inline-flex items-center h-8 px-3 rounded-full text-[10px] font-semibold uppercase tracking-wider border border-white/[0.14] bg-[#0d1117] text-[#cbd5e1]">
-            {strategyLabel} ┬╖ Locked
+            {strategyLabel} • Locked
           </span>
 
           <span className="hidden xl:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full border border-white/[0.14] bg-[#0d1117] text-[#cbd5e1] text-[10px] font-semibold uppercase tracking-wider">
@@ -779,7 +812,7 @@ export default function Dashboard() {
               manualSetup={chartManualSetup}
               onCrosshairMove={handleCrosshairMove}
               onChartClick={handleChartClick}
-              onTimeframeChange={setTimeframe}
+              onTimeframeChange={(tf) => setSearchParams({ symbol, timeframe: tf }, { replace: true })}
             />
           )}
         </div>
@@ -790,7 +823,7 @@ export default function Dashboard() {
 
         <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center gap-2 pointer-events-none">
           <span className="px-2.5 py-1 rounded-md bg-[#0d1117]/95 border border-white/[0.08] text-[11px] text-[#e5e7eb] font-semibold">
-            {symbol} ┬╖ {timeframe}
+            {symbol} • {timeframe}
           </span>
           {loading && (
             <span className="px-2.5 py-1 rounded-md bg-[#3b82f6]/10 border border-[#3b82f6]/25 text-[11px] text-[#93c5fd] font-medium animate-pulse">
@@ -866,6 +899,19 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+              {hoveredSignal.status !== 'live' && (
+                <span 
+                  className="text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-full border font-bold uppercase tracking-wider shrink-0"
+                  style={{
+                    color: hoveredSignal.status === 'WIN' ? '#22c55e' : hoveredSignal.status === 'LOSS' ? '#ef4444' : '#94a3b8',
+                    borderColor: hoveredSignal.status === 'WIN' ? 'rgba(34,197,94,0.3)' : hoveredSignal.status === 'LOSS' ? 'rgba(239,68,68,0.3)' : 'rgba(148,163,184,0.3)',
+                    background: hoveredSignal.status === 'WIN' ? 'rgba(34,197,94,0.1)' : hoveredSignal.status === 'LOSS' ? 'rgba(239,68,68,0.1)' : 'rgba(148,163,184,0.1)',
+                  }}
+                >
+                  OUTCOME: {hoveredSignal.status === 'WIN' ? 'HIT TP' : hoveredSignal.status === 'LOSS' ? 'HIT SL' : 'EXPIRED'}
+                </span>
+              )}
+
               {hoveredSignal.confidence >= 85 && (
                 <span className="text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold uppercase tracking-wider shrink-0 shadow-[0_0_10px_rgba(59,130,246,0.15)]">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
@@ -934,7 +980,7 @@ export default function Dashboard() {
               <div className="space-y-1.5">
                 {hoveredSignal.reason.map((r, i) => (
                   <p key={i} className="text-[11px] text-[#94a3b8] leading-relaxed">
-                    ΓÇó {r}
+                    - {r}
                   </p>
                 ))}
               </div>
@@ -947,7 +993,7 @@ export default function Dashboard() {
             <div className="flex items-start justify-between gap-2">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[#64748b] font-semibold">Locked TRAXO Suggestion</div>
-                <div className="text-[13px] font-semibold text-white mt-1">{lockedSignal.direction} ┬╖ {symbol}</div>
+                <div className="text-[13px] font-semibold text-white mt-1">{lockedSignal.direction} • {symbol}</div>
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                   {lockedSignal.confidence >= 85 && (
                     <span className="text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold uppercase tracking-wider shrink-0 shadow-[0_0_10px_rgba(59,130,246,0.15)]">
@@ -1043,7 +1089,7 @@ export default function Dashboard() {
                 Why we flagged this for you, {displayName.split(' ')[0]}
               </div>
               {lockedSignal.reason.map((line, i) => (
-                <p key={i} className="text-[11px] text-[#94a3b8] leading-relaxed">ΓÇó {line}</p>
+                <p key={i} className="text-[11px] text-[#94a3b8] leading-relaxed">- {line}</p>
               ))}
             </div>
 
@@ -1097,7 +1143,7 @@ export default function Dashboard() {
             >
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-[#64748b] font-semibold">Entry Analysis</div>
-                <div className="text-[13px] text-white font-semibold mt-1">{symbol} ┬╖ {timeframe}</div>
+                <div className="text-[13px] text-white font-semibold mt-1">{symbol} • {timeframe}</div>
                 <div className="text-[11px] text-[#94a3b8] mt-0.5">Entry {manualSetup.entry.toFixed(manualSetup.digits)}</div>
                 <div className="text-[10px] text-[#64748b] mt-1">Drag this header to move</div>
               </div>
@@ -1162,7 +1208,7 @@ export default function Dashboard() {
                 </div>
                 <div className="space-y-1.5">
                   {manualSetup.reason.map((line, i) => (
-                    <p key={i} className="text-[11px] text-[#94a3b8] leading-relaxed">ΓÇó {line}</p>
+                    <p key={i} className="text-[11px] text-[#94a3b8] leading-relaxed">- {line}</p>
                   ))}
                 </div>
 

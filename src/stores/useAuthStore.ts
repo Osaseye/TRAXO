@@ -46,7 +46,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const profile = snapshot.exists() ? (snapshot.data() as Partial<User>) : null
         set({ user: mapFirebaseUser(fu, profile), isAuthenticated: true, idToken: token, isLoading: false })
       } catch (err) {
-        // eslint-disable-next-line no-console
+         
         console.warn('Failed to hydrate Firestore profile', err)
         set({ user: mapFirebaseUser(fu), isAuthenticated: true, idToken: token, isLoading: false })
       }
@@ -115,7 +115,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
           }
         } catch (err) {
           // non-fatal: log and continue — devs can inspect Firestore writes separately
-          // eslint-disable-next-line no-console
+           
           console.warn('Failed to write user profile to Firestore', err)
         }
 
@@ -147,7 +147,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         set({ user: { ...(current ?? {}), ...normalized } as User, isLoading: false })
       } catch (err) {
         set({ isLoading: false })
-        // eslint-disable-next-line no-console
+         
         console.error('Failed to update profile', err)
         throw err
       }
@@ -164,7 +164,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
           const profile = snapshot.exists() ? (snapshot.data() as Partial<User>) : null
           set({ user: mapFirebaseUser(fu, profile), isAuthenticated: true, idToken: token, isLoading: false })
         } catch (err) {
-          // eslint-disable-next-line no-console
+           
           console.warn('Failed to hydrate Firestore profile on sign-in', err)
           set({ user: mapFirebaseUser(fu), isAuthenticated: true, idToken: token, isLoading: false })
         }

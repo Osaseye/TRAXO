@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
 import { getHistoricalSignals, getLiveSignals } from '../lib/api';
 import webSocketService from '../lib/websocket';

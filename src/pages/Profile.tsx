@@ -75,14 +75,17 @@ export default function Profile() {
   })
 
   useEffect(() => {
-    setForm({
-      fullName: authUser?.fullName ?? '',
-      displayName: authUser?.displayName ?? '',
-      email: authUser?.email ?? fallbackEmail,
-      dob: authUser?.dob ?? '',
-      country: authUser?.country ?? '',
-      bio: authUser?.bio ?? '',
-    })
+    const t = setTimeout(() => {
+      setForm({
+        fullName: authUser?.fullName ?? '',
+        displayName: authUser?.displayName ?? '',
+        email: authUser?.email ?? fallbackEmail,
+        dob: authUser?.dob ?? '',
+        country: authUser?.country ?? '',
+        bio: authUser?.bio ?? '',
+      })
+    }, 0)
+    return () => clearTimeout(t)
   }, [authUser, fallbackEmail])
 
   const activeStrategies = useMemo(() => {

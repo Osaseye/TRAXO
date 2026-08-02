@@ -43,6 +43,7 @@ export function calculateSDSL(
  * 50% retracement risks missed fills.  Enter aggressively at the proximal line.
  * Otherwise, use the conservative 50% mitigation level (OTE).
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function getSDEntryPrice(zone: SupplyDemandZone, _atr14: number): number {
   if (zone.departure_speed > 3.0) {
     // Aggressive: proximal line touch only (Refinement 2)

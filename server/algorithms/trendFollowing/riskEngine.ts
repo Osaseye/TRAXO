@@ -114,7 +114,7 @@ export function calculateTPs(
     if (tp1Src === 'rr') tp1Price = entryPrice + 1.5 * R
 
     // TP2: BSL pool, otherwise 3R
-    let tp2Price  = (nextBSL && nextBSL > tp1Price) ? nextBSL : entryPrice + 3.0 * R
+    const tp2Price  = (nextBSL && nextBSL > tp1Price) ? nextBSL : entryPrice + 3.0 * R
     const tp2Src: 'structure' | 'rr' = (nextBSL && nextBSL > tp1Price) ? 'structure' : 'rr'
 
     // 1.618× extension
@@ -128,7 +128,7 @@ export function calculateTPs(
   const tp1Src: 'structure' | 'rr' = lastLLPrice && lastLLPrice < entryPrice ? 'structure' : 'rr'
   if (tp1Src === 'rr') tp1Price = entryPrice - 1.5 * R
 
-  let tp2Price  = (nextSSL && nextSSL < tp1Price) ? nextSSL : entryPrice - 3.0 * R
+  const tp2Price  = (nextSSL && nextSSL < tp1Price) ? nextSSL : entryPrice - 3.0 * R
   const tp2Src: 'structure' | 'rr' = (nextSSL && nextSSL < tp1Price) ? 'structure' : 'rr'
 
   const fib1618 = entryPrice - 1.618 * impulseRange

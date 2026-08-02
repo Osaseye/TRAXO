@@ -1,5 +1,5 @@
 import type { SignalDirection, Timeframe } from '@/types'
-import { resolveWickRejectionSession } from './wickRejectionContext.ts'
+import { resolveWickRejectionSession } from './wickRejectionContext'
 
 export type WickRejectionAssetType = 'STOCKS' | 'CRYPTO' | 'FOREX'
 export type WickRejectionTier = 'prime' | 'standard' | 'aggressive' | 'discard'
