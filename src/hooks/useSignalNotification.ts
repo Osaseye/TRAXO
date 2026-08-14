@@ -90,30 +90,47 @@ function firePushNotification(signal: SignalForNotification) {
 
 export function notifySignal(signal: SignalForNotification): boolean {
   const fingerprint = notificationFingerprint(signal)
-  if (globalSeenIds.has(fingerprint)) return false
+
+  if (globalSeenIds.has(fingerprint)) {
+    console.log('[notifySignal] ⏭ Skipping duplicate:', signal.symbol, signal.timeframe, signal.direction)
+    return false
+  }
 
   const {
     notifToastEnabled, notifSoundEnabled, notifPushEnabled, notifSymbolFilters,
     notifTimeframeFilters, notifStrategyFilters, notifMinConfidencePct
   } = useTradingContextStore.getState()
 
-  const isAllowed = 
-    (notifSymbolFilters.length === 0 || notifSymbolFilters.includes(signal.symbol as any)) &&
-    (notifTimeframeFilters.length === 0 || notifTimeframeFilters.includes(signal.timeframe as any)) &&
-    (notifStrategyFilters.length === 0 || !signal.strategyId || notifStrategyFilters.includes(signal.strategyId)) &&
-    (signal.confidence >= notifMinConfidencePct)
+  console.log('[notifySignal] Filter state:', {
+    notifToastEnabled, notifSoundEnabled, notifPushEnabled,
+    notifSymbolFilters, notifTimeframeFilters, notifStrategyFilters,
+    notifMinConfidencePct,
+    signalConfidence: signal.confidence,
+  })
 
-  if (!isAllowed) return false
+  const cleanSym = (s: string) => String(s || '').replace('/', '').toUpperCase()
+  const cleanTF = (tf: string) => String(tf || '').toLowerCase().replace('min', 'm').replace('day', 'd')
+  const cleanStrat = (s: string) => String(s || '').replace(/-/g, '_').toLowerCase()
 
-  const intervalS = intervalSeconds(signal.timeframe)
-  const nowS = Math.floor(Date.now() / 1000)
-  const signalAgeS = signal.time ? nowS - signal.time : 0
-  if (signal.time && signalAgeS > intervalS * 4) {
-      globalSeenIds.add(fingerprint) // Mark stale signals as seen to prevent re-triggering
-      return false
+  const sigConf = (signal.confidence != null && !isNaN(Number(signal.confidence))) ? Number(signal.confidence) : 50
+  const minConf = Number(notifMinConfidencePct) || 0
+
+  const symPass = !notifSymbolFilters || notifSymbolFilters.length === 0 || notifSymbolFilters.some((f) => cleanSym(f) === cleanSym(signal.symbol))
+  const tfPass = !notifTimeframeFilters || notifTimeframeFilters.length === 0 || notifTimeframeFilters.some((f) => cleanTF(f) === cleanTF(signal.timeframe))
+  const stratPass = !notifStrategyFilters || notifStrategyFilters.length === 0 || !signal.strategyId || notifStrategyFilters.some((f) => cleanStrat(f) === cleanStrat(signal.strategyId))
+  const confPass = sigConf >= minConf
+
+  console.log(`[notifySignal] Filter checks: sym=${symPass}, tf=${tfPass}, strat=${stratPass}, conf=${confPass} (sigConf=${sigConf} >= minConf=${minConf})`)
+
+  if (!symPass || !tfPass || !stratPass || !confPass) {
+    console.log('[notifySignal] ❌ Blocked:', !symPass ? 'SYMBOL' : !tfPass ? 'TIMEFRAME' : !stratPass ? 'STRATEGY' : 'CONFIDENCE')
+    return false
   }
 
   globalSeenIds.add(fingerprint)
+  if (signal.id) globalSeenIds.add(signal.id)
+
+  console.log('[notifySignal] ✅ Adding notification + toast for', signal.direction, signal.symbol, signal.timeframe)
 
   useNotificationStore.getState().addNotifications([{
     ...signal,
@@ -124,8 +141,22 @@ export function notifySignal(signal: SignalForNotification): boolean {
     createdAt: Date.now(),
   }])
 
-  if (notifToastEnabled) useToastStore.getState().addToast(signal)
-  if (notifSoundEnabled) playSignalChime(signal.direction)
+  if (notifToastEnabled ?? true) {
+    console.log('[notifySignal] 🍞 Firing toast for', signal.direction, signal.symbol)
+    useToastStore.getState().addToast({
+      id: signal.id,
+      symbol: signal.symbol,
+      timeframe: signal.timeframe,
+      strategyLabel: signal.strategyLabel || 'Signal',
+      direction: signal.direction,
+      entry: Number(signal.entry) || 0,
+      sl: Number(signal.sl) || 0,
+      tp: Number(signal.tp) || 0,
+      rr: Number(signal.rr) || 0,
+      confidence: Number(signal.confidence) || 0,
+    })
+  }
+  if (notifSoundEnabled ?? true) playSignalChime(signal.direction)
   if (notifPushEnabled) firePushNotification(signal)
 
   return true

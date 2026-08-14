@@ -1,13 +1,19 @@
-import { useEffect } from 'react'
-import { X } from 'lucide-react'
-import { formatPrice } from '@/lib/utils'
+import React, { useEffect } from 'react'
+import { useNavigate } from 'react-router'
+import { X, ArrowUpRight, ArrowDownRight, ExternalLink, Copy, Check } from 'lucide-react'
+import { formatPrice, formatMT4OrderClipboardPayload } from '@/lib/utils'
 import { useToastStore, type SignalToastItem } from '@/stores/useToastStore'
+import { useTradingContextStore, type ChartSymbol, type ChartTimeframe } from '@/stores/useTradingContextStore'
 import { cn } from '@/lib/utils'
 
-const AUTO_DISMISS_MS = 6000
+const AUTO_DISMISS_MS = 7000
 
 export function SignalToast({ toast }: { toast: SignalToastItem }) {
+  const navigate = useNavigate()
   const removeToast = useToastStore((s) => s.removeToast)
+  const setChartSymbol = useTradingContextStore((s) => s.setChartSymbol)
+  const setChartTimeframe = useTradingContextStore((s) => s.setChartTimeframe)
+  const [copied, setCopied] = React.useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => removeToast(toast.id), AUTO_DISMISS_MS)
@@ -15,93 +21,111 @@ export function SignalToast({ toast }: { toast: SignalToastItem }) {
   }, [toast.id, removeToast])
 
   const isBuy = toast.direction === 'BUY'
-  const accentColor = isBuy ? '#22c55e' : '#ef4444'
-  const confidencePct = Math.round(toast.confidence)
+  const confidencePct = Math.round(Number(toast.confidence) || 0)
+  const rrValue = Number(toast.rr) || 0
+
+  const handleCopyOrder = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const payload = formatMT4OrderClipboardPayload({
+      symbol: toast.symbol,
+      direction: toast.direction,
+      entry: toast.entry,
+      sl: toast.sl,
+      tp: toast.tp,
+    })
+    navigator.clipboard.writeText(payload)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleToastClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setChartSymbol(toast.symbol as ChartSymbol)
+    setChartTimeframe(toast.timeframe as ChartTimeframe)
+    navigate(`/dashboard?symbol=${toast.symbol}&timeframe=${toast.timeframe}`)
+    removeToast(toast.id)
+  }
 
   return (
     <div
+      onClick={handleToastClick}
       className={cn(
-        'relative w-[300px] bg-[#0d1117] rounded-xl overflow-hidden shadow-2xl',
-        'animate-in slide-in-from-right-4 duration-200',
+        'group relative w-[320px] bg-[#090d14]/95 border rounded-2xl shadow-[0_16px_36px_rgba(0,0,0,0.6)] backdrop-blur-xl p-3.5 select-none transition-all duration-200 cursor-pointer',
+        'hover:border-white/[0.25] hover:scale-[1.02] active:scale-[0.99]',
+        isBuy ? 'border-emerald-500/30' : 'border-rose-500/30'
       )}
-      style={{ border: `1px solid ${accentColor}33` }}
     >
-      {/* Left accent bar */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-[3px]"
-        style={{ background: accentColor }}
-      />
-
-      <div className="pl-4 pr-3 pt-3 pb-3">
-        {/* Header row */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span
-              className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider"
-              style={{ background: accentColor + '20', color: accentColor }}
-            >
-              {toast.direction}
-            </span>
-            <span className="text-[14px] font-bold text-[#e5e7eb]">{toast.symbol}</span>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.05] text-[#374151] font-medium">
-              {toast.timeframe}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-[#374151]">{toast.strategyLabel}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="text-[#374151] hover:text-[#e5e7eb] transition-colors"
-            >
-              <X size={11} />
-            </button>
-          </div>
-        </div>
-
-        {/* Entry / SL / TP / R:R */}
-        <div className="grid grid-cols-4 gap-1.5 mb-2.5">
-          {[
-            { l: 'Entry', v: formatPrice(toast.entry), c: '#e5e7eb' },
-            { l: 'SL',    v: formatPrice(toast.sl),    c: '#ef4444' },
-            { l: 'TP',    v: formatPrice(toast.tp),    c: '#22c55e' },
-            { l: 'R:R',   v: `${toast.rr.toFixed(1)}x`, c: '#3b82f6' },
-          ].map(({ l, v, c }) => (
-            <div key={l} className="bg-[#0b0f17] rounded-lg px-1.5 py-1.5 text-center">
-              <p className="text-[8px] text-[#374151] uppercase tracking-wider mb-0.5">{l}</p>
-              <p className="text-[10px] font-bold tabular" style={{ color: c }}>{v}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Confidence bar */}
+      {/* Top Header Row */}
+      <div className="flex items-center justify-between gap-2 mb-2.5">
         <div className="flex items-center gap-2">
-          <div className="flex-1 h-[3px] bg-[#1e293b] rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${confidencePct}%`, background: accentColor }}
-            />
-          </div>
-          <span className="text-[10px] font-bold tabular shrink-0" style={{ color: accentColor }}>
-            {confidencePct}%
+          <span
+            className={cn(
+              'h-5 px-2 rounded-md text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 border',
+              isBuy
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+            )}
+          >
+            {isBuy ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+            {toast.direction}
           </span>
+          <span className="text-[13px] font-extrabold text-white tracking-wide">{toast.symbol}</span>
+          <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 rounded bg-white/[0.06] border border-white/[0.06]">
+            {toast.timeframe}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleCopyOrder}
+            className="p-1 rounded-md text-slate-400 hover:text-emerald-400 hover:bg-white/[0.1] transition-colors flex items-center gap-1 text-[10px] font-semibold"
+            title="Copy order parameters"
+          >
+            {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+          </button>
+          <span className="text-[10px] font-semibold text-blue-400 opacity-80 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 ml-1">
+            View <ExternalLink size={10} />
+          </span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              removeToast(toast.id)
+            }}
+            className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/[0.1] transition-colors"
+            title="Dismiss notification"
+          >
+            <X size={13} />
+          </button>
         </div>
       </div>
 
-      {/* Auto-dismiss progress bar */}
-      <div
-        className="h-[2px] bg-[#1e293b]"
-        style={{
-          background: `linear-gradient(to right, ${accentColor}66, transparent)`,
-          animation: `shrink ${AUTO_DISMISS_MS}ms linear forwards`,
-        }}
-      />
+      {/* Main Metrics Grid */}
+      <div className="grid grid-cols-4 gap-1 p-2 rounded-xl bg-[#06090e] border border-white/[0.06] mb-2 text-center">
+        <div className="min-w-0">
+          <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Entry</span>
+          <span className="text-[11px] font-bold text-slate-200 tabular-nums truncate block">{formatPrice(toast.entry, undefined, toast.symbol)}</span>
+        </div>
+        <div className="min-w-0">
+          <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">SL</span>
+          <span className="text-[11px] font-bold text-rose-400 tabular-nums truncate block">{formatPrice(toast.sl, undefined, toast.symbol)}</span>
+        </div>
+        <div className="min-w-0">
+          <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">TP</span>
+          <span className="text-[11px] font-bold text-emerald-400 tabular-nums truncate block">{formatPrice(toast.tp, undefined, toast.symbol)}</span>
+        </div>
+        <div className="min-w-0">
+          <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">R:R</span>
+          <span className="text-[11px] font-bold text-blue-400 tabular-nums truncate block">{rrValue.toFixed(1)}x</span>
+        </div>
+      </div>
 
-      <style>{`
-        @keyframes shrink {
-          from { transform: scaleX(1); transform-origin: left; }
-          to   { transform: scaleX(0); transform-origin: left; }
-        }
-      `}</style>
+      {/* Footer Info */}
+      <div className="flex items-center justify-between text-[10px]">
+        <span className="text-slate-400 font-medium truncate max-w-[170px]">{toast.strategyLabel}</span>
+        <span className="text-slate-300 font-bold tracking-tight">
+          Confidence <span className={cn('ml-0.5', isBuy ? 'text-emerald-400' : 'text-rose-400')}>{confidencePct}%</span>
+        </span>
+      </div>
     </div>
   )
 }

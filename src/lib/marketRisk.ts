@@ -76,7 +76,12 @@ function buildRiskProfile(marketType: MarketType): Pick<MarketRiskContext, 'titl
   }
 }
 
-export function getMarketRiskContext(symbol: string, timeframe: Timeframe, strategyCount = 1): MarketRiskContext {
+export function getMarketRiskContext(
+  symbol: string,
+  timeframe: Timeframe,
+  strategyCount = 1,
+  newsMinutesAway?: number | null
+): MarketRiskContext {
   const marketType = getMarketTypeForSymbol(symbol)
   const profile = buildRiskProfile(marketType)
   const timeframeFactor = getTimeframeFactor(timeframe)
@@ -93,7 +98,11 @@ export function getMarketRiskContext(symbol: string, timeframe: Timeframe, strat
       ? 8
       : 6
 
-  const confidencePenalty = Math.round(basePenalty * timeframeFactor * strategyFactor)
+  let confidencePenalty = Math.round(basePenalty * timeframeFactor * strategyFactor)
+
+  if (newsMinutesAway === undefined || newsMinutesAway === null || newsMinutesAway > 30) {
+    confidencePenalty = 0
+  }
   const riskLevel: MarketRiskLevel = confidencePenalty >= 10 ? 'High' : confidencePenalty >= 6 ? 'Medium' : 'Low'
 
   return {

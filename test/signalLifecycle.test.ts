@@ -1,4 +1,4 @@
-import { annotateSignalLifecycle, type SignalLifecycleLike } from '../src/lib/signalLifecycle.ts'
+import { annotateSignalLifecycle, type SignalLifecycleLike } from '../src/lib/signalLifecycle'
 
 function assertEqual(actual: unknown, expected: unknown, message = '') {
   if (actual !== expected) {

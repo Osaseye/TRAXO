@@ -126,9 +126,23 @@ export function isBaseCandle(candle: SDCandle, atr14: number): boolean {
   return body < 0.40 * atr14
 }
 
-export function isDepartureCandle(candle: SDCandle, atr14: number): boolean {
-  const body = Math.abs(candle.close - candle.open)
-  return body > 2.0 * atr14
+export function isDepartureCandle(candles: SDCandle[], index: number, atr14: number): boolean {
+  if (index >= candles.length) return false
+  const c1 = candles[index]
+  const body1 = Math.abs(c1.close - c1.open)
+  if (body1 > 1.4 * atr14) return true
+
+  if (index + 1 < candles.length) {
+    const c2 = candles[index + 1]
+    const body2 = Math.abs(c2.close - c2.open)
+    const c1Bull = c1.close > c1.open
+    const c2Bull = c2.close > c2.open
+    
+    if (c1Bull === c2Bull && (body1 + body2) > 2.0 * atr14) {
+      return true
+    }
+  }
+  return false
 }
 
 // ─── Pattern Classifier ──────────────────────────────────────────────────────
@@ -160,7 +174,7 @@ export function classifyPattern(
   if (j >= candles.length)      return null
 
   const departure = candles[j]
-  if (!isDepartureCandle(departure, atr14)) return null
+  if (!isDepartureCandle(candles, j, atr14)) return null
 
   const priorBullish = countBullish(priorCandles) >= 2
   const priorBearish = countBearish(priorCandles) >= 2

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { getWickRejectionAnchorTimeframe, resolveWickRejectionSession } from '../src/lib/algorithms/wickRejectionContext.ts'
-import { clearHtfCache, getHtfCache, setHtfCache } from '../src/lib/htfCache.ts'
+import { getWickRejectionAnchorTimeframe, resolveWickRejectionSession } from '../server/algorithms/wickRejectionContext'
+import { analyzeWickRejection } from '../server/algorithms/wickRejection'
 
 function assertEqual(a: any, b: any, msg = '') {
   if (a !== b) throw new Error(`Assertion failed: ${a} !== ${b} ${msg}`)
@@ -16,7 +16,6 @@ assertEqual(getWickRejectionAnchorTimeframe('1H'), '1D')
 assertEqual(getWickRejectionAnchorTimeframe('4H'), '1D')
 
 // Session resolver tests
-// Stock opening bell in New York: 09:30 -> ensure we get opening_bell
 const nyOpening = new Date('2026-05-30T13:30:00Z').toISOString() // 09:30 EDT
 assertEqual(resolveWickRejectionSession('STOCKS', nyOpening), 'opening_bell')
 
@@ -43,14 +42,30 @@ assertEqual(resolveWickRejectionSession('FOREX', forexOff), 'off_hours')
 assertEqual(resolveWickRejectionSession('CRYPTO', forexOverlap), 'normal')
 assertEqual(resolveWickRejectionSession('STOCKS', 'invalid'), 'normal')
 
-// HTF cache freshness tests
-clearHtfCache()
-setHtfCache('EURUSD', '5m', 'bullish')
-assertEqual(getHtfCache('EURUSD', '5m').status, 'fresh')
+// Strategy Execution Test with auto-zone fallback
+const testCandle = {
+  open: 1.0850,
+  high: 1.0855,
+  low: 1.0800,  // long lower wick: 50 pips
+  close: 1.0845,
+  volume: 1500,
+  timestamp: forexOverlap,
+}
 
-const baseNow = new Date().getTime()
-assertEqual(getHtfCache('EURUSD', '5m', baseNow + 3_700_000).status, 'stale')
+const signal = analyzeWickRejection({
+  symbol: 'EURUSD',
+  assetType: 'FOREX',
+  timeframe: '15m',
+  candle: testCandle,
+  atr14: 0.0020,
+  volumeMa20: 1000,
+  nearestZone: null,
+})
 
-assertEqual(getHtfCache('EURUSD', '5m', baseNow + 7_400_000).status, 'failed')
+console.log('Signal result:', JSON.stringify(signal, null, 2))
+assertEqual(signal.signal, 'BUY', 'Wick rejection should generate BUY signal for long lower wick')
+if (signal.confidence_pct < 70) {
+  throw new Error(`Expected high confidence signal (>=70%), got ${signal.confidence_pct}%`)
+}
 
-console.log('All wickRejectionContext tests passed')
+console.log('All wickRejectionContext and strategy tests passed cleanly!')

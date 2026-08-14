@@ -1,5 +1,6 @@
-import type { Timeframe } from '@/types'
-import type { WickRejectionAssetType, WickRejectionSession } from './wickRejection'
+export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1H' | '4H' | '1D' | string
+export type WickRejectionAssetType = 'STOCKS' | 'CRYPTO' | 'FOREX'
+export type WickRejectionSession = 'normal' | 'london_ny_overlap' | 'off_hours' | 'opening_bell'
 
 // Cached formatter for high-frequency calls
 const NY_FORMATTER = new Intl.DateTimeFormat('en-US', {

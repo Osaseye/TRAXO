@@ -18,6 +18,8 @@ const signalsRouter = require('./routes/signals');
 const candlesRouter = require('./routes/candles');
 const scannerRouter = require('./routes/scanner');
 const globalSignalsRouter = require('./routes/globalSignals');
+const tradingContextRouter = require('./routes/tradingContext');
+const journalRouter = require('./routes/journal');
 
 // --- Legacy Auth/Profile Route Imports (to be refactored later if needed) ---
 const { setupAuthRoutes } = require('./routes/auth'); 
@@ -39,6 +41,8 @@ app.use('/api/signals', signalsRouter);
 app.use('/api/candles', candlesRouter);
 app.use('/api/scanner', scannerRouter);
 app.use('/api/global-signals', globalSignalsRouter);
+app.use('/api/trading-context', tradingContextRouter);
+app.use('/api/journal', journalRouter);
 
 // Setup legacy authentication and profile routes
 setupAuthRoutes(app);
@@ -50,6 +54,18 @@ const server = http.createServer(app);
 initWebSocketServer(server);
 
 const port = process.env.PORT || 8080;
+
+// Handle port listening errors (e.g. port already in use)
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`\n[server] Error: Port ${port} is already in use.`);
+    console.error(`[server] Another process is running on port ${port}. Please stop it or set PORT=<another_port> in .env.\n`);
+    process.exit(1);
+  } else {
+    console.error('[server] Server error:', error);
+  }
+});
+
 server.listen(port, () => {
   console.log(`Server listening on http://localhost:${port}`);
   
@@ -57,3 +73,25 @@ server.listen(port, () => {
   startCron();
   // startNewsPoller(); // Assuming you have a news poller to start
 });
+
+// Graceful shutdown handling for nodemon restarts and SIGTERM/SIGINT
+const gracefulShutdown = (signal) => {
+  console.log(`[server] Received ${signal}, closing server...`);
+  server.close(() => {
+    console.log('[server] Server closed.');
+    if (signal === 'SIGUSR2') {
+      process.kill(process.pid, 'SIGUSR2');
+    } else {
+      process.exit(0);
+    }
+  });
+  
+  setTimeout(() => {
+    process.exit(1);
+  }, 2000);
+};
+
+process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.once('SIGINT', () => gracefulShutdown('SIGINT'));
+process.once('SIGUSR2', () => gracefulShutdown('SIGUSR2'));
+

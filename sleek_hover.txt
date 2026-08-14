@@ -1,0 +1,69 @@
+        {hoveredSignal && !lockedSignal && !loading && (
+          <div
+            className="absolute z-20 w-[340px] max-w-[calc(100vw-0.9rem)] bg-[#0d1117] border border-white/[0.1] rounded-2xl shadow-2xl p-4 pointer-events-none"
+            style={{
+              left: Math.max(6, Math.min(mouse.x + 16, window.innerWidth - 356)),
+              top: Math.max(66, Math.min(mouse.y - 10, window.innerHeight - 320)),
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide',
+                    hoveredSignal.direction === 'BUY'
+                      ? 'bg-emerald-500/10 text-emerald-500'
+                      : 'bg-rose-500/10 text-rose-500'
+                  )}
+                >
+                  {hoveredSignal.direction}
+                </span>
+                <span className="text-[13px] font-bold text-white">{symbol}</span>
+                <span className="text-[10px] font-medium text-slate-300 px-1.5 py-0.5 rounded bg-white/[0.05]">
+                  {hoveredSignal.strategyLabel}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {[
+                ['ENTRY', hoveredSignal.entry, 'text-white'],
+                ['SL', hoveredSignal.sl, 'text-rose-500'],
+                ['TP', hoveredSignal.tp, 'text-emerald-500'],
+                ['R:R', hoveredSignal.rr, 'text-blue-500'],
+              ].map(([k, v, color]) => (
+                <div key={String(k)}>
+                  <span className="block text-[9px] font-semibold text-slate-500 uppercase mb-1">{k}</span>
+                  <span className={cn('text-[11px] font-bold', color)}>
+                    {typeof v === 'number' && String(k) !== 'R:R' ? formatPrice(v) : typeof v === 'number' ? v.toFixed(1) + 'x' : String(v)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {hoveredMoneyContext && (
+              <div className="flex items-center justify-between text-[11px] font-medium mb-4 pb-4 border-b border-white/[0.05]">
+                <div className="flex gap-4">
+                  <span className="text-slate-400">Position: <span className="text-white">{fmtUSD(hoveredMoneyContext.suggestedPosition)}</span></span>
+                  <span className="text-slate-400">Risk: <span className="text-rose-500">{fmtUSD(hoveredMoneyContext.maxLossAtSL)}</span></span>
+                </div>
+                <span className="text-[10px] font-bold text-blue-400 px-1.5 py-0.5 bg-blue-500/10 rounded">
+                  {hoveredSignal.confidence}% Conf.
+                </span>
+              </div>
+            )}
+
+            <div>
+              <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                Pattern Analysis
+              </div>
+              <div className="space-y-1">
+                {hoveredSignal.reason.map((r, i) => (
+                  <p key={i} className="text-[11px] text-slate-300">
+                    • {r}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}

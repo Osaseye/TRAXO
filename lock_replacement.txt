@@ -1,0 +1,119 @@
+        {lockedSignal && !loading && (
+          <div className="absolute z-30 left-3 top-16 sm:left-4 sm:top-20 w-[320px] sm:w-[360px] max-w-[calc(100vw-0.9rem)] rounded-2xl bg-[#090d14]/95 border border-white/[0.25] shadow-[0_16px_36px_rgba(0,0,0,0.6)] backdrop-blur-xl p-3.5 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Locked Suggestion</div>
+                <div className="text-[14px] font-extrabold text-white mt-1 tracking-wide">{lockedSignal.direction} • {symbol}</div>
+                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                  {lockedSignal.confidence >= 85 && (
+                    <span className="text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-md border border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold uppercase tracking-wider shrink-0 shadow-[0_0_10px_rgba(59,130,246,0.15)]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                      High Quality
+                    </span>
+                  )}
+                  <span className="text-[10px] px-2 py-0.5 rounded-md border border-white/[0.14] bg-[#0b0f17] text-[#cbd5e1] truncate font-semibold">
+                    {lockedSignal.strategyLabel}
+                  </span>
+                  <span
+                    className={cn("text-[10px] px-2 py-0.5 rounded-md border shrink-0 font-bold", 
+                      lockedSignal.risk === 'Low' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 
+                      lockedSignal.risk === 'Medium' ? 'text-amber-400 border-amber-500/30 bg-amber-500/10' : 
+                      'text-rose-400 border-rose-500/30 bg-rose-500/10'
+                    )}
+                  >
+                    {lockedSignal.risk} Risk
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setLockedSignalId(null)
+                  setHoveredSignalId(null)
+                }}
+                className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/[0.1] transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-4 gap-1.5 p-2 rounded-xl bg-[#06090e] border border-white/[0.06] text-center">
+              {[
+                ['Entry', lockedSignal.entry, '#e5e7eb'],
+                ['SL', lockedSignal.sl, '#ef4444'],
+                ['TP', lockedSignal.tp, '#22c55e'],
+                ['R:R', lockedSignal.rr, '#3b82f6'],
+              ].map(([k, v, color]) => (
+                <div key={String(k)}>
+                  <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">{k}</span>
+                  <span className="text-[11px] font-bold tabular-nums" style={{ color: String(color) }}>
+                    {typeof v === 'number' && String(k) !== 'R:R' ? formatPrice(v) : typeof v === 'number' ? v.toFixed(1) + 'x' : String(v)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[11px] text-slate-400 font-semibold">Confidence</span>
+              <span className="text-[11px] font-bold text-blue-400">{lockedSignal.confidence}%</span>
+            </div>
+
+            {lockedMoneyContext && (
+              <div className="rounded-xl border border-white/[0.06] bg-[#06090e] p-3 space-y-2">
+                <div className="text-[9px] uppercase tracking-widest text-slate-500 font-bold mb-1">Money Context</div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">Suggested trade amount</span>
+                  <span className="text-white font-bold">{fmtUSD(lockedMoneyContext.suggestedPosition)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">Loss at SL</span>
+                  <span className="text-rose-400 font-bold">{fmtUSD(lockedMoneyContext.maxLossAtSL)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">Remaining daily loss budget</span>
+                  <span className="text-white font-bold">{fmtUSD(lockedMoneyContext.remainingDailyLoss)}</span>
+                </div>
+                <div className="text-[10px] text-slate-500 pt-1">
+                  Capital risk: <span className="text-slate-300 font-bold">{lockedMoneyContext.capitalRisk}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1.5 pt-2 border-t border-white/[0.08]">
+              <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                Why we flagged this for you, {displayName.split(' ')[0]}
+              </div>
+              {lockedSignal.reason.map((line, i) => (
+                <p key={i} className="text-[11px] text-slate-400 leading-relaxed">• {line}</p>
+              ))}
+            </div>
+
+            <div className="rounded-xl border border-white/[0.06] bg-[#06090e] p-3 space-y-2.5 mt-2">
+              <p className="text-[11px] font-bold text-slate-300">Did you take this trade?</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => saveLockedFeedback(true)}
+                  className="flex-1 h-8 px-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-[11px] font-bold text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                >
+                  Yes, took it
+                </button>
+                <button
+                  onClick={() => saveLockedFeedback(false)}
+                  className="flex-1 h-8 px-3 rounded-lg border border-slate-500/30 bg-slate-500/10 text-[11px] font-bold text-slate-400 hover:bg-slate-500/20 hover:text-white transition-colors"
+                >
+                  No, skipped
+                </button>
+              </div>
+
+              {lockedJournal?.taken && lockedSuggestionKey && (
+                <div className="pt-2 mt-2 border-t border-white/[0.06] space-y-2">
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Journal Outcome</p>
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'win')} className={cn("flex-1 h-7 rounded-md border text-[10px] font-bold transition-colors", lockedJournal.outcome === 'win' ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400' : 'border-emerald-500/30 text-emerald-400/50 hover:bg-emerald-500/10')}>Win</button>
+                    <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'loss')} className={cn("flex-1 h-7 rounded-md border text-[10px] font-bold transition-colors", lockedJournal.outcome === 'loss' ? 'border-rose-500 bg-rose-500/20 text-rose-400' : 'border-rose-500/30 text-rose-400/50 hover:bg-rose-500/10')}>Loss</button>
+                    <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'breakeven')} className={cn("flex-1 h-7 rounded-md border text-[10px] font-bold transition-colors", lockedJournal.outcome === 'breakeven' ? 'border-slate-400 bg-slate-500/20 text-slate-300' : 'border-slate-500/30 text-slate-400/50 hover:bg-slate-500/10')}>BE</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}

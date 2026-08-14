@@ -116,29 +116,44 @@ export function labelSwingLows(swingLows: TFSwingPoint[]): TFSwingPoint[] {
 export function determineTrend(
   swingHighs: TFSwingPoint[],
   swingLows:  TFSwingPoint[],
+  emaBias:    TrendDirection = 'RANGING'
 ): TrendDirection {
-  if (swingHighs.length < 3 || swingLows.length < 3) return 'RANGING'
+  if (swingHighs.length < 2 || swingLows.length < 2) return emaBias
 
-  const h = swingHighs.slice(-3)  // [oldest, middle, newest]
-  const l = swingLows.slice(-3)
+  if (swingHighs.length >= 3 && swingLows.length >= 3) {
+    const h = swingHighs.slice(-3)  // [oldest, middle, newest]
+    const l = swingLows.slice(-3)
 
-  // ── Macro anchoring (oldest → newest) ──────────────────────────────────────
-  const macroHH = h[2].price > h[0].price
-  const macroHL = l[2].price > l[0].price
-  // ── Secondary consecutive check (middle → newest) ─────────────────────────
-  const confirmHH = h[2].price > h[1].price
-  const confirmHL = l[2].price > l[1].price
+    // ── Macro anchoring (oldest → newest) ──────────────────────────────────────
+    const macroHH = h[2].price > h[0].price
+    const macroHL = l[2].price > l[0].price
+    // ── Secondary consecutive check (middle → newest) ─────────────────────────
+    const confirmHH = h[2].price > h[1].price
+    const confirmHL = l[2].price > l[1].price
 
-  if (macroHH && macroHL && (confirmHH || confirmHL)) return 'BULLISH'
+    if (macroHH && macroHL && (confirmHH || confirmHL)) return 'BULLISH'
 
-  const macroLH = h[2].price < h[0].price
-  const macroLL = l[2].price < l[0].price
-  const confirmLH = h[2].price < h[1].price
-  const confirmLL = l[2].price < l[1].price
+    const macroLH = h[2].price < h[0].price
+    const macroLL = l[2].price < l[0].price
+    const confirmLH = h[2].price < h[1].price
+    const confirmLL = l[2].price < l[1].price
 
-  if (macroLH && macroLL && (confirmLH || confirmLL)) return 'BEARISH'
+    if (macroLH && macroLL && (confirmLH || confirmLL)) return 'BEARISH'
+  }
 
-  return 'RANGING'
+  // Fallback to 2-swing logic
+  const h2 = swingHighs.slice(-2)
+  const l2 = swingLows.slice(-2)
+  
+  const confirmHH2 = h2[1].price > h2[0].price
+  const confirmHL2 = l2[1].price > l2[0].price
+  if (confirmHH2 && confirmHL2) return 'BULLISH'
+
+  const confirmLH2 = h2[1].price < h2[0].price
+  const confirmLL2 = l2[1].price < l2[0].price
+  if (confirmLH2 && confirmLL2) return 'BEARISH'
+
+  return emaBias
 }
 
 // ─────────────────────────────────────────────

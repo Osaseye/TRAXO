@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand'
+import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'pro'
@@ -100,19 +100,21 @@ export const useOnboardingStore = create<OnboardingState>()(
         try {
           const { doc, setDoc, serverTimestamp } = await import('firebase/firestore')
           const { db } = await import('@/lib/firebase')
+          const { cleanUndefined } = await import('@/lib/utils')
+          const rawPrefs = {
+            experienceLevel: state.experienceLevel,
+            instruments: state.instruments,
+            plan: state.plan,
+            selectedStrategyId: state.selectedStrategyId,
+            selectedStrategyIds: state.selectedStrategyIds,
+            riskPerTrade: state.riskPerTrade,
+            maxDailyLoss: state.maxDailyLoss,
+            maxOpenTrades: state.maxOpenTrades,
+          }
           await setDoc(
             doc(db, 'users', uid),
             {
-              preferences: {
-                experienceLevel: state.experienceLevel,
-                instruments: state.instruments,
-                plan: state.plan,
-                selectedStrategyId: state.selectedStrategyId,
-                selectedStrategyIds: state.selectedStrategyIds,
-                riskPerTrade: state.riskPerTrade,
-                maxDailyLoss: state.maxDailyLoss,
-                maxOpenTrades: state.maxOpenTrades,
-              },
+              preferences: cleanUndefined(rawPrefs),
               updatedAt: serverTimestamp(),
             },
             { merge: true },

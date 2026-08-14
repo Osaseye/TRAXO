@@ -1,4 +1,4 @@
-import type { WickRejectionSignal } from './wickRejection.ts'
+import type { WickRejectionSignal } from './wickRejection'
 import type { Signal, Timeframe } from '@/types'
 
 export function mapWickToSignal(w: WickRejectionSignal, userId: string, timeframe: Timeframe): Signal | null {

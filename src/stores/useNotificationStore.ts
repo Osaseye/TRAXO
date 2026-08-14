@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { UTCTimestamp } from 'lightweight-charts'
 import type { AnalysisSignal } from '@/lib/signalDetection'
+import { cleanUndefined } from '@/lib/utils'
 
 export interface StoredNotification extends Omit<Pick<AnalysisSignal, 'id' | 'time' | 'strategyId' | 'strategyLabel' | 'direction' | 'entry' | 'sl' | 'tp' | 'rr' | 'confidence' | 'reason'>, 'time'> {
   symbol: string
@@ -135,7 +136,7 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
       for (let i = 0; i < notifications.length; i += 500) {
         const batch = writeBatch(db)
         for (const notification of notifications.slice(i, i + 500)) {
-          batch.set(doc(db, 'users', uid, 'notifications', notification.id), notification)
+          batch.set(doc(db, 'users', uid, 'notifications', notification.id), cleanUndefined(notification))
         }
         await batch.commit()
       }

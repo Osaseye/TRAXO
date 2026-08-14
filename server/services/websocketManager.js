@@ -58,6 +58,15 @@ function broadcast(message) {
   const events = EVENT_MAP[message.type];
 
   if (events) {
+    const clients = io.engine?.clientsCount ?? 0;
+    // Only log signal-related events, not candle ticks (too noisy)
+    if (message.type === 'NEW_SIGNAL') {
+      const p = message.payload;
+      console.log(`📡 Signal sent to ${clients} client(s) → ${p?.direction} ${p?.symbol} ${p?.timeframe} | ${p?.strategyLabel || 'Strategy'} | ${p?.confidence ?? 0}%`);
+    } else if (message.type === 'SIGNAL_UPDATED') {
+      const p = message.payload;
+      console.log(`📊 Signal update sent → ${p?.symbol} ${p?.timeframe} resolved as ${p?.status}`);
+    }
     events.forEach((event) => io.emit(event, message.payload));
   } else {
     // Fallback: emit the raw message under its type as the event name

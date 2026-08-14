@@ -10,24 +10,25 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Replace the placeholder below with the admin user's UID (from the seed script output)
-    function isAdminCollection(userId) {
-      return userId == 'JkLqTXPjjFZA9gRrjaP1KmQl7rN2';
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    // Top-level signals collection (written by background scanner server admin SDK or admin accounts)
+    match /signals/{signalId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     match /users/{userId} {
       allow create: if isOwner(userId);
-      allow read: if isOwner(userId) || (request.auth != null && request.auth.token.admin == true);
-      allow update: if isOwner(userId) || (request.auth != null && request.auth.token.admin == true);
-      allow delete: if isOwner(userId) || (request.auth != null && request.auth.token.admin == true);
+      allow read: if isOwner(userId) || isAdmin();
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
 
       match /signals/{signalId} {
-        // Signals may be written by the owning user, by an authenticated admin, or
-        // by unauthenticated clients only when targeting the seeded admin collection
-        // (replace the placeholder above with the admin UID). This allows the
-        // background scanner to save into the admin's collection when not signed in.
-        allow read: if isOwner(userId) || (request.auth != null && request.auth.token.admin == true) || isAdminCollection(userId);
-        allow create, update, delete: if isOwner(userId) || (request.auth != null && request.auth.token.admin == true) || isAdminCollection(userId);
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isOwner(userId) || isAdmin();
       }
 
       match /notifications/{notificationId} {

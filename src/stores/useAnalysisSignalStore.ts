@@ -18,6 +18,18 @@ interface AnalysisSignalState {
   clearFirestoreSignals: (uid?: string | null) => Promise<void>
 }
 
+/**
+ * Rejects signals with zero (or near-zero) risk distance.
+ * This guards against the crypto decimal-precision bug where
+ * entry_price and sl_price were both rounded to the same 2-decimal
+ * value (e.g. 0.07) making risk = 0 and R:R = 0.
+ */
+function isSane(signal: StoredSignal) {
+  const riskDist = Math.abs(signal.entry - signal.sl)
+  // Allow tiny dust only for JPY pairs (3-digit) — anything below 0.000001 is corrupt
+  return riskDist > 0.000001
+}
+
 function signalFingerprint(signal: StoredSignal) {
   return [
     signal.strategyId,
@@ -31,7 +43,7 @@ function signalFingerprint(signal: StoredSignal) {
 function dedupeSignals(signals: StoredSignal[]) {
   const byFingerprint = new Map<string, StoredSignal>()
 
-  for (const signal of signals) {
+  for (const signal of signals.filter(isSane)) {
     const key = signalFingerprint(signal)
     const existing = byFingerprint.get(key)
 
@@ -82,7 +94,7 @@ export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
       const q = query(colRef, orderBy('time', 'desc'), limit(500))
       const snap = await getDocs(q)
       if (!snap.empty) {
-        const signals: StoredSignal[] = snap.docs.map((d) => d.data() as StoredSignal)
+        const signals: StoredSignal[] = snap.docs.map((d) => d.data() as StoredSignal).filter(isSane)
         set({ signals: dedupeSignals(signals).slice(0, 500) })
       }
     } catch {

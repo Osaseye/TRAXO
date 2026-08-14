@@ -6,10 +6,24 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatPrice(value: number, decimals = 5): string {
+export function formatPrice(value: number, decimals?: number, symbol?: string): string {
+  let targetDecimals = decimals
+  if (targetDecimals === undefined) {
+    if (symbol) {
+      if (symbol.includes('JPY')) targetDecimals = 3
+      else if (['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT'].includes(symbol)) targetDecimals = 2
+      else if (['XAUUSD', 'XAGUSD', 'SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'WTI', 'BRENT', 'NATGAS'].includes(symbol)) targetDecimals = 2
+      else if (['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'].includes(symbol)) targetDecimals = 2
+      else targetDecimals = 5
+    } else {
+      const absVal = Math.abs(value)
+      targetDecimals = absVal >= 100 ? 2 : absVal >= 10 ? 2 : 5
+    }
+  }
+
   return value.toLocaleString('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    minimumFractionDigits: targetDecimals,
+    maximumFractionDigits: targetDecimals,
   })
 }
 
@@ -20,6 +34,49 @@ export function formatPercent(value: number, decimals = 2): string {
 
 export function formatConfidence(value: number): string {
   return `${Math.round(value * 100)}%`
+}
+
+export function calculateLots(symbol: string, entry: number, sl: number, riskAmount: number): number {
+  const riskDist = Math.abs(entry - sl)
+  if (riskDist <= 0 || riskAmount <= 0) return 0.01
+
+  let lotSize = 0.01
+  if (symbol.includes('JPY')) {
+    // 1 standard lot JPY = ~1000 JPY per pip ≈ $6.50 per pip
+    lotSize = riskAmount / (riskDist * 650)
+  } else if (['XAUUSD', 'XAGUSD'].includes(symbol)) {
+    // Gold: 1 lot = 100 oz ($10 per $1.00 move per 0.1 lot)
+    lotSize = riskAmount / (riskDist * 100)
+  } else if (['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'BNBUSDT'].includes(symbol)) {
+    // Crypto: 1 lot = 1 coin
+    lotSize = riskAmount / riskDist
+  } else if (['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'].includes(symbol)) {
+    // Stocks: 1 lot = 1 share
+    lotSize = riskAmount / riskDist
+  } else {
+    // Standard Forex (EURUSD, etc): 1 lot = 100,000 units ($10 per pip)
+    lotSize = riskAmount / (riskDist * 100000)
+  }
+
+  return Math.max(0.01, Number(lotSize.toFixed(2)))
+}
+
+export function formatMT4OrderClipboardPayload(signal: {
+  symbol: string
+  direction: string
+  entry: number
+  sl: number
+  tp: number
+  riskAmount?: number
+}): string {
+  const symbol = signal.symbol
+  const entryFmt = formatPrice(signal.entry, undefined, symbol)
+  const slFmt = formatPrice(signal.sl, undefined, symbol)
+  const tpFmt = formatPrice(signal.tp, undefined, symbol)
+  const riskAmt = signal.riskAmount ?? 25
+  const lots = calculateLots(symbol, signal.entry, signal.sl, riskAmt)
+
+  return `${signal.direction} ${symbol} @ ${entryFmt} | SL: ${slFmt} | TP: ${tpFmt} | Risk: $${riskAmt.toFixed(2)} (${lots} Lots)`
 }
 
 export function timeAgo(date: string | Date): string {
@@ -71,3 +128,22 @@ export function getFirebaseErrorMessage(error: any): string {
 
   return 'An unexpected error occurred. Please try again.'
 }
+
+export function cleanUndefined<T extends Record<string, any>>(obj: T): T {
+  if (obj === null || typeof obj !== 'object') return obj
+  const cleaned: Record<string, any> = Array.isArray(obj) ? [] : {}
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      cleaned[key] =
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        !(value instanceof Date) &&
+        typeof (value as any).toMillis !== 'function'
+          ? cleanUndefined(value)
+          : value
+    }
+  }
+  return cleaned as T
+}
+

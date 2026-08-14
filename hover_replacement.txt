@@ -1,0 +1,104 @@
+        {hoveredSignal && !lockedSignal && !loading && (
+          <div
+            className={cn(
+              'absolute z-20 w-[320px] max-w-[calc(100vw-0.9rem)] bg-[#090d14]/95 border rounded-2xl shadow-[0_16px_36px_rgba(0,0,0,0.6)] backdrop-blur-xl p-3.5 pointer-events-none transition-all duration-200',
+              hoveredSignal.direction === 'BUY' ? 'border-emerald-500/30' : 'border-rose-500/30'
+            )}
+            style={{
+              left: Math.max(6, Math.min(mouse.x + 16, window.innerWidth - 336)),
+              top: Math.max(66, Math.min(mouse.y - 10, window.innerHeight - 320)),
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={cn(
+                    'h-5 px-2 rounded-md text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 border shrink-0',
+                    hoveredSignal.direction === 'BUY'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                  )}
+                >
+                  {hoveredSignal.direction === 'BUY' ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                  {hoveredSignal.direction}
+                </span>
+                <span className="text-[13px] font-extrabold text-white tracking-wide shrink-0">{symbol}</span>
+                <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 rounded bg-white/[0.06] border border-white/[0.06] shrink-0">
+                  {timeframe}
+                </span>
+              </div>
+              <span className={cn('text-[12px] font-bold shrink-0', hoveredSignal.direction === 'BUY' ? 'text-emerald-400' : 'text-rose-400')}>
+                {hoveredSignal.confidence}%
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
+              {hoveredSignal.status !== 'live' && (
+                <span 
+                  className={cn("text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-md border font-bold uppercase tracking-wider shrink-0", 
+                    hoveredSignal.status === 'WIN' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 
+                    hoveredSignal.status === 'LOSS' ? 'text-rose-400 border-rose-500/30 bg-rose-500/10' : 
+                    'text-slate-400 border-slate-500/30 bg-slate-500/10'
+                  )}
+                >
+                  OUTCOME: {hoveredSignal.status === 'WIN' ? 'HIT TP' : hoveredSignal.status === 'LOSS' ? 'HIT SL' : 'EXPIRED'}
+                </span>
+              )}
+
+              {hoveredSignal.confidence >= 85 && (
+                <span className="text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-md border border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold uppercase tracking-wider shrink-0 shadow-[0_0_10px_rgba(59,130,246,0.15)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                  High Quality
+                </span>
+              )}
+              <span className="text-[10px] px-2 py-0.5 rounded-md border border-white/[0.14] bg-[#0b0f17] text-[#cbd5e1] truncate">
+                {hoveredSignal.strategyLabel}
+              </span>
+              <span
+                className={cn("text-[10px] px-2 py-0.5 rounded-md border shrink-0 font-bold", 
+                  hoveredSignal.risk === 'Low' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 
+                  hoveredSignal.risk === 'Medium' ? 'text-amber-400 border-amber-500/30 bg-amber-500/10' : 
+                  'text-rose-400 border-rose-500/30 bg-rose-500/10'
+                )}
+              >
+                {hoveredSignal.risk} Risk
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-1.5 p-2 rounded-xl bg-[#06090e] border border-white/[0.06] mb-2.5 text-center">
+              {[
+                ['Entry', hoveredSignal.entry, '#e5e7eb'],
+                ['SL', hoveredSignal.sl, '#ef4444'],
+                ['TP', hoveredSignal.tp, '#22c55e'],
+                ['R:R', hoveredSignal.rr, '#3b82f6'],
+              ].map(([k, v, color]) => (
+                <div key={String(k)}>
+                  <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">{k}</span>
+                  <span className="text-[11px] font-bold tabular-nums" style={{ color: String(color) }}>
+                    {typeof v === 'number' && String(k) !== 'R:R' ? formatPrice(v) : typeof v === 'number' ? v.toFixed(1) + 'x' : String(v)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {hoveredMoneyContext && (
+              <div className="flex items-center justify-between text-[10px] text-slate-400 mb-2.5">
+                <span>Suggested amount</span>
+                <span className="text-white font-bold">{fmtUSD(hoveredMoneyContext.suggestedPosition)}</span>
+              </div>
+            )}
+
+            <div>
+              <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                Why we flagged this for you, {displayName.split(' ')[0]}
+              </div>
+              <div className="space-y-1">
+                {hoveredSignal.reason.map((r, i) => (
+                  <p key={i} className="text-[11px] text-slate-400 leading-relaxed">
+                    • {r}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}

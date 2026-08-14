@@ -5,67 +5,73 @@ const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 class WebSocketService {
   socket;
-  listeners = new Map();
+  listeners = new Map<string, Set<(...args: any[]) => void>>();
+  /** Track which events have a native socket.on handler registered */
+  private registeredEvents = new Set<string>();
 
   constructor() {
     this.socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
     });
 
     this.socket.on('connect', () => {
-      console.log('Connected to WebSocket server');
+      console.log('[ws] Connected to server, id:', this.socket.id);
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('Disconnected from WebSocket server');
+    this.socket.on('disconnect', (reason) => {
+      console.log('[ws] Disconnected:', reason);
     });
 
-    this.socket.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
-
-    this.socket.onAny((eventName, ...args) => {
-      if (this.listeners.has(eventName)) {
-        const callbacks = new Set(this.listeners.get(eventName));
-        callbacks.forEach(callback => {
-          if (typeof callback === 'function') {
-            callback(...args);
-          }
-        });
-      }
+    this.socket.on('connect_error', (err) => {
+      console.warn('[ws] Connection error:', err.message);
     });
   }
 
-  subscribe(eventName: string, callback: any) {
+  /**
+   * Subscribe to a named socket.io event.
+   * Uses direct socket.on() — no onAny indirection.
+   */
+  subscribe(eventName: string, callback: (...args: any[]) => void) {
     if (typeof callback !== 'function') {
-      console.error(`[WebSocketService] Attempted to subscribe to event "${eventName}" with a non-function callback.`);
-      return () => {}; // Return a no-op for safety
+      console.error(`[ws] subscribe("${eventName}"): callback is not a function`);
+      return () => {};
     }
 
+    // Lazily create the listener set and attach ONE native socket.on per event
     if (!this.listeners.has(eventName)) {
       this.listeners.set(eventName, new Set());
     }
-    this.listeners.get(eventName).add(callback);
 
-    return () => {
-      const eventListeners = this.listeners.get(eventName);
-      if (eventListeners) {
-        eventListeners.delete(callback);
-        if (eventListeners.size === 0) {
-          this.listeners.delete(eventName);
+    if (!this.registeredEvents.has(eventName)) {
+      this.registeredEvents.add(eventName);
+      this.socket.on(eventName, (...args: any[]) => {
+        const cbs = this.listeners.get(eventName);
+        if (cbs) {
+          cbs.forEach((cb) => {
+            try { cb(...args); } catch (e) { console.error(`[ws] ${eventName} callback error:`, e); }
+          });
         }
+      });
+    }
+
+    this.listeners.get(eventName)!.add(callback);
+
+    // Return unsubscribe function
+    return () => {
+      const set = this.listeners.get(eventName);
+      if (set) {
+        set.delete(callback);
       }
     };
   }
 
   unsubscribe(eventName: string, callback: any) {
-    const eventListeners = this.listeners.get(eventName);
-    if (eventListeners) {
-      eventListeners.delete(callback);
-      if (eventListeners.size === 0) {
-        this.listeners.delete(eventName);
-      }
-    }
+    const set = this.listeners.get(eventName);
+    if (set) set.delete(callback);
   }
 
   getClient() {

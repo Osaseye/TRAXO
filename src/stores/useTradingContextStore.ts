@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { postJournalEntry, postTradingContext, updateJournalEntry } from '@/lib/api'
 
 export type ChartSymbol =
   | 'EURUSD'
@@ -194,11 +195,21 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
         : [...state.notifStrategyFilters, strategyId],
     })),
 
-  setAccountBalance: (value) => set({ accountBalance: Math.max(0, Number(value) || 0) }),
-  setRiskPerTradePct: (value) =>
-    set({ riskPerTradePct: Math.max(0.1, Math.min(10, Number(value) || 1)) }),
-  setMaxDailyLossPct: (value) =>
-    set({ maxDailyLossPct: Math.max(0.5, Math.min(20, Number(value) || 2)) }),
+  setAccountBalance: (value) => {
+    const nextVal = Math.max(0, Number(value) || 0)
+    postTradingContext({ accountBalance: nextVal }).catch(() => {})
+    set({ accountBalance: nextVal })
+  },
+  setRiskPerTradePct: (value) => {
+    const nextVal = Math.max(0.1, Math.min(10, Number(value) || 1))
+    postTradingContext({ riskPerTradePct: nextVal }).catch(() => {})
+    set({ riskPerTradePct: nextVal })
+  },
+  setMaxDailyLossPct: (value) => {
+    const nextVal = Math.max(0.5, Math.min(20, Number(value) || 2))
+    postTradingContext({ maxDailyLossPct: nextVal }).catch(() => {})
+    set({ maxDailyLossPct: nextVal })
+  },
   setChartSymbol: (value) => set({ chartSymbol: value }),
   setChartTimeframe: (value) => set({ chartTimeframe: value }),
 
@@ -229,6 +240,10 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
         id: existingIdx >= 0 ? state.journal[existingIdx].id : `jrnl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         createdAt: existingIdx >= 0 ? state.journal[existingIdx].createdAt : Date.now(),
       }
+
+      // Sync to backend asynchronously
+      postJournalEntry(next).catch(() => {})
+      postTradingContext({ accountBalance: nextBalance }).catch(() => {})
 
       if (existingIdx >= 0) {
         const updated = [...state.journal]
@@ -271,6 +286,10 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
         ...target,
         outcome,
       }
+
+      // Sync outcome & updated balance to backend asynchronously
+      updateJournalEntry(target.id, { outcome }).catch(() => {})
+      postTradingContext({ accountBalance: nextBalance }).catch(() => {})
 
       return {
         journal: updatedJournal,

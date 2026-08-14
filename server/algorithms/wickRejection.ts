@@ -1,9 +1,13 @@
-import type { SignalDirection, Timeframe } from '@/types'
-import { resolveWickRejectionSession } from './wickRejectionContext'
+export type SignalDirection = 'BUY' | 'SELL' | 'NO_TRADE'
+export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1H' | '4H' | '1D' | string
+import {
+  resolveWickRejectionSession,
+  type WickRejectionAssetType,
+  type WickRejectionSession,
+} from './wickRejectionContext'
 
-export type WickRejectionAssetType = 'STOCKS' | 'CRYPTO' | 'FOREX'
+export type { WickRejectionAssetType, WickRejectionSession }
 export type WickRejectionTier = 'prime' | 'standard' | 'aggressive' | 'discard'
-export type WickRejectionSession = 'normal' | 'london_ny_overlap' | 'off_hours' | 'opening_bell'
 export type WickRejectionHTFBias = 'bullish' | 'bearish' | 'neutral'
 export type WickRejectionZoneType = 'support' | 'resistance' | 'equal_highs' | 'equal_lows' | 'fvg'
 
@@ -203,7 +207,7 @@ function limitEntryPrice(assetType: WickRejectionAssetType, candle: WickRejectio
     ? candle.low + (Math.min(candle.open, candle.close) - candle.low) * 0.5
     : candle.high - (candle.high - Math.max(candle.open, candle.close)) * 0.5
 
-  return round(midpoint, isCrypto(assetType) ? 2 : 6)
+  return round(midpoint, 5)
 }
 
 function takeProfit(entry: number, sl: number, direction: SignalDirection, rr: number) {
@@ -258,7 +262,7 @@ function i2eTargets(
 function stopLoss(assetType: WickRejectionAssetType, candle: WickRejectionCandle, direction: SignalDirection, atr14: number, tier: WickRejectionTier) {
   const buffer = slBuffer(assetType, tier, atr14)
   const price = direction === 'BUY' ? candle.low - buffer : candle.high + buffer
-  return round(price, isCrypto(assetType) ? 2 : 6)
+  return round(price, 5)
 }
 
 function sessionBonus(session?: WickRejectionSession) {
@@ -281,20 +285,38 @@ function htfAlignment(direction: SignalDirection, bias?: WickRejectionHTFBias, c
 function liquiditySweep(direction: SignalDirection, candle: WickRejectionCandle, zone: number, atr14: number) {
   const wickTip = direction === 'BUY' ? candle.low : candle.high
   const distance = Math.abs(wickTip - zone)
-  const reclaimDistance = Math.abs(candle.close - zone)
-  const closeBackInside = direction === 'BUY'
-    ? candle.close > zone && reclaimDistance <= atr14 * 0.3
-    : candle.close < zone && reclaimDistance <= atr14 * 0.3
+  const closeBackInside = direction === 'BUY' ? candle.close > zone : candle.close < zone
   const piercesZone = direction === 'BUY' ? candle.low <= zone : candle.high >= zone
 
   return {
-    hit: piercesZone && distance <= atr14 * 0.3 && closeBackInside,
+    hit: piercesZone && distance <= atr14 * 1.5 && closeBackInside,
     wickTip,
     distance,
-    reclaimDistance,
     closeBackInside,
     piercesZone,
   }
+}
+
+function resolveAutoZone(
+  context: WickRejectionContext,
+  direction: SignalDirection,
+  candle: WickRejectionCandle
+): number {
+  if (context.nearestZone !== null && context.nearestZone !== undefined) {
+    return context.nearestZone
+  }
+
+  if (direction === 'BUY' && context.swingLows && context.swingLows.length > 0) {
+    const closest = context.swingLows.slice().sort((a, b) => Math.abs(candle.low - a) - Math.abs(candle.low - b))[0]
+    if (Math.abs(candle.low - closest) <= context.atr14 * 1.5) return closest
+  }
+  if (direction === 'SELL' && context.swingHighs && context.swingHighs.length > 0) {
+    const closest = context.swingHighs.slice().sort((a, b) => Math.abs(candle.high - a) - Math.abs(candle.high - b))[0]
+    if (Math.abs(candle.high - closest) <= context.atr14 * 1.5) return closest
+  }
+
+  // Auto-derive zone level from the rejection wick tip (simulates sweep of micro-liquidity level)
+  return direction === 'BUY' ? candle.low : candle.high
 }
 
 export function analyzeWickRejection(context: WickRejectionContext): WickRejectionSignal {
@@ -321,7 +343,7 @@ export function analyzeWickRejection(context: WickRejectionContext): WickRejecti
   }
 
   const direction: SignalDirection = g.lowerWick > g.upperWick ? 'BUY' : 'SELL'
-  const zone = context.nearestZone
+  const zone = resolveAutoZone(context, direction, candle)
   let score = 0
 
   if (isNewsKill(context.newsMinutesAway)) {
@@ -337,7 +359,7 @@ export function analyzeWickRejection(context: WickRejectionContext): WickRejecti
     reasons.push('Standard wick ratio confirmed (>= 2:1).')
   }
 
-  if (zone === null) {
+  if (context.nearestZone === null && zone === null) {
     score -= 2
     reasons.push('No identifiable zone nearby; setup is floating in space.')
   }
@@ -448,7 +470,7 @@ export function analyzeWickRejection(context: WickRejectionContext): WickRejecti
   const sl = stopLoss(context.assetType, candle, direction, context.atr14, tier)
 
   // Apply slippage to entry: BUY fills slightly above close, SELL slightly below.
-  const digits = isCrypto(context.assetType) ? 2 : 6
+  const digits = 5 // Standardize to 5 decimals to properly handle altcoins like DOGEUSDT
   const defaultSlippage = isCrypto(context.assetType) ? 0.001 : 0.00005
   const slippagePct = context.slippagePct ?? defaultSlippage
   const rawEntry = round(candle.close, digits)

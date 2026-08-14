@@ -132,19 +132,26 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const uid = current?.id || auth.currentUser?.uid
         if (!uid) throw new Error('Not authenticated')
         const { doc, setDoc, serverTimestamp } = await import('firebase/firestore')
+        const { cleanUndefined } = await import('@/lib/utils')
         const userRef = doc(db, 'users', uid)
-        const normalized = {
+        const rawNormalized = {
           ...data,
-          fullName: data.fullName?.trim() || current?.fullName || undefined,
-          displayName: data.displayName?.trim() || data.fullName?.trim() || current?.displayName || current?.fullName || undefined,
-          country: data.country?.trim() || current?.country || undefined,
-          bio: data.bio?.trim() || current?.bio || undefined,
-          dob: data.dob?.trim() || current?.dob || undefined,
+          fullName: data.fullName !== undefined ? data.fullName.trim() : current?.fullName,
+          displayName:
+            data.displayName !== undefined
+              ? data.displayName.trim()
+              : data.fullName !== undefined
+              ? data.fullName.trim()
+              : current?.displayName || current?.fullName,
+          country: data.country !== undefined ? data.country.trim() : current?.country,
+          bio: data.bio !== undefined ? data.bio.trim() : current?.bio,
+          dob: data.dob !== undefined ? data.dob.trim() : current?.dob,
         }
-        const toWrite = { ...normalized, updatedAt: serverTimestamp() }
+        const cleaned = cleanUndefined(rawNormalized)
+        const toWrite = { ...cleaned, updatedAt: serverTimestamp() }
         await setDoc(userRef, toWrite, { merge: true })
         // update local store user (shallow merge)
-        set({ user: { ...(current ?? {}), ...normalized } as User, isLoading: false })
+        set({ user: { ...(current ?? {}), ...cleaned } as User, isLoading: false })
       } catch (err) {
         set({ isLoading: false })
          

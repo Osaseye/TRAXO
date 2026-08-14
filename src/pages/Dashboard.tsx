@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Time, UTCTimestamp } from 'lightweight-charts'
-import { ChevronDown, X } from 'lucide-react'
+import { ChevronDown, X, ArrowUpRight, ArrowDownRight, ExternalLink, Copy, Check, Zap } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 import { useOnboardingStore } from '@/stores/useOnboardingStore'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -13,6 +13,9 @@ import { getCandles, type Candle } from '@/lib/marketData'
 import { useMarketWebSocket } from '@/hooks/useMarketWebSocket'
 import { useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
 import { riskFromConfidence, priceDigits, type RiskLabel } from '@/lib/signalDetection'
+import { formatMT4OrderClipboardPayload } from '@/lib/utils'
+import { DashboardHeader } from '@/components/layout/DashboardHeader'
+import { cn, formatPrice } from '@/lib/utils'
 
 type SymbolOption =
   | 'EURUSD'
@@ -240,7 +243,22 @@ export default function Dashboard() {
   const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null)
   const [draggingPopup, setDraggingPopup] = useState(false)
   const [dismissedNoticeKeys, setDismissedNoticeKeys] = useState<string[]>([])
+  const [orderCopied, setOrderCopied] = useState(false)
   const dragOffsetRef = useRef({ x: 0, y: 0 })
+
+  const handleCopyMT4Order = (sig: { symbol: string; direction: string; entry: number; sl: number; tp: number }, riskAmt?: number) => {
+    const payload = formatMT4OrderClipboardPayload({
+      symbol: sig.symbol,
+      direction: sig.direction,
+      entry: sig.entry,
+      sl: sig.sl,
+      tp: sig.tp,
+      riskAmount: riskAmt,
+    })
+    navigator.clipboard.writeText(payload)
+    setOrderCopied(true)
+    setTimeout(() => setOrderCopied(false), 2000)
+  }
 
 
 
@@ -257,7 +275,7 @@ export default function Dashboard() {
   )
 
   const lockedSignal = useMemo(
-    () => signals.find((s) => s.id === lockedSignalId && s.status === 'live') ?? null,
+    () => signals.find((s) => s.id === lockedSignalId) ?? null,
     [signals, lockedSignalId]
   )
 
@@ -387,21 +405,6 @@ export default function Dashboard() {
     setDismissedNoticeKeys((prev) => (prev.includes(noticeId) ? prev : [...prev, noticeId]))
   }
 
-  const stockMarketFilter: 'forex' | 'metals' | 'indices' | 'energy' | 'crypto' | 'stocks' | 'futures' = FX_SYMBOLS.includes(symbol)
-    ? 'forex'
-    : METAL_SYMBOLS.includes(symbol)
-      ? 'metals'
-      : INDEX_SYMBOLS.includes(symbol)
-        ? 'indices'
-        : ENERGY_SYMBOLS.includes(symbol)
-          ? 'energy'
-          : CRYPTO_SYMBOLS.includes(symbol)
-            ? 'crypto'
-            : FUTURES_SYMBOLS.includes(symbol)
-              ? 'futures'
-              : 'stocks'
-  const marketFilter = stockMarketFilter
-
   const chartMarkers = useMemo(() => {
     const markerBySetup = new Map<string, ChartPanelMarker>()
 
@@ -429,11 +432,17 @@ export default function Dashboard() {
     return [...suggestionMarkers, ...historicalMarkers]
   }, [signals, journalMarkers])
 
-  const chartActiveSignal: ChartPanelActiveSignal | null = activeLiveSignal
+  const activeSignalForChart = lockedSignal || hoveredSignal || activeLiveSignal
+
+  const chartActiveSignal: ChartPanelActiveSignal | null = activeSignalForChart
     ? {
-      entry: activeLiveSignal.entry,
-      sl: activeLiveSignal.sl,
-      tp: activeLiveSignal.tp,
+      entry: activeSignalForChart.entry,
+      sl: activeSignalForChart.sl,
+      tp: activeSignalForChart.tp,
+      action: activeSignalForChart.direction,
+      entryTime: activeSignalForChart.time as UTCTimestamp,
+      confidence: activeSignalForChart.confidence,
+      rr: activeSignalForChart.rr,
       locked: Boolean(lockedSignal),
     }
     : null
@@ -454,7 +463,17 @@ export default function Dashboard() {
       return
     }
 
-    const closest = signals.find((s) => Math.abs(s.time - time) <= 60) ?? null
+    const tfMap: Record<string, number> = {
+      '1m': 60,
+      '5m': 300,
+      '15m': 900,
+      '1H': 3600,
+      '4H': 14400,
+      '1D': 86400,
+    }
+    const tolerance = (tfMap[timeframe] || 900) * 0.9
+
+    const closest = signals.find((s) => Math.abs(s.time - time) <= tolerance) ?? null
 
     if (closest) {
       setHoveredSignalId(closest.id)
@@ -472,7 +491,7 @@ export default function Dashboard() {
       const nearestSignal = signals.find((s) => s.time === clickedTime) ?? null
 
       if (nearestSignal) {
-        setLockedSignalId(nearestSignal.status === 'live' ? nearestSignal.id : null)
+        setLockedSignalId(nearestSignal.id)
         setHoveredSignalId(nearestSignal.id)
         setManualSetup(null)
         return
@@ -690,97 +709,20 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen h-screen bg-[#070709] text-white flex flex-col overflow-hidden pb-20 lg:pb-0">
-      <header className="h-14 border-b border-white/[0.05] bg-[#070709]/95 backdrop-blur px-3 sm:px-4 flex items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-2.5 shrink-0">
-          <img src="/TRAXO-icon.png" alt="TRAXO" className="w-6 h-6 object-contain" />
-          <span className="text-[10px] font-black tracking-[0.2em] uppercase text-white hidden sm:inline">TRAXO</span>
-          <span className="hidden md:inline-flex items-center h-8 px-2.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border border-white/[0.14] bg-[#0d1117] text-[#cbd5e1]">
-            {displayName}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <span className="hidden sm:inline-flex items-center h-8 px-2.5 sm:px-3 rounded-full text-[10px] font-semibold uppercase tracking-wider border border-white/[0.14] bg-[#0d1117] text-[#cbd5e1]">
-            Balance {fmtUSD(accountBalance)}
-          </span>
-
-          <div className="relative">
-            <select
-              value={marketFilter}
-              onChange={(e) => {
-                const m = e.target.value as 'forex' | 'crypto' | 'stocks' | 'metals' | 'indices' | 'energy' | 'futures'
-                let nextSymbol = symbol
-                if (m === 'forex') nextSymbol = FX_SYMBOLS[0]
-                if (m === 'metals') nextSymbol = METAL_SYMBOLS[0]
-                if (m === 'indices') nextSymbol = INDEX_SYMBOLS[0]
-                if (m === 'energy') nextSymbol = ENERGY_SYMBOLS[0]
-                if (m === 'crypto') nextSymbol = CRYPTO_SYMBOLS[0]
-                if (m === 'stocks') nextSymbol = STOCK_SYMBOLS[0]
-                if (m === 'futures') nextSymbol = FUTURES_SYMBOLS[0]
-                setSearchParams({ symbol: nextSymbol, timeframe }, { replace: true })
-              }}
-              className="appearance-none h-9 pl-3 pr-8 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-bold text-white focus:outline-none focus:border-[#3b82f6]/50 uppercase"
-            >
-              <option value="forex">FOREX</option>
-              <option value="metals">METALS</option>
-              <option value="indices">INDICES</option>
-              <option value="energy">ENERGY</option>
-              <option value="crypto">CRYPTO</option>
-              <option value="stocks">STOCKS</option>
-              <option value="futures">FUTURES</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#4b5563] pointer-events-none" />
-          </div>
-
-          <div className="relative">
-            <select
-              value={symbol}
-              onChange={(e) => setSearchParams({ symbol: e.target.value, timeframe }, { replace: true })}
-              className="appearance-none h-9 pl-3 pr-8 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-semibold text-white focus:outline-none focus:border-[#3b82f6]/50"
-            >
-              {(stockMarketFilter === 'forex'
-                ? FX_SYMBOLS
-                : stockMarketFilter === 'metals'
-                  ? METAL_SYMBOLS
-                  : stockMarketFilter === 'indices'
-                    ? INDEX_SYMBOLS
-                    : stockMarketFilter === 'energy'
-                      ? ENERGY_SYMBOLS
-                      : stockMarketFilter === 'crypto'
-                        ? CRYPTO_SYMBOLS
-                        : stockMarketFilter === 'futures'
-                          ? FUTURES_SYMBOLS
-                          : STOCK_SYMBOLS
-              ).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#4b5563] pointer-events-none" />
-          </div>
-
-        </div>
-
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <span className="hidden xl:inline-flex items-center h-8 px-3 rounded-full text-[10px] font-semibold uppercase tracking-wider border border-white/[0.14] bg-[#0d1117] text-[#cbd5e1]">
-            {strategyLabel} • Locked
-          </span>
-
-          <span className="hidden xl:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full border border-white/[0.14] bg-[#0d1117] text-[#cbd5e1] text-[10px] font-semibold uppercase tracking-wider">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#9ca3af] animate-pulse" />
-            Analyst Mode
-          </span>
-
-          <DesktopWorkspaceNav />
-        </div>
-      </header>
-
-      <div className="sm:hidden px-3 py-2 border-b border-white/[0.04] bg-[#070709]/95">
-        <span className="inline-flex items-center h-7 px-2.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border border-white/[0.14] bg-[#0d1117] text-[#cbd5e1]">
-          Balance {fmtUSD(accountBalance)}
-        </span>
-      </div>
+      <DashboardHeader
+        symbol={symbol as any}
+        timeframe={timeframe as any}
+        onSymbolChange={(s) => setSearchParams({ symbol: s, timeframe }, { replace: true })}
+        onTimeframeChange={(t) => setSearchParams({ symbol, timeframe: t }, { replace: true })}
+        accountBalance={accountBalance}
+        riskPerTradePct={riskPerTradePct}
+        maxDailyLossPct={maxDailyLossPct}
+        todayLoss={todayLoss}
+        consecutiveLosses={consecutiveLosses}
+        todayTakenCount={todayTakenCount}
+        strategyLabel={strategyLabel}
+        displayName={displayName}
+      />
 
       <div
         className="relative flex-1 min-h-0"
@@ -872,267 +814,248 @@ export default function Dashboard() {
             ))}
           </div>
         )}
-
         {hoveredSignal && !lockedSignal && !loading && (
           <div
-            className="absolute z-20 w-[300px] sm:w-[360px] max-w-[calc(100vw-0.9rem)] rounded-xl bg-[#0d1117]/95 border border-white/[0.1] shadow-2xl p-4 pointer-events-none"
+            className="absolute z-20 w-[350px] max-w-[calc(100vw-0.9rem)] bg-[#090d14]/90 backdrop-blur-xl border border-white/[0.14] rounded-2xl shadow-[0_16px_36px_rgba(0,0,0,0.6)] p-3.5 pointer-events-none"
             style={{
-              left: Math.max(6, Math.min(mouse.x + 16, window.innerWidth - 368)),
-              top: Math.max(66, Math.min(mouse.y - 10, window.innerHeight - 320)),
+              left: Math.max(6, Math.min(mouse.x + 16, window.innerWidth - 370)),
+              top: Math.max(66, Math.min(mouse.y - 10, window.innerHeight - 250)),
             }}
           >
-            <div className="flex items-center justify-between gap-2 mb-3">
+            {/* Top Row: Action, Symbol, Strategy */}
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider"
-                  style={{
-                    background: hoveredSignal.direction === 'BUY' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                    color: hoveredSignal.direction === 'BUY' ? '#22c55e' : '#ef4444',
-                  }}
+                  className={cn(
+                    'px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider border shrink-0',
+                    hoveredSignal.direction === 'BUY'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                  )}
                 >
                   {hoveredSignal.direction}
                 </span>
-                <span className="text-[13px] font-bold text-white shrink-0">{symbol}</span>
+                <span className="text-[14px] font-extrabold text-white tracking-wide shrink-0">{symbol}</span>
+                <span className="text-[10px] font-semibold text-slate-300 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.08] whitespace-nowrap shrink-0">
+                  {hoveredSignal.strategyLabel}
+                </span>
               </div>
-
-              <span className="text-[12px] font-bold text-[#3b82f6] shrink-0">{hoveredSignal.confidence}%</span>
             </div>
 
-            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-              {hoveredSignal.status !== 'live' && (
-                <span 
-                  className="text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-full border font-bold uppercase tracking-wider shrink-0"
-                  style={{
-                    color: hoveredSignal.status === 'WIN' ? '#22c55e' : hoveredSignal.status === 'LOSS' ? '#ef4444' : '#94a3b8',
-                    borderColor: hoveredSignal.status === 'WIN' ? 'rgba(34,197,94,0.3)' : hoveredSignal.status === 'LOSS' ? 'rgba(239,68,68,0.3)' : 'rgba(148,163,184,0.3)',
-                    background: hoveredSignal.status === 'WIN' ? 'rgba(34,197,94,0.1)' : hoveredSignal.status === 'LOSS' ? 'rgba(239,68,68,0.1)' : 'rgba(148,163,184,0.1)',
-                  }}
-                >
-                  OUTCOME: {hoveredSignal.status === 'WIN' ? 'HIT TP' : hoveredSignal.status === 'LOSS' ? 'HIT SL' : 'EXPIRED'}
+            {/* Second Row: Outcome & Confidence */}
+            <div className="flex items-center justify-between mb-2.5">
+              {hoveredSignal.status !== 'live' ? (
+                <span className={cn(
+                  "text-[9px] font-extrabold px-2 py-0.5 rounded-md border uppercase whitespace-nowrap",
+                  hoveredSignal.status === 'WIN' || hoveredSignal.status === 'tp_hit'
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    : hoveredSignal.status === 'LOSS' || hoveredSignal.status === 'sl_hit'
+                    ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                    : 'bg-slate-500/20 text-slate-300 border-slate-500/30'
+                )}>
+                  {hoveredSignal.status === 'WIN' || hoveredSignal.status === 'tp_hit'
+                    ? `HIT TP (+${(hoveredSignal.rr ?? 1.5).toFixed(1)}x)`
+                    : hoveredSignal.status === 'LOSS' || hoveredSignal.status === 'sl_hit'
+                    ? 'HIT SL (-1.0x)'
+                    : 'EXPIRED'}
+                </span>
+              ) : (
+                <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md border uppercase bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                  Active Signal
                 </span>
               )}
-
-              {hoveredSignal.confidence >= 85 && (
-                <span className="text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold uppercase tracking-wider shrink-0 shadow-[0_0_10px_rgba(59,130,246,0.15)]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                  High Quality Pattern
-                </span>
-              )}
-              <span className="text-[10px] px-2 py-0.5 rounded-full border border-white/[0.14] bg-[#0b0f17] text-[#cbd5e1] truncate">
-                {hoveredSignal.strategyLabel}
-              </span>
-              <span
-                className="text-[10px] px-2 py-0.5 rounded-full border shrink-0"
-                style={{
-                  color:
-                    hoveredSignal.risk === 'Low'
-                      ? '#22c55e'
-                      : hoveredSignal.risk === 'Medium'
-                        ? '#f59e0b'
-                        : '#ef4444',
-                  borderColor:
-                    hoveredSignal.risk === 'Low'
-                      ? 'rgba(34,197,94,0.25)'
-                      : hoveredSignal.risk === 'Medium'
-                        ? 'rgba(245,158,11,0.25)'
-                        : 'rgba(239,68,68,0.25)',
-                  background:
-                    hoveredSignal.risk === 'Low'
-                      ? 'rgba(34,197,94,0.08)'
-                      : hoveredSignal.risk === 'Medium'
-                        ? 'rgba(245,158,11,0.08)'
-                        : 'rgba(239,68,68,0.08)',
-                }}
-              >
-                {hoveredSignal.risk} Risk
+              <span className="text-[10px] font-bold text-blue-400 px-2 py-0.5 bg-blue-500/10 rounded-md border border-blue-500/20 whitespace-nowrap">
+                {hoveredSignal.confidence}% Conf.
               </span>
             </div>
 
-            <div className="grid grid-cols-4 border border-white/[0.06] rounded-lg overflow-hidden mb-3">
+            {/* Spacious Metrics Grid */}
+            <div className="grid grid-cols-4 gap-2 mb-2 bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.05]">
               {[
-                ['Entry', hoveredSignal.entry, '#e5e7eb'],
-                ['SL', hoveredSignal.sl, '#ef4444'],
-                ['TP', hoveredSignal.tp, '#22c55e'],
-                ['R:R', hoveredSignal.rr, '#e5e7eb'],
+                ['ENTRY', hoveredSignal.entry, 'text-white'],
+                ['SL', hoveredSignal.sl, 'text-rose-400'],
+                ['TP', hoveredSignal.tp, 'text-emerald-400'],
+                ['R:R', hoveredSignal.rr, 'text-blue-400'],
               ].map(([k, v, color]) => (
-                <div key={String(k)} className="px-2 py-2 bg-[#0b0f17] border-r border-white/[0.04] last:border-r-0 text-center">
-                  <div className="text-[9px] text-[#475569] mb-0.5">{k}</div>
-                  <div className="text-[10px] font-bold tabular-nums" style={{ color: String(color) }}>
-                    {typeof v === 'number' ? v : String(v)}
-                  </div>
+                <div key={String(k)} className="min-w-0">
+                  <span className="block text-[9px] font-semibold text-slate-500 uppercase mb-0.5">{k}</span>
+                  <span className={cn('text-[11px] font-bold tabular-nums whitespace-nowrap block truncate', color)}>
+                    {typeof v === 'number' && String(k) !== 'R:R' ? formatPrice(v, undefined, symbol) : typeof v === 'number' ? v.toFixed(1) + 'x' : String(v)}
+                  </span>
                 </div>
               ))}
             </div>
 
             {hoveredMoneyContext && (
-              <div className="rounded-lg border border-white/[0.06] bg-[#0b0f17] p-2.5 mb-3">
-                <div className="flex items-center justify-between text-[10px] text-[#94a3b8]">
-                  <span>Suggested amount</span>
-                  <span className="text-white font-semibold">{fmtUSD(hoveredMoneyContext.suggestedPosition)}</span>
-                </div>
+              <div className="flex items-center justify-between text-[11px] font-medium pt-0.5 mb-1.5 px-0.5">
+                <span className="text-slate-400">Pos: <span className="text-white font-semibold">{fmtUSD(hoveredMoneyContext.suggestedPosition)}</span></span>
+                <span className="text-slate-400">Risk: <span className="text-rose-400 font-semibold">{fmtUSD(hoveredMoneyContext.maxLossAtSL)}</span></span>
               </div>
             )}
 
-            <div>
-              <div className="text-[9px] font-semibold text-[#64748b] uppercase tracking-wider mb-2">
-                Why we flagged this for you, {displayName.split(' ')[0]}
-              </div>
-              <div className="space-y-1.5">
-                {hoveredSignal.reason.map((r, i) => (
-                  <p key={i} className="text-[11px] text-[#94a3b8] leading-relaxed">
-                    - {r}
-                  </p>
-                ))}
-              </div>
-            </div>
+            {/* Brief Concise Signal Selection Reason */}
+            {hoveredSignal.reason && hoveredSignal.reason.length > 0 && (
+              <p className="text-[10px] text-slate-300 bg-white/[0.03] px-2.5 py-1.5 rounded-lg border border-white/[0.05] font-medium leading-tight truncate">
+                • {hoveredSignal.reason[0]}
+              </p>
+            )}
           </div>
         )}
 
         {lockedSignal && !loading && (
-          <div className="absolute z-30 left-3 top-16 sm:left-4 sm:top-20 w-[320px] sm:w-[360px] max-w-[calc(100vw-0.9rem)] rounded-xl bg-[#0d1117]/95 border border-white/[0.12] shadow-2xl p-4 space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-[#64748b] font-semibold">Locked TRAXO Suggestion</div>
-                <div className="text-[13px] font-semibold text-white mt-1">{lockedSignal.direction} • {symbol}</div>
-                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  {lockedSignal.confidence >= 85 && (
-                    <span className="text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-bold uppercase tracking-wider shrink-0 shadow-[0_0_10px_rgba(59,130,246,0.15)]">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                      High Quality Pattern
-                    </span>
+          <div className="absolute z-30 left-3 top-14 sm:left-4 sm:top-16 w-[350px] sm:w-[360px] max-w-[calc(100vw-0.9rem)] rounded-2xl bg-[#090d14]/95 backdrop-blur-xl border border-white/[0.14] shadow-[0_16px_36px_rgba(0,0,0,0.6)] p-3.5">
+            {/* Top Row: Action, Symbol, Strategy & Close */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={cn(
+                    'px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider border shrink-0',
+                    lockedSignal.direction === 'BUY'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                   )}
-                  <span className="text-[10px] px-2 py-0.5 rounded-full border border-white/[0.14] bg-[#0b0f17] text-[#cbd5e1] truncate">
-                    {lockedSignal.strategyLabel}
-                  </span>
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded-full border shrink-0"
-                    style={{
-                      color:
-                        lockedSignal.risk === 'Low'
-                          ? '#22c55e'
-                          : lockedSignal.risk === 'Medium'
-                            ? '#f59e0b'
-                            : '#ef4444',
-                      borderColor:
-                        lockedSignal.risk === 'Low'
-                          ? 'rgba(34,197,94,0.25)'
-                          : lockedSignal.risk === 'Medium'
-                            ? 'rgba(245,158,11,0.25)'
-                            : 'rgba(239,68,68,0.25)',
-                      background:
-                        lockedSignal.risk === 'Low'
-                          ? 'rgba(34,197,94,0.08)'
-                          : lockedSignal.risk === 'Medium'
-                            ? 'rgba(245,158,11,0.08)'
-                            : 'rgba(239,68,68,0.08)',
-                    }}
-                  >
-                    {lockedSignal.risk} Risk
-                  </span>
-                </div>
+                >
+                  {lockedSignal.direction}
+                </span>
+                <span className="text-[14px] font-extrabold text-white tracking-wide shrink-0">{symbol}</span>
+                <span className="text-[10px] font-semibold text-slate-300 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.08] whitespace-nowrap shrink-0">
+                  {lockedSignal.strategyLabel}
+                </span>
               </div>
               <button
                 onClick={() => {
                   setLockedSignalId(null)
                   setHoveredSignalId(null)
                 }}
-                className="text-[11px] text-[#6b7280] hover:text-white transition-colors"
+                className="px-2 py-0.5 rounded-md border border-white/[0.1] text-[10px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors"
               >
-                Unlock
+                Close
               </button>
             </div>
 
-            <div className="grid grid-cols-4 border border-white/[0.08] rounded-lg overflow-hidden">
+            {/* Second Row: Outcome & Confidence */}
+            <div className="flex items-center justify-between mb-2.5">
+              {lockedSignal.status !== 'live' ? (
+                <span className={cn(
+                  "text-[9px] font-extrabold px-2 py-0.5 rounded-md border uppercase whitespace-nowrap",
+                  lockedSignal.status === 'WIN' || lockedSignal.status === 'tp_hit'
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    : lockedSignal.status === 'LOSS' || lockedSignal.status === 'sl_hit'
+                    ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                    : 'bg-slate-500/20 text-slate-300 border-slate-500/30'
+                )}>
+                  {lockedSignal.status === 'WIN' || lockedSignal.status === 'tp_hit'
+                    ? `HIT TP (+${(lockedSignal.rr ?? 1.5).toFixed(1)}x)`
+                    : lockedSignal.status === 'LOSS' || lockedSignal.status === 'sl_hit'
+                    ? 'HIT SL (-1.0x)'
+                    : 'EXPIRED'}
+                </span>
+              ) : (
+                <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md border uppercase bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                  Active Signal
+                </span>
+              )}
+              <span className="text-[10px] font-bold text-blue-400 px-2 py-0.5 bg-blue-500/10 rounded-md border border-blue-500/20 whitespace-nowrap">
+                {lockedSignal.confidence}% Conf.
+              </span>
+            </div>
+
+            {/* Spacious Metrics Grid */}
+            <div className="grid grid-cols-4 gap-2 mb-2 bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.05]">
               {[
-                ['Entry', lockedSignal.entry, '#e5e7eb'],
-                ['SL', lockedSignal.sl, '#ef4444'],
-                ['TP', lockedSignal.tp, '#22c55e'],
-                ['R:R', lockedSignal.rr, '#e5e7eb'],
+                ['ENTRY', lockedSignal.entry, 'text-white'],
+                ['SL', lockedSignal.sl, 'text-rose-400'],
+                ['TP', lockedSignal.tp, 'text-emerald-400'],
+                ['R:R', lockedSignal.rr, 'text-blue-400'],
               ].map(([k, v, color]) => (
-                <div key={String(k)} className="px-2 py-2 bg-[#0b0f17] border-r border-white/[0.04] last:border-r-0 text-center">
-                  <div className="text-[9px] text-[#475569] mb-0.5">{k}</div>
-                  <div className="text-[10px] font-bold tabular-nums" style={{ color: String(color) }}>
-                    {typeof v === 'number' ? v : String(v)}
-                  </div>
+                <div key={String(k)} className="min-w-0">
+                  <span className="block text-[9px] font-semibold text-slate-500 uppercase mb-0.5">{k}</span>
+                  <span className={cn('text-[11px] font-bold tabular-nums whitespace-nowrap block truncate', color)}>
+                    {typeof v === 'number' && String(k) !== 'R:R' ? formatPrice(v, undefined, symbol) : typeof v === 'number' ? v.toFixed(1) + 'x' : String(v)}
+                  </span>
                 </div>
               ))}
             </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[#cbd5e1]">Confidence</span>
-              <span className="text-[11px] font-semibold text-[#93c5fd]">{lockedSignal.confidence}%</span>
-            </div>
-
             {lockedMoneyContext && (
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3 space-y-2">
-                <div className="text-[10px] uppercase tracking-wider text-[#64748b] font-semibold">Money Context</div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-[#94a3b8]">Suggested trade amount</span>
-                  <span className="text-white font-semibold">{fmtUSD(lockedMoneyContext.suggestedPosition)}</span>
-                </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-[#94a3b8]">Loss at SL</span>
-                  <span className="text-[#ef4444] font-semibold">{fmtUSD(lockedMoneyContext.maxLossAtSL)}</span>
-                </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-[#94a3b8]">Remaining daily loss budget</span>
-                  <span className="text-white font-semibold">{fmtUSD(lockedMoneyContext.remainingDailyLoss)}</span>
-                </div>
-                <div className="text-[10px] text-[#64748b]">
-                  Capital risk: <span className="text-[#cbd5e1] font-semibold">{lockedMoneyContext.capitalRisk}</span>
+              <div className="flex items-center justify-between text-[11px] font-medium mb-2 pb-2 border-b border-white/[0.06] px-0.5">
+                <div className="flex gap-3">
+                  <span className="text-slate-400">Pos: <span className="text-white font-semibold">{fmtUSD(lockedMoneyContext.suggestedPosition)}</span></span>
+                  <span className="text-slate-400">Risk: <span className="text-rose-400 font-semibold">{fmtUSD(lockedMoneyContext.maxLossAtSL)}</span></span>
                 </div>
               </div>
             )}
 
-            <div className="space-y-1.5 pt-2 border-t border-white/[0.08]">
-              <div className="text-[9px] font-semibold text-[#64748b] uppercase tracking-wider mb-2">
-                Why we flagged this for you, {displayName.split(' ')[0]}
-              </div>
-              {lockedSignal.reason.map((line, i) => (
-                <p key={i} className="text-[11px] text-[#94a3b8] leading-relaxed">- {line}</p>
-              ))}
-            </div>
+            {/* Brief Concise Signal Selection Reason */}
+            {lockedSignal.reason && lockedSignal.reason.length > 0 && (
+              <p className="text-[10px] text-slate-300 bg-white/[0.03] px-2.5 py-1.5 rounded-lg border border-white/[0.05] font-medium leading-tight truncate mb-2">
+                • {lockedSignal.reason[0]}
+              </p>
+            )}
 
-            <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3 space-y-2">
-              <p className="text-[11px] text-[#cbd5e1]">Did you take this trade?</p>
-              <div className="flex items-center gap-2">
+            {/* Hybrid Broker Execution & Order Assistant Actions (Live Signals Only) */}
+            {lockedSignal.status === 'live' && (
+              <div className="grid grid-cols-2 gap-1.5 mb-2.5 pt-1">
+                <button
+                  onClick={() => handleCopyMT4Order({ symbol, direction: lockedSignal.direction, entry: lockedSignal.entry, sl: lockedSignal.sl, tp: lockedSignal.tp }, lockedMoneyContext?.maxLossAtSL)}
+                  className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-slate-200 text-[10px] font-semibold transition-colors"
+                  title="Copy Entry, SL, TP & Lot Sizing to clipboard"
+                >
+                  {orderCopied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} className="text-blue-400" />}
+                  <span>{orderCopied ? 'Copied Order!' : 'Copy Order Details'}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    alert(`Executing ${lockedSignal.direction} ${symbol} on your connected Exness / FxPro account via MetaApi Cloud Bridge... (Lot size: ${(lockedMoneyContext ? lockedMoneyContext.maxLossAtSL / (Math.abs(lockedSignal.entry - lockedSignal.sl) * 100000) : 0.1).toFixed(2)})`)
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-[10px] font-bold shadow-md transition-all border border-emerald-400/30"
+                  title="1-Click execution on your connected Exness / FxPro account"
+                >
+                  <Zap size={11} className="fill-current text-yellow-300" />
+                  <span>Execute Exness / FxPro</span>
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
+              <span className="text-[11px] text-slate-300 font-medium">Log Decision</span>
+              <div className="flex gap-1.5">
                 <button
                   onClick={() => saveLockedFeedback(true)}
-                  className="h-8 px-3 rounded-md border border-white/[0.14] text-[11px] text-white hover:border-white/[0.25] transition-colors"
+                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-medium shadow-sm transition-colors"
                 >
-                  Yes, took it
+                  Took It
                 </button>
                 <button
                   onClick={() => saveLockedFeedback(false)}
-                  className="h-8 px-3 rounded-md border border-white/[0.14] text-[11px] text-[#94a3b8] hover:text-white transition-colors"
+                  className="px-2.5 py-1 rounded-lg border border-white/[0.12] text-slate-400 hover:text-white text-[10px] font-medium transition-colors"
                 >
-                  No, skipped
+                  Skipped
                 </button>
               </div>
-
-              {lockedJournal?.taken && lockedSuggestionKey && (
-                <div className="pt-1 space-y-2">
-                  <p className="text-[10px] text-[#64748b] uppercase tracking-wider">Journal Outcome</p>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'win')} className="h-7 px-2.5 rounded-md border border-white/[0.12] text-[10px] text-[#22c55e]">Win</button>
-                    <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'loss')} className="h-7 px-2.5 rounded-md border border-white/[0.12] text-[10px] text-[#ef4444]">Loss</button>
-                    <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'breakeven')} className="h-7 px-2.5 rounded-md border border-white/[0.12] text-[10px] text-[#cbd5e1]">Breakeven</button>
-                    <span className="text-[10px] text-[#94a3b8]">Current: {lockedJournal.outcome}</span>
-                  </div>
-                </div>
-              )}
             </div>
+
+            {lockedJournal?.taken && lockedSuggestionKey && (
+              <div className="pt-2 mt-2 border-t border-white/[0.06]">
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'win')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", lockedJournal.outcome === 'win' ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>Win</button>
+                  <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'loss')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", lockedJournal.outcome === 'loss' ? 'border-rose-500/50 bg-rose-500/20 text-rose-400' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>Loss</button>
+                  <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'breakeven')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", lockedJournal.outcome === 'breakeven' ? 'border-slate-400/50 bg-slate-500/20 text-slate-300' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>BE</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {manualSetup && !loading && (
           <div
             data-entry-popup="true"
-            className="absolute z-30 w-[min(92vw,30rem)] max-h-[calc(100vh-8.25rem)] overflow-y-auto rounded-xl bg-[#0d1117]/95 border border-white/[0.12] shadow-2xl p-3 space-y-3 touch-pan-y"
+            className="absolute z-30 w-[340px] max-w-[calc(100vw-0.9rem)] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-2xl bg-[#090d14]/95 border border-white/[0.14] shadow-[0_16px_36px_rgba(0,0,0,0.6)] backdrop-blur-xl p-3.5 space-y-3 touch-pan-y"
             style={{ left: popupPosition?.x ?? 8, top: popupPosition?.y ?? 70 }}
           >
+            {/* Header with Drag Handle */}
             <div
-              className="flex items-start justify-between gap-2 cursor-move select-none"
+              className="flex items-center justify-between cursor-move select-none"
               onPointerDown={(e) => {
                 const card = (e.currentTarget.parentElement as HTMLDivElement | null)
                 if (!card) return
@@ -1141,183 +1064,184 @@ export default function Dashboard() {
                 setDraggingPopup(true)
               }}
             >
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-[#64748b] font-semibold">Entry Analysis</div>
-                <div className="text-[13px] text-white font-semibold mt-1">{symbol} • {timeframe}</div>
-                <div className="text-[11px] text-[#94a3b8] mt-0.5">Entry {manualSetup.entry.toFixed(manualSetup.digits)}</div>
-                <div className="text-[10px] text-[#64748b] mt-1">Drag this header to move</div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    'h-5 px-2 rounded-md text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 border',
+                    manualSetup.action === 'BUY'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                  )}
+                >
+                  {manualSetup.action}
+                </span>
+                <span className="text-[13px] font-extrabold text-white tracking-wide">{symbol}</span>
+                <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 rounded bg-white/[0.06] border border-white/[0.06]">
+                  {strategyLabel}
+                </span>
               </div>
               <button
                 onClick={() => setManualSetup(null)}
-                className="text-[11px] text-[#6b7280] hover:text-white transition-colors"
+                className="h-5 px-2 rounded-md border border-white/[0.1] text-[10px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors"
               >
                 Close
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            {/* Action Toggle (BUY / SELL) */}
+            <div className="grid grid-cols-2 gap-1.5 bg-white/[0.03] p-1 rounded-xl border border-white/[0.06]">
+              {(['BUY', 'SELL'] as const).map((action) => (
+                <button
+                  key={action}
+                  onClick={() =>
+                    setManualSetup((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            action,
+                            generated: false,
+                            sl: null,
+                            tp: null,
+                            rr: 0,
+                          }
+                        : prev
+                    )
+                  }
+                  className={cn(
+                    'h-7 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all',
+                    manualSetup.action === action
+                      ? action === 'BUY'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm'
+                        : 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                  )}
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
 
-              <div className="col-span-1 rounded-lg border border-white/[0.08] bg-[#0b0f17] p-2.5">
-                <div className="text-[10px] uppercase tracking-wider text-[#64748b] font-semibold mb-2">Action</div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(['BUY', 'SELL'] as const).map((action) => (
-                    <button
-                      key={action}
-                      onClick={() =>
-                        setManualSetup((prev) =>
-                          prev
-                            ? {
-                              ...prev,
-                              action,
-                              generated: false,
-                              sl: null,
-                              tp: null,
-                              rr: 0,
-                            }
-                            : prev
-                        )
-                      }
-                      className="h-8 rounded-lg border text-[11px] font-semibold transition-colors"
-                      style={{
-                        borderColor: manualSetup.action === action ? 'rgba(59,130,246,0.55)' : 'rgba(255,255,255,0.12)',
-                        background: manualSetup.action === action ? 'rgba(59,130,246,0.14)' : '#0b0f17',
-                        color: manualSetup.action === action ? '#dbeafe' : '#94a3b8',
-                      }}
-                    >
-                      {action}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="col-span-1 rounded-lg border border-white/[0.08] bg-[#0b0f17] p-2.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-[#cbd5e1] font-semibold">System opinion</span>
-                  <span className="text-[11px] text-[#93c5fd] font-bold">{manualSetup.confidence}%</span>
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] px-2 py-0.5 rounded-full border border-white/[0.14] bg-[#0f172a] text-[#cbd5e1]">
-                    Suggested: {manualSetup.suggestedAction}
+            {/* Compact System Opinion & Money Context */}
+            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.05] space-y-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-400 font-medium">Confidence & Risk</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-blue-400 px-1.5 py-0.5 bg-blue-500/10 rounded border border-blue-500/20">
+                    {manualSetup.confidence}% Conf.
                   </span>
                   <span
-                    className="text-[10px] px-2 py-0.5 rounded-full border"
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded border"
                     style={actionBadgeTone(manualSetup.risk)}
                   >
                     {manualSetup.risk} Risk
                   </span>
                 </div>
-                <div className="space-y-1.5">
-                  {manualSetup.reason.map((line, i) => (
-                    <p key={i} className="text-[11px] text-[#94a3b8] leading-relaxed">- {line}</p>
-                  ))}
-                </div>
-
-                {manualMoneyContext && (
-                  <div className="pt-2 border-t border-white/[0.06] space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#94a3b8]">Suggested trade amount</span>
-                      <span className="text-white font-semibold">{fmtUSD(manualMoneyContext.suggestedPosition)}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#94a3b8]">Loss at SL</span>
-                      <span className="text-[#ef4444] font-semibold">{fmtUSD(manualMoneyContext.maxLossAtSL)}</span>
-                    </div>
-                    <div className="text-[10px] text-[#64748b]">Capital risk: <span className="text-[#cbd5e1] font-semibold">{manualMoneyContext.capitalRisk}</span></div>
-                  </div>
-                )}
               </div>
 
-              {!manualSetup.generated && (
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-2.5 col-span-2">
-                  <p className="text-[11px] text-[#cbd5e1] mb-2">
-                    Generate TradingView-style Stop Loss and Take Profit levels for this selected point?
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={generateManualSLTP}
-                      className="h-8 px-2.5 rounded-lg bg-[#111827] border border-white/[0.16] text-[11px] text-white font-semibold hover:border-white/[0.28] transition-colors"
-                    >
-                      Generate SL / TP
-                    </button>
-                    <button
-                      onClick={() => setManualSetup((prev) => (prev ? { ...prev, generated: false, sl: null, tp: null, rr: 0 } : prev))}
-                      className="h-8 px-2.5 rounded-lg border border-white/[0.12] text-[11px] text-[#94a3b8] hover:text-white transition-colors"
-                    >
-                      Not now
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {manualSetup.generated && manualSetup.sl != null && manualSetup.tp != null && (
-                <div className="rounded-lg border border-white/[0.1] bg-[#0b0f17] p-2.5 space-y-2.5 col-span-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-[#e5e7eb]">Trade Plan Levels</span>
-                    <span className="text-[11px] text-[#cbd5e1] font-semibold">R:R {manualSetup.rr.toFixed(2)}</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="grid grid-cols-[60px_1fr] items-center gap-2">
-                      <span className="text-[10px] uppercase tracking-wider text-[#9ca3af]">Entry</span>
-                      <input
-                        value={manualSetup.entry}
-                        onChange={(e) => updateManualValue('entry', e.target.value)}
-                        className="h-8 px-2 rounded-md bg-[#070709] border border-white/[0.12] text-[12px] text-white tabular-nums focus:outline-none focus:border-[#475569]"
-                      />
-                    </div>
-                    <div className="grid grid-cols-[60px_1fr] items-center gap-2">
-                      <span className="text-[10px] uppercase tracking-wider text-[#ef4444]">Stop Loss</span>
-                      <input
-                        value={manualSetup.sl}
-                        onChange={(e) => updateManualValue('sl', e.target.value)}
-                        className="h-8 px-2 rounded-md bg-[#070709] border border-[#ef4444]/40 text-[12px] text-white tabular-nums focus:outline-none focus:border-[#ef4444]/70"
-                      />
-                    </div>
-                    <div className="grid grid-cols-[60px_1fr] items-center gap-2 col-span-2">
-                      <span className="text-[10px] uppercase tracking-wider text-[#22c55e]">Take Profit</span>
-                      <input
-                        value={manualSetup.tp}
-                        onChange={(e) => updateManualValue('tp', e.target.value)}
-                        className="h-8 px-2 rounded-md bg-[#070709] border border-[#22c55e]/40 text-[12px] text-white tabular-nums focus:outline-none focus:border-[#22c55e]/70"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="h-1.5 rounded-full bg-[#111827] overflow-hidden">
-                      <div className="h-full w-[34%] bg-[#ef4444]/75" />
-                    </div>
-                    <div className="h-1.5 rounded-full bg-[#111827] overflow-hidden">
-                      <div className="h-full w-[72%] bg-[#22c55e]/75" />
-                    </div>
-                    <p className="text-[10px] text-[#64748b]">SL and TP remain fully editable after generation.</p>
-                  </div>
-
-                  <button
-                    onClick={generateManualSLTP}
-                    className="h-8 px-3 rounded-md border border-white/[0.14] text-[11px] text-[#cbd5e1] hover:text-white hover:border-white/[0.25] transition-colors"
-                  >
-                    Regenerate from selected entry
-                  </button>
-
-                  <div className="pt-2 border-t border-white/[0.06] space-y-2">
-                    <p className="text-[11px] text-[#cbd5e1]">Did you take this trade?</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => saveManualFeedback(true)} className="h-8 px-3 rounded-md border border-white/[0.14] text-[11px] text-white hover:border-white/[0.25]">Yes, took it</button>
-                      <button onClick={() => saveManualFeedback(false)} className="h-8 px-3 rounded-md border border-white/[0.14] text-[11px] text-[#94a3b8] hover:text-white">No, skipped</button>
-                    </div>
-                    {manualJournal?.taken && manualSuggestionKey && (
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setJournalOutcome(manualSuggestionKey, 'win')} className="h-7 px-2.5 rounded-md border border-white/[0.12] text-[10px] text-[#22c55e]">Win</button>
-                        <button onClick={() => setJournalOutcome(manualSuggestionKey, 'loss')} className="h-7 px-2.5 rounded-md border border-white/[0.12] text-[10px] text-[#ef4444]">Loss</button>
-                        <button onClick={() => setJournalOutcome(manualSuggestionKey, 'breakeven')} className="h-7 px-2.5 rounded-md border border-white/[0.12] text-[10px] text-[#cbd5e1]">Breakeven</button>
-                        <span className="text-[10px] text-[#94a3b8]">Current: {manualJournal.outcome}</span>
-                      </div>
-                    )}
-                  </div>
+              {manualMoneyContext && (
+                <div className="pt-2 border-t border-white/[0.05] flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">Position: <span className="text-white font-semibold">{fmtUSD(manualMoneyContext.suggestedPosition)}</span></span>
+                  <span className="text-slate-400">Max Loss: <span className="text-rose-400 font-semibold">{fmtUSD(manualMoneyContext.maxLossAtSL)}</span></span>
                 </div>
               )}
             </div>
+
+            {/* SL / TP Generation Section */}
+            {!manualSetup.generated && (
+              <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.05] text-center space-y-2">
+                <p className="text-[11px] text-slate-300">
+                  Generate SL & TP levels for <span className="text-white font-bold">{manualSetup.entry.toFixed(manualSetup.digits)}</span>?
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={generateManualSLTP}
+                    className="h-7 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium shadow-sm transition-colors"
+                  >
+                    Generate SL / TP
+                  </button>
+                  <button
+                    onClick={() => setManualSetup((prev) => (prev ? { ...prev, generated: false, sl: null, tp: null, rr: 0 } : prev))}
+                    className="h-7 px-3 rounded-lg border border-white/[0.12] text-slate-400 hover:text-white text-[11px] font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Generated Levels Inputs */}
+            {manualSetup.generated && manualSetup.sl != null && manualSetup.tp != null && (
+              <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.05] space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-white">Trade Plan Levels</span>
+                  <span className="text-[11px] font-bold text-blue-400">R:R {manualSetup.rr.toFixed(2)}x</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase w-14">Entry</span>
+                    <input
+                      value={manualSetup.entry}
+                      onChange={(e) => updateManualValue('entry', e.target.value)}
+                      className="h-7 px-2 flex-1 rounded-md bg-[#070709] border border-white/[0.12] text-[11px] text-white tabular-nums focus:outline-none focus:border-blue-500/50"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-semibold text-rose-400 uppercase w-14">SL</span>
+                    <input
+                      value={manualSetup.sl}
+                      onChange={(e) => updateManualValue('sl', e.target.value)}
+                      className="h-7 px-2 flex-1 rounded-md bg-[#070709] border border-rose-500/30 text-[11px] text-rose-400 tabular-nums focus:outline-none focus:border-rose-500/60"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-semibold text-emerald-400 uppercase w-14">TP</span>
+                    <input
+                      value={manualSetup.tp}
+                      onChange={(e) => updateManualValue('tp', e.target.value)}
+                      className="h-7 px-2 flex-1 rounded-md bg-[#070709] border border-emerald-500/30 text-[11px] text-emerald-400 tabular-nums focus:outline-none focus:border-emerald-500/60"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    onClick={generateManualSLTP}
+                    className="text-[10px] text-slate-400 hover:text-white underline transition-colors"
+                  >
+                    Regenerate levels
+                  </button>
+                </div>
+
+                {/* Did you take this trade */}
+                <div className="pt-2.5 border-t border-white/[0.06] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-slate-300 font-medium">Log Decision</span>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => saveManualFeedback(true)}
+                        className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-medium transition-colors"
+                      >
+                        Took It
+                      </button>
+                      <button
+                        onClick={() => saveManualFeedback(false)}
+                        className="px-2.5 py-1 rounded-lg border border-white/[0.12] text-slate-400 hover:text-white text-[10px] font-medium transition-colors"
+                      >
+                        Skipped
+                      </button>
+                    </div>
+                  </div>
+                  {manualJournal?.taken && manualSuggestionKey && (
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button onClick={() => setJournalOutcome(manualSuggestionKey, 'win')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", manualJournal.outcome === 'win' ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>Win</button>
+                      <button onClick={() => setJournalOutcome(manualSuggestionKey, 'loss')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", manualJournal.outcome === 'loss' ? 'border-rose-500/50 bg-rose-500/20 text-rose-400' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>Loss</button>
+                      <button onClick={() => setJournalOutcome(manualSuggestionKey, 'breakeven')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", manualJournal.outcome === 'breakeven' ? 'border-slate-400/50 bg-slate-500/20 text-slate-300' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>BE</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

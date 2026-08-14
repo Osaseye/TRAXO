@@ -54,7 +54,18 @@ async function fetchCandles(symbol, interval, outputsize = 200) {
         // No sleep needed — getKey() will skip cooling keys automatically
         continue;
       }
-      // Non-429 error (bad symbol, network issue, etc.) — re-throw immediately
+
+      // Handle transient SSL/network socket glitches (EPROTO, ECONNRESET, bad record mac)
+      const isTransientNetwork = /EPROTO|ECONNRESET|ETIMEDOUT|SSL|bad record mac|socket|network/i.test(err.message || '');
+      if (isTransientNetwork && attempt < MAX_RETRIES - 1) {
+        console.warn(
+          `[marketData] Transient network/SSL glitch for ${symbol}:${interval}: ${err.message}. Retrying in 500ms (attempt ${attempt + 1}/${MAX_RETRIES})...`
+        );
+        await new Promise((r) => setTimeout(r, 500));
+        continue;
+      }
+
+      // Non-recoverable error — re-throw
       throw err;
     }
   }
@@ -85,6 +96,7 @@ function _doFetch(tdSymbol, tdInterval, outputsize, apiKey) {
       hostname: BASE_URL,
       path: `/time_series?${params.toString()}`,
       method: 'GET',
+      timeout: 10000,
     };
 
     const req = https.request(options, (res) => {
@@ -136,6 +148,10 @@ function _doFetch(tdSymbol, tdInterval, outputsize, apiKey) {
           reject(new Error(`Failed to parse TwelveData JSON response: ${e.message}`));
         }
       });
+    });
+
+    req.on('timeout', () => {
+      req.destroy(new Error('TwelveData HTTPS request timed out after 10s'));
     });
 
     req.on('error', (e) => {

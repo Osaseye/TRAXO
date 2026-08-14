@@ -102,7 +102,7 @@ async function getActiveLiveSignals(symbol, timeframe) {
     
     if (snapshot.empty) return [];
     
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
   } catch (error) {
     console.error(`Error fetching active live signals for ${symbol}:${timeframe}:`, error);
     return [];

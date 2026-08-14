@@ -1,0 +1,39 @@
+        {manualSetup && !loading && (
+          <div
+            data-entry-popup="true"
+            className="absolute z-30 w-[min(92vw,30rem)] max-h-[calc(100vh-8.25rem)] overflow-y-auto rounded-2xl bg-[#0d1117] border border-white/[0.1] shadow-2xl p-4 space-y-4 touch-pan-y"
+            style={{ left: popupPosition?.x ?? 8, top: popupPosition?.y ?? 70 }}
+          >
+            <div
+              className="flex items-center justify-between cursor-move select-none"
+              onPointerDown={(e) => {
+                const card = (e.currentTarget.parentElement as HTMLDivElement | null)
+                if (!card) return
+                const rect = card.getBoundingClientRect()
+                dragOffsetRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+                setDraggingPopup(true)
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide',
+                    manualSetup.action === 'BUY'
+                      ? 'bg-emerald-500/10 text-emerald-500'
+                      : 'bg-rose-500/10 text-rose-500'
+                  )}
+                >
+                  {manualSetup.action}
+                </span>
+                <span className="text-[13px] font-bold text-white">{symbol}</span>
+                <span className="text-[10px] font-medium text-slate-300 px-1.5 py-0.5 rounded bg-white/[0.05]">
+                  {strategyLabel}
+                </span>
+              </div>
+              <button
+                onClick={() => setManualSetup(null)}
+                className="px-2 py-0.5 rounded border border-white/[0.1] text-[10px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-colors"
+              >
+                Close
+              </button>
+            </div>

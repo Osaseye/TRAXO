@@ -110,10 +110,10 @@ export function analyzeSupplyDemand(ctx: SupplyDemandContext): SupplyDemandSigna
       (z.type === 'SUPPLY' && htfBias === 'BEARISH'),
   }))
 
-  // ── Quality gate (zone score ≥ 7) ─────────────────────────────────────────
-  const tradeable = zones.filter(z => z.quality_score >= 7)
+  // ── Quality gate (zone score ≥ 5) ─────────────────────────────────────────
+  const tradeable = zones.filter(z => z.quality_score >= 5)
   if (tradeable.length === 0) {
-    return noTrade(ctx, ['NO_ZONE: no zones passed quality gate (score ≥ 7)'])
+    return noTrade(ctx, ['NO_ZONE: no zones passed quality gate (score ≥ 5)'])
   }
 
   // ── Refine quality scores with opposing-zone distance ─────────────────────
@@ -131,7 +131,7 @@ export function analyzeSupplyDemand(ctx: SupplyDemandContext): SupplyDemandSigna
 
   // ── Select best zone by quality (prefer fresh DEMAND/SUPPLY nearest price) ─
   const lastClose = candles[currentIndex].close
-  const eligible  = scored.filter(z => z.quality_score >= 7)
+  const eligible  = scored.filter(z => z.quality_score >= 5)
   if (eligible.length === 0) return noTrade(ctx, ['NO_ZONE: all zones below quality gate after re-score'])
 
   const best = eligible.slice().sort((a, b) => {
@@ -141,11 +141,17 @@ export function analyzeSupplyDemand(ctx: SupplyDemandContext): SupplyDemandSigna
   })[0]
 
   // ── Only trigger if price is near the proximal line ──────────────────────
-  // (within 1.5 ATR of the proximal edge — zone is "in play")
+  // Zone is "in play" for pending setup. Scale distance gate by timeframe.
+  let distMult = 3.5
+  const tf = timeframe.toLowerCase()
+  if (['1m', '5m'].includes(tf)) distMult = 15.0
+  else if (['15m', '30m'].includes(tf)) distMult = 10.0
+  else if (['1h', '4h'].includes(tf)) distMult = 5.0
+
   const distToProximal = Math.abs(lastClose - best.proximal_line)
-  if (distToProximal > 1.5 * atr14) {
+  if (distToProximal > distMult * atr14) {
     return noTrade(ctx, [
-      `NO_TRIGGER: price ${lastClose.toFixed(5)} is ${distToProximal.toFixed(5)} away from proximal (> 1.5 ATR)`,
+      `NO_TRIGGER: price ${lastClose.toFixed(5)} is ${distToProximal.toFixed(5)} away from proximal (> ${distMult} ATR)`,
     ])
   }
 

@@ -9,76 +9,74 @@ import {
   Lock,
   Mail,
   Play,
+  Search,
   Sparkles,
   Target,
   TrendingUp,
   X,
   Zap,
+  BookOpenText,
+  SlidersHorizontal,
 } from 'lucide-react'
-import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
+import { StrategiesHeader } from '@/components/layout/StrategiesHeader'
+import { MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
 import { ONBOARDING_STRATEGIES, useOnboardingStore } from '@/stores/useOnboardingStore'
+import { cn } from '@/lib/utils'
 
 const STRATEGIES = [
   {
     id: 'wick-rejection',
     name: 'Wick Rejection',
-    tagline: 'Reversal at liquidity sweeps',
+    tagline: 'Reversal at key liquidity sweeps & wick tip rejections',
     timeframe: '1H / 4H',
     winRate: '74%',
     signalsPerDay: 4,
     type: 'reversal',
-    cover: '/strategies/wick-rejection/wick-rejection.png',
+    description: 'Detects high-volume wick exhaustion at key structural liquidity levels with ATR tolerance validation.',
   },
   {
     id: 'breakout',
-    name: 'Breakout',
-    tagline: 'Consolidation break with momentum',
+    name: 'Breakout Momentum',
+    tagline: 'Consolidation range expansion with institutional momentum',
     timeframe: '1H / 4H / 1D',
     winRate: '68%',
     signalsPerDay: 3,
     type: 'continuation',
-    cover: null,
+    description: 'Captures volatility expansion when price breaks out of multi-candle compression zones with volume confluence.',
   },
   {
     id: 'order-block',
-    name: 'Order Block',
-    tagline: 'Institutional footprint retest',
+    name: 'Order Block Retest',
+    tagline: 'Institutional footprint zone retest & order flow entry',
     timeframe: '1H / 4H',
     winRate: '71%',
     signalsPerDay: 3,
     type: 'reversal',
-    cover: null,
+    description: 'Identifies major institutional order blocks preceding energetic displacements and tracks mitigation retests.',
   },
   {
     id: 'supply-demand',
     name: 'Supply & Demand',
-    tagline: 'Zone reaction framework',
+    tagline: 'Imbalance zone reaction & structural flip framework',
     timeframe: '1H / 4H',
     winRate: '77%',
     signalsPerDay: 3,
     type: 'reversal',
-    cover: null,
+    description: 'Pins unmitigated supply and demand zones, targeting liquidity voids with precision stop-loss placement.',
   },
   {
     id: 'trend-following',
     name: 'Trend Following',
-    tagline: 'Pullback continuation model',
+    tagline: 'High-probability pullback continuation in dominant trend',
     timeframe: '4H / 1D',
     winRate: '69%',
     signalsPerDay: 2,
     type: 'continuation',
-    cover: null,
+    description: 'Filters market structure for higher-high/higher-low sequences and triggers entries on healthy retracements.',
   },
 ] as const
 
 type FilterType = 'all' | 'reversal' | 'continuation'
-
-function getWinRateTone(rateStr: string) {
-  const rate = parseInt(rateStr, 10)
-  if (rate >= 75) return 'border-[#22c55e]/30 bg-[#22c55e]/10 text-[#86efac]'
-  if (rate >= 70) return 'border-[#3b82f6]/30 bg-[#3b82f6]/10 text-[#bfdbfe]'
-  return 'border-white/[0.12] bg-white/[0.05] text-[#cbd5e1]'
-}
 
 function getStrategyIcon(id: string) {
   switch (id) {
@@ -99,6 +97,7 @@ function getStrategyIcon(id: string) {
 
 export default function StrategyManager() {
   const [filter, setFilter] = useState<FilterType>('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [isSubmitted, setIsSubmitted] = useState(false)
@@ -110,8 +109,12 @@ export default function StrategyManager() {
   const activeStrategyIds = plan === 'pro' ? selectedStrategyIds : [selectedStrategyId]
 
   const filteredStrategies = STRATEGIES.filter((strategy) => {
-    if (filter === 'all') return true
-    return strategy.type === filter
+    const matchesFilter = filter === 'all' || strategy.type === filter
+    const matchesSearch =
+      strategy.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      strategy.tagline.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      strategy.description.toLowerCase().includes(searchQuery.toLowerCase())
+    return matchesFilter && matchesSearch
   })
 
   const stats = useMemo(() => {
@@ -139,284 +142,251 @@ export default function StrategyManager() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white pb-24 lg:pb-8 relative">
-      <header className="h-14 border-b border-white/[0.05] bg-[#070709]/95 backdrop-blur px-3 sm:px-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <img src="/TRAXO-icon.png" alt="TRAXO" className="w-6 h-6 object-contain shrink-0" />
-          <span className="text-[10px] font-black tracking-[0.2em] uppercase text-white hidden sm:inline">TRAXO</span>
-          <span className="hidden sm:block h-4 w-px bg-white/[0.1]" />
-          <h1 className="text-[14px] font-semibold text-[#e5e7eb] truncate">Strategies</h1>
-        </div>
-        <DesktopWorkspaceNav />
-      </header>
+    <div className="min-h-screen bg-[#070709] text-white pb-24 lg:pb-8 relative selection:bg-blue-500/20">
+      {/* Sleek Top Header */}
+      <StrategiesHeader title="Strategies" subtitle="Institutional Trading Frameworks" />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
-        <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6">
-          <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-5">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.16em] text-[#64748b]">Strategy Library</p>
-              <h2 className="mt-2 text-2xl font-bold text-[#f8fafc]">Choose the framework behind your signals</h2>
-              <p className="mt-2 text-[13px] text-[#94a3b8] max-w-3xl">
-                Study entries, invalidation logic, risk models, and strategy-specific execution rules before taking setups live.
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* UNIFIED CONTIGUOUS TERMINAL WORKSPACE (NO FLOATING CARDS) */}
+        <div className="rounded-xl border border-white/[0.08] bg-[#090d14]/95 shadow-2xl backdrop-blur-xl overflow-hidden divide-y divide-white/[0.08]">
+          
+          {/* Top Panel Banner */}
+          <div className="p-5 sm:p-6 bg-[#05080f]/50 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+            <div className="space-y-1.5 max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                Strategy Execution Engine
+              </div>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+                Institutional Algorithmic Strategy Blueprints
+              </h1>
+              <p className="text-[12px] sm:text-[13px] text-slate-400 leading-relaxed">
+                Click any framework to inspect its mathematical entry criteria, stop loss placement rules, invalidation conditions, and live algorithm signal stream.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full xl:w-auto xl:min-w-[38rem]">
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Guides</p>
-                <p className="mt-1 text-[14px] font-bold text-[#f8fafc]">{STRATEGIES.length}</p>
+            {/* Metrics Bar inside top panel */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full xl:w-auto xl:min-w-[34rem]">
+              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
+                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Frameworks</p>
+                <p className="mt-1 text-lg font-bold text-white tabular-nums">{STRATEGIES.length}</p>
               </div>
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Active</p>
-                <p className="mt-1 text-[14px] font-bold text-[#f8fafc]">{activeStrategyIds.length}</p>
+              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
+                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Active Stack</p>
+                <p className="mt-1 text-lg font-bold text-emerald-400 tabular-nums">{activeStrategyIds.length}</p>
               </div>
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Avg WR</p>
-                <p className="mt-1 text-[14px] font-bold text-[#f8fafc]">{stats.avgWinRate}%</p>
+              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
+                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Avg Win Rate</p>
+                <p className="mt-1 text-lg font-bold text-blue-400 tabular-nums">{stats.avgWinRate}%</p>
               </div>
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Signals</p>
-                <p className="mt-1 text-[14px] font-bold text-[#f8fafc]">{stats.signalCapacity}/day</p>
+              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
+                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Daily Capacity</p>
+                <p className="mt-1 text-lg font-bold text-slate-200 tabular-nums">{stats.signalCapacity}/day</p>
               </div>
             </div>
           </div>
-        </section>
 
-        <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_24rem] gap-5">
-          <div className="space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-1.5 p-1 bg-[#0d1117] border border-white/[0.06] rounded-xl w-fit">
-                {(['all', 'reversal', 'continuation'] as const).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setFilter(type)}
-                    className={`h-8 px-3 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-colors ${
-                      filter === type
-                        ? 'bg-white/[0.09] text-white border border-white/[0.12]'
-                        : 'text-[#94a3b8] hover:text-white border border-transparent'
-                    }`}
-                  >
-                    {type === 'all' ? 'All Guides' : type}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[12px] text-[#64748b]">{filteredStrategies.length} guides shown</p>
+          {/* Controls Bar inside container */}
+          <div className="p-3 bg-[#070b12]/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-1 bg-[#090d14] p-1 rounded-lg border border-white/[0.06]">
+              {(['all', 'reversal', 'continuation'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFilter(type)}
+                  className={cn(
+                    "h-7 px-3 rounded text-[10px] font-extrabold uppercase tracking-wider transition-all",
+                    filter === type
+                      ? "bg-white/[0.1] text-white border border-white/[0.15] shadow-sm"
+                      : "text-slate-400 hover:text-white border border-transparent"
+                  )}
+                >
+                  {type === 'all' ? 'All Frameworks' : type}
+                </button>
+              ))}
             </div>
 
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredStrategies.map((strategy) => {
-                const Icon = getStrategyIcon(strategy.id)
-                const isActive = activeStrategyIds.includes(strategy.id)
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search framework rules..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-8 pl-8 pr-3 rounded-lg bg-[#090d14] border border-white/[0.08] text-[11px] text-white placeholder:text-slate-500 focus:outline-none focus:border-white/[0.2] transition-colors"
+              />
+            </div>
+          </div>
 
-                return (
-                  <Link
-                    key={strategy.id}
-                    to={`/strategies/${strategy.id}`}
-                    className="group rounded-2xl border border-white/[0.08] bg-[#0d1117] overflow-hidden hover:border-[#3b82f6]/35 transition-colors flex flex-col"
-                  >
-                    <div className="h-32 bg-[#0b0f17] relative border-b border-white/[0.06] overflow-hidden">
-                      {strategy.cover ? (
-                        <img
-                          src={strategy.cover}
-                          alt={`${strategy.name} cover`}
-                          className="absolute inset-0 w-full h-full object-cover opacity-75"
-                        />
-                      ) : (
-                        <div className="absolute inset-0 grid grid-cols-6 gap-px opacity-40">
-                          {Array.from({ length: 36 }).map((_, index) => (
-                            <span key={index} className="bg-white/[0.04]" />
-                          ))}
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#0d1117] via-[#0d1117]/45 to-transparent" />
-                      <div className="absolute top-3 left-3 w-9 h-9 rounded-lg border border-white/[0.12] bg-black/35 backdrop-blur-sm flex items-center justify-center text-[#bfdbfe]">
-                        <Icon size={17} />
-                      </div>
-                      <div className="absolute top-3 right-3 w-8 h-8 rounded-lg border border-white/[0.12] bg-black/35 backdrop-blur-sm flex items-center justify-center text-[#cbd5e1] group-hover:text-white group-hover:border-[#3b82f6]/45 transition-colors">
-                        <ArrowUpRight size={14} />
-                      </div>
-                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-3">
-                        <span className={`rounded-lg border px-2 py-1 text-[10px] font-semibold uppercase ${getWinRateTone(strategy.winRate)}`}>
-                          {strategy.winRate} win rate
-                        </span>
+          {/* Strategy Framework List Table (Contiguous, Zero Floating Cards) */}
+          <div className="divide-y divide-white/[0.06]">
+            {filteredStrategies.map((strategy) => {
+              const Icon = getStrategyIcon(strategy.id)
+              const isActive = activeStrategyIds.includes(strategy.id)
+
+              return (
+                <Link
+                  key={strategy.id}
+                  to={`/strategies/${strategy.id}`}
+                  className="group p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors"
+                >
+                  {/* Left Metadata & Logic */}
+                  <div className="flex items-start gap-4 min-w-0 flex-1">
+                    <div className="w-10 h-10 rounded-lg bg-[#05080f] border border-white/[0.1] flex items-center justify-center text-blue-400 shrink-0 group-hover:border-blue-500/40 transition-colors mt-0.5">
+                      <Icon size={18} />
+                    </div>
+
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-[14px] font-bold text-white group-hover:text-blue-300 transition-colors">
+                          {strategy.name}
+                        </h2>
                         <span
-                          className={`rounded-lg border px-2 py-1 text-[10px] font-semibold uppercase ${
+                          className={cn(
+                            "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0",
                             isActive
-                              ? 'border-[#22c55e]/30 bg-[#22c55e]/10 text-[#86efac]'
-                              : 'border-white/[0.12] bg-black/25 text-[#cbd5e1]'
-                          }`}
+                              ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                              : "bg-white/[0.04] text-slate-400 border-white/[0.08]"
+                          )}
                         >
-                          {isActive ? 'Active' : 'Available'}
+                          {isActive ? 'Active in Plan' : 'Available'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-white/[0.04] text-slate-400 border border-white/[0.06]">
+                          {strategy.type}
                         </span>
                       </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
+                        {strategy.description}
+                      </p>
                     </div>
+                  </div>
 
-                    <div className="p-4 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-[15px] font-bold text-white group-hover:text-[#bfdbfe] transition-colors">
-                            {strategy.name}
-                          </h3>
-                          <p className="mt-1 text-[12px] text-[#94a3b8]">{strategy.tagline}</p>
-                        </div>
+                  {/* Right Metrics & Action Link */}
+                  <div className="flex items-center justify-between md:justify-end gap-6 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-white/[0.06]">
+                    <div className="flex items-center gap-4 text-center">
+                      <div>
+                        <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Timeframe</span>
+                        <span className="text-[11px] font-bold text-slate-200">{strategy.timeframe}</span>
                       </div>
-
-                      <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
-                        <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-2">
-                          <p className="text-[#64748b]">Type</p>
-                          <p className="mt-1 font-semibold text-[#e5e7eb] capitalize">{strategy.type}</p>
-                        </div>
-                        <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-2">
-                          <p className="text-[#64748b]">Timeframe</p>
-                          <p className="mt-1 font-semibold text-[#e5e7eb]">{strategy.timeframe}</p>
-                        </div>
-                        <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-2">
-                          <p className="text-[#64748b]">Signals</p>
-                          <p className="mt-1 font-semibold text-[#e5e7eb]">{strategy.signalsPerDay}/day</p>
-                        </div>
+                      <div>
+                        <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Daily Signals</span>
+                        <span className="text-[11px] font-bold text-slate-200">{strategy.signalsPerDay}/day</span>
+                      </div>
+                      <div>
+                        <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Win Rate</span>
+                        <span className="text-[11px] font-extrabold text-emerald-400">{strategy.winRate}</span>
                       </div>
                     </div>
-                  </Link>
-                )
-              })}
-            </section>
+
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-400 group-hover:text-blue-300 transition-colors pl-2">
+                      <BookOpenText className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Inspect Framework</span>
+                      <ArrowUpRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    </div>
+                  </div>
+                </Link>
+              )
+            })}
           </div>
 
-          <aside className="space-y-5">
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5">
-              <div className="flex items-center gap-2">
-                <Layers3 size={16} className="text-[#93c5fd]" />
-                <p className="text-[13px] font-semibold">Library Mix</p>
+          {/* Bottom Phase 2 Custom Strategy Builder Callout */}
+          <div className="p-5 bg-[#05080f]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                <Sparkles size={16} />
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Reversal</p>
-                  <p className="mt-2 text-2xl font-bold">{stats.reversal}</p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[13px] font-bold text-white">Custom Strategy Builder Sandbox</h3>
+                  <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-white/[0.06] text-slate-400 border border-white/[0.08]">Phase 2</span>
                 </div>
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Continuation</p>
-                  <p className="mt-2 text-2xl font-bold">{stats.continuation}</p>
-                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">Design custom entry checkpoints, volatility filters, and backtest execution parameters.</p>
               </div>
-            </section>
+            </div>
 
-            <section
+            <button
               onClick={openBetaModal}
-              className="rounded-2xl border border-dashed border-white/[0.15] bg-[#0d1117] p-5 cursor-pointer hover:border-[#3b82f6]/45 transition-colors group"
+              className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.12] text-[10px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-colors shrink-0"
             >
-              <div className="w-10 h-10 rounded-lg border border-white/[0.12] bg-[#0b0f17] flex items-center justify-center text-[#bfdbfe]">
-                <Sparkles size={17} />
-              </div>
-              <p className="mt-4 text-[11px] uppercase tracking-[0.16em] text-[#64748b]">Phase 2 Sandbox</p>
-              <h3 className="mt-2 text-lg font-bold text-[#f8fafc] group-hover:text-[#bfdbfe] transition-colors">
-                Custom Strategy Builder
-              </h3>
-              <p className="mt-2 text-[12px] leading-relaxed text-[#94a3b8]">
-                Build rule blocks, define validation checkpoints, and run backtests before launching a live framework.
-              </p>
-              <div className="mt-4 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-white/[0.12] bg-[#0b0f17] text-[10px] font-semibold uppercase tracking-wider text-[#cbd5e1]">
-                <Lock size={11} />
-                Request beta access
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5">
-              <div className="flex items-center gap-2">
-                <Zap size={16} className="text-[#86efac]" />
-                <p className="text-[13px] font-semibold">Active Stack</p>
-              </div>
-              <div className="mt-4 space-y-2">
-                {ONBOARDING_STRATEGIES.filter((strategy) => activeStrategyIds.includes(strategy.id)).map((strategy) => (
-                  <div key={strategy.id} className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[12px] font-semibold text-[#e5e7eb]">{strategy.name}</p>
-                      <span className="text-[10px] text-[#94a3b8]">{strategy.winRate}</span>
-                    </div>
-                    <p className="mt-1 text-[11px] text-[#64748b]">{strategy.signalsPerDay} signals per day</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </aside>
-        </section>
+              <Lock size={10} />
+              <span>Request Sandbox Access</span>
+            </button>
+          </div>
+        </div>
       </main>
 
+      {/* Beta Access Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="relative w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="relative w-full max-w-md rounded-xl border border-white/[0.14] bg-[#090d14] p-5 shadow-2xl space-y-4">
             <button
               onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-lg border border-white/[0.08] hover:border-white/[0.15] bg-[#0b0f17] flex items-center justify-center text-[#94a3b8] hover:text-white transition-colors"
-              aria-label="Close modal"
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
             >
-              <X size={14} />
+              <X size={16} />
             </button>
 
             {!isSubmitted ? (
               <div className="space-y-4">
-                <div className="w-10 h-10 rounded-lg bg-[#3b82f6]/10 border border-[#3b82f6]/20 flex items-center justify-center text-[#bfdbfe]">
-                  <Sparkles size={18} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold">Custom Strategy Builder Beta</h3>
-                  <p className="mt-2 text-[12px] leading-relaxed text-[#94a3b8]">
-                    Define entries, validation checkpoints, filters, and stop structures before compiling them into a backtesting workflow.
-                  </p>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                    <Sparkles size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-bold text-white">Custom Strategy Builder Beta</h3>
+                    <p className="text-[10px] text-slate-400">Request sandbox access</p>
+                  </div>
                 </div>
 
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3 space-y-2 text-[10px]">
-                  <p className="uppercase tracking-[0.16em] text-[#64748b]">Rule Flow Preview</p>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-[#070709] border border-white/[0.06]">
-                    <span className="text-[#e5e7eb]">Rule 1: Rejection Wick Ratio</span>
-                    <span className="text-[#94a3b8]">&gt;= 2:1</span>
+                <div className="rounded-lg border border-white/[0.08] bg-[#05080f] p-3 space-y-2 text-[10px]">
+                  <p className="uppercase font-bold tracking-widest text-slate-500">Visual Rule Compiler Preview</p>
+                  <div className="p-2 rounded bg-[#090d14] border border-white/[0.06] flex justify-between">
+                    <span className="text-slate-300 font-semibold">1. Rejection Wick Ratio</span>
+                    <span className="text-blue-400 font-bold">&gt;= 3:1</span>
                   </div>
-                  <div className="flex justify-center">
-                    <ChevronRight size={12} className="text-[#64748b] rotate-90" />
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-[#070709] border border-white/[0.06]">
-                    <span className="text-[#e5e7eb]">Rule 2: Volatility Filter</span>
-                    <span className="text-[#94a3b8]">ATR &gt; 1.5</span>
+                  <div className="p-2 rounded bg-[#090d14] border border-white/[0.06] flex justify-between">
+                    <span className="text-slate-300 font-semibold">2. Volume Confluence</span>
+                    <span className="text-emerald-400 font-bold">&gt; 1.5x MA20</span>
                   </div>
                 </div>
 
                 <form onSubmit={handleJoinWaitlist} className="space-y-2.5">
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748b]" />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input
                       type="email"
                       required
-                      placeholder="Enter your trading account email"
+                      placeholder="Enter your trading email"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      className="w-full h-10 pl-9 pr-4 rounded-lg border border-white/[0.08] bg-[#0b0f17] text-xs text-white placeholder:text-[#64748b] focus:outline-none focus:border-[#3b82f6]/50 transition-colors"
+                      className="w-full h-9 pl-9 pr-3 rounded-lg border border-white/[0.1] bg-[#05080f] text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50"
                     />
                   </div>
                   <button
                     type="submit"
-                    className="w-full h-10 rounded-lg bg-white text-[#111827] font-semibold text-xs flex items-center justify-center gap-1.5 hover:bg-[#e5e7eb] transition-colors"
+                    className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-lg"
                   >
                     <Play size={12} fill="currentColor" />
-                    Join sandbox beta waitlist
+                    Join Strategy Sandbox Beta
                   </button>
                 </form>
               </div>
             ) : (
-              <div className="text-center py-6 space-y-4">
-                <div className="w-12 h-12 rounded-lg bg-[#22c55e]/10 border border-[#22c55e]/25 flex items-center justify-center text-[#86efac] mx-auto">
-                  <CheckCircle2 size={22} />
+              <div className="text-center py-4 space-y-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto">
+                  <CheckCircle2 size={20} />
                 </div>
-                <div className="space-y-1">
-                  <h3 className="text-lg font-bold text-white">You are on the list</h3>
-                  <p className="text-xs text-[#94a3b8] leading-relaxed">
-                    We saved your beta request under <span className="text-white font-semibold">{email}</span>.
-                  </p>
-                </div>
+                <h3 className="text-[14px] font-bold text-white">Beta Access Requested</h3>
+                <p className="text-xs text-slate-400">
+                  We registered your request for <span className="text-white font-bold">{email}</span>.
+                </p>
                 <button
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 h-9 rounded-lg border border-white/[0.08] hover:border-white/[0.15] bg-[#0b0f17] text-xs text-[#cbd5e1] transition-colors"
+                  className="h-8 px-4 rounded-lg bg-white/[0.06] text-xs font-bold text-slate-200 hover:text-white"
                 >
-                  Return to library
+                  Return to Frameworks
                 </button>
               </div>
             )}

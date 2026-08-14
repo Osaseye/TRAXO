@@ -4,6 +4,7 @@ const candleCache = require('./candleCache');
 const signalStore = require('./signalStore');
 const websocketManager = require('./websocketManager');
 const redis = require('./redisClient');
+const { getCachedNews } = require('./newsCache');
 
 // ─────────────────────────────────────────────
 // Timeframe normalisation
@@ -127,9 +128,44 @@ function normalizeCandle(candle) {
 }
 
 // ─────────────────────────────────────────────
+// News Parsing Utility
+// ─────────────────────────────────────────────
+async function getUpcomingNewsForSymbol(symbol) {
+  const assetType = getAssetType(symbol);
+  let category = 'general';
+  if (assetType === 'FOREX') category = 'forex';
+  if (assetType === 'CRYPTO') category = 'crypto';
+  
+  const newsItems = await getCachedNews(`news:${category}`);
+  if (!newsItems || !newsItems.length) return null;
+
+  const now = Math.floor(Date.now() / 1000);
+  let minMinutes = null;
+  
+  // Extract base and quote for forex/crypto (e.g., 'EUR', 'USD' from 'EUR/USD' or 'BTCUSDT')
+  const cleanSym = symbol.replace('/', '');
+  const tokens = assetType === 'FOREX' || assetType === 'CRYPTO' 
+    ? [cleanSym.slice(0, 3), cleanSym.slice(3, 6)].filter(Boolean)
+    : [cleanSym];
+  
+  for (const item of newsItems) {
+    const text = (item.headline + ' ' + item.summary).toUpperCase();
+    const isRelevant = tokens.some(t => text.includes(t));
+    if (isRelevant) {
+      const minutesAway = Math.floor((item.datetime - now) / 60);
+      if (minutesAway >= 0 && (minMinutes === null || minutesAway < minMinutes)) {
+        minMinutes = minutesAway;
+      }
+    }
+  }
+  
+  return minMinutes;
+}
+
+// ─────────────────────────────────────────────
 // Strategy runner — mirrors signalDetection.ts
 // ─────────────────────────────────────────────
-function runAllStrategies(candles, symbol, timeframe) {
+function runAllStrategies(candles, symbol, timeframe, newsMinutesAway = null) {
   if (!candles || candles.length < 30) return [];
 
   candles = candles.map(normalizeCandle);
@@ -146,7 +182,7 @@ function runAllStrategies(candles, symbol, timeframe) {
     // ── Breakout ──────────────────────────────────────────────────────
     () => {
       const raw = mods.analyzeBreakout({
-        symbol, timeframe, assetType, candles,
+        symbol, timeframe, assetType, candles, newsMinutesAway
       });
       return raw;
     },
@@ -154,13 +190,13 @@ function runAllStrategies(candles, symbol, timeframe) {
     () => {
       return mods.analyzeOrderBlock({
         symbol, asset_type: assetType, timeframe,
-        candles, atr14, volumeMa20,
+        candles, atr14, volumeMa20, newsMinutesAway
       });
     },
     // ── Supply & Demand ───────────────────────────────────────────────
     () => {
       return mods.analyzeSupplyDemand({
-        symbol, timeframe, assetType, candles,
+        symbol, timeframe, assetType, candles, newsMinutesAway
       });
     },
     // ── Trend Following ───────────────────────────────────────────────
@@ -170,7 +206,7 @@ function runAllStrategies(candles, symbol, timeframe) {
         asset_type: assetType,
         htfTrendDirection: 'UNKNOWN',
         htfAdx: 0,
-        newsMinutesAway: null,
+        newsMinutesAway,
         consecutiveLosses: 0,
         rollingDrawdownPct: 0,
       });
@@ -184,6 +220,7 @@ function runAllStrategies(candles, symbol, timeframe) {
         atr14, volumeMa20,
         htfBias:    'neutral',
         nearestZone: null,
+        newsMinutesAway,
       });
     },
   ];
@@ -344,25 +381,28 @@ async function runScan() {
           candles = await marketDataService.fetchCandles(symbol, timeframe, 200);
           if (candles && candles.length > 0) {
             await candleCache.cacheCandles(symbol, timeframe, candles, 200);
+          }
+        }
 
-            const latestCandle = candles[candles.length - 1];
-            const frontSymbol = symbol.replace('/', '');
-            const frontTimeframe = toFrontendTimeframe(timeframe);
+        if (candles && candles.length > 0) {
+          const latestCandle = candles[candles.length - 1];
+          const frontSymbol = symbol.replace('/', '');
+          const frontTimeframe = toFrontendTimeframe(timeframe);
 
-            // Push the freshest candle to the frontend so charts tick live
-            websocketManager.broadcast({
-              type: 'NEW_CANDLE',
-              payload: {
-                ...latestCandle,
-                symbol: frontSymbol,
-                timeframe: frontTimeframe,
-              },
-            });
+          // Push the freshest candle to the frontend so charts tick live
+          websocketManager.broadcast({
+            type: 'NEW_CANDLE',
+            payload: {
+              ...latestCandle,
+              symbol: frontSymbol,
+              timeframe: frontTimeframe,
+            },
+          });
 
-            // ─────────────────────────────────────────────
-            // Evaluation Loop: Check active signals for TP/SL hits
-            // ─────────────────────────────────────────────
-            const activeSignals = await signalStore.getActiveLiveSignals(frontSymbol, frontTimeframe);
+          // ─────────────────────────────────────────────
+          // Evaluation Loop: Check active signals for TP/SL hits
+          // ─────────────────────────────────────────────
+          const activeSignals = await signalStore.getActiveLiveSignals(frontSymbol, frontTimeframe);
             for (const sig of activeSignals) {
               let outcome = null;
 
@@ -384,12 +424,17 @@ async function runScan() {
               }
             }
           }
-        }
 
         if (!candles || candles.length === 0) continue;
 
+        // Fetch upcoming news for this symbol
+        const newsMinutesAway = await getUpcomingNewsForSymbol(symbol).catch(err => {
+          console.error(`Error fetching news for ${symbol}:`, err.message);
+          return null;
+        });
+
         // 2. Run all 5 strategies (strip '/' from symbol for strategy engine)
-        const { signals: found, rejects } = runAllStrategies(candles, symbol.replace('/', ''), timeframe);
+        const { signals: found, rejects } = runAllStrategies(candles, symbol.replace('/', ''), timeframe, newsMinutesAway);
 
         // Store rejections in Redis for Admin Panel transparency (2 hours TTL)
         try {

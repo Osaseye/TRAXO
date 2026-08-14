@@ -62,7 +62,7 @@ export function detectBreakout(
   const n = candles.length
   const threshold = BREAKOUT_BODY_THRESHOLD_ATR * atr14
 
-  for (let offset = 0; offset < 3; offset++) {
+  for (let offset = 0; offset < RETEST_WINDOW; offset++) {
     const idx = n - 1 - offset
     if (idx < 0) break
 

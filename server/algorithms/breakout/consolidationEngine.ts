@@ -29,7 +29,7 @@ import type {
 // ─────────────────────────────────────────────
 
 const SWING_LOOKBACK          = 5      // bars each side for swing detection
-const TOUCH_TOLERANCE_MULT    = 0.15   // ATR multiplier for trendline touch
+const TOUCH_TOLERANCE_MULT    = 0.35   // ATR multiplier for trendline touch
 const MIN_TOUCH_COUNT         = 2      // touches required on each trendline
 const MIN_RANGE_HEIGHT_ATR    = 1.0    // zone must span >= 1 ATR
 const MIN_FORMATION_CANDLES   = 8      // zone must be at least 8 candles old

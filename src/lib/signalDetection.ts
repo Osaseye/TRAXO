@@ -29,11 +29,15 @@ export interface AnalysisSignal {
   confidence: number;
   risk: RiskLabel;
   reason: string[];
-  status?: 'live' | 'expired';
+  status?: 'live' | 'expired' | 'WIN' | 'LOSS' | 'tp_hit' | 'sl_hit' | string;
 }
 
 export function priceDigits(symbol: string): number {
-  return symbol.includes('JPY') ? 3 : 5;
+  if (symbol.includes('JPY')) return 3
+  if (['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT'].includes(symbol)) return 2
+  if (['XAUUSD', 'XAGUSD', 'SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'WTI', 'BRENT', 'NATGAS'].includes(symbol)) return 2
+  if (['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'].includes(symbol)) return 2
+  return 5
 }
 
 const CRYPTO_SYMBOLS = ['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT'];

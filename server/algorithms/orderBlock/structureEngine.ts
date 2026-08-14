@@ -134,23 +134,31 @@ export function detectBOS(
 ): { direction: 'BULLISH' | 'BEARISH'; candle_idx: number; confirmed: boolean } | null {
   if (swings.length === 0) return null
 
-  const lastHigh = swings.filter((s) => s.type === 'HH' || s.type === 'LH').at(-1)
-  const lastLow = swings.filter((s) => s.type === 'LL' || s.type === 'HL').at(-1)
+  let latestBOS: { direction: 'BULLISH' | 'BEARISH'; candle_idx: number; confirmed: boolean } | null = null
 
-  // Search from the most recent swing forward
-  const startIdx = swings.at(-1)?.index ?? 0
+  // Check the last 20 swings to find the most recent BOS event
+  const recentSwings = swings.slice(-20)
 
-  for (let i = startIdx + 1; i < candles.length; i++) {
-    const c = candles[i]
-    if (lastHigh && c.close > lastHigh.price) {
-      return { direction: 'BULLISH', candle_idx: i, confirmed: true }
-    }
-    if (lastLow && c.close < lastLow.price) {
-      return { direction: 'BEARISH', candle_idx: i, confirmed: true }
+  for (const swing of recentSwings) {
+    // Find the first candle after this swing that breaks it
+    for (let i = swing.index + 1; i < candles.length; i++) {
+      const c = candles[i]
+      if ((swing.type === 'HH' || swing.type === 'LH') && c.close > swing.price) {
+        if (!latestBOS || i > latestBOS.candle_idx) {
+          latestBOS = { direction: 'BULLISH', candle_idx: i, confirmed: true }
+        }
+        break // only care about the first break of this swing
+      }
+      if ((swing.type === 'LL' || swing.type === 'HL') && c.close < swing.price) {
+        if (!latestBOS || i > latestBOS.candle_idx) {
+          latestBOS = { direction: 'BEARISH', candle_idx: i, confirmed: true }
+        }
+        break // only care about the first break of this swing
+      }
     }
   }
 
-  return null
+  return latestBOS
 }
 
 /**

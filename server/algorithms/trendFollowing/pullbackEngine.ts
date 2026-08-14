@@ -243,8 +243,8 @@ export function detectPullback(
     const fibR618 = hhPrice - 0.618 * range
     const fibR786 = hhPrice - 0.786 * range
 
-    // OTE zone: between 61.8% (higher price) and 78.6% (lower price)
-    const oteZoneHigh = fibR618
+    // OTE zone: between 50.0% (higher price) and 78.6% (lower price)
+    const oteZoneHigh = fibR500
     const oteZoneLow  = fibR786
 
     // Prior impulse candles (from lastHL to lastHH) for FVG/OB scanning
@@ -311,8 +311,8 @@ export function detectPullback(
   const fibR618 = llPrice + 0.618 * range
   const fibR786 = llPrice + 0.786 * range
 
-  // For bear: OTE zone between 61.8% (lower price) and 78.6% (higher price)
-  const oteZoneLow  = fibR618
+  // For bear: OTE zone between 50.0% (lower price) and 78.6% (higher price)
+  const oteZoneLow  = fibR500
   const oteZoneHigh = fibR786
 
   const impulseStart   = Math.max(0, lastLH.index)

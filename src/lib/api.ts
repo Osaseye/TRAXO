@@ -51,3 +51,34 @@ export const getScannerStatus = () => {
 export const getScannerRejects = (symbol: string, timeframe: string) => {
   return request(`/api/scanner/rejects?symbol=${symbol}&timeframe=${timeframe}`);
 };
+
+export const getTradingContext = (uid?: string) => {
+  const query = uid ? `?uid=${uid}` : '';
+  return request(`/api/trading-context${query}`);
+};
+
+export const postTradingContext = (data: any) => {
+  return request('/api/trading-context', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+export const getJournalEntries = (uid?: string) => {
+  const query = uid ? `?uid=${uid}` : '';
+  return request(`/api/journal${query}`);
+};
+
+export const postJournalEntry = (entry: any) => {
+  return request('/api/journal', {
+    method: 'POST',
+    body: JSON.stringify(entry),
+  });
+};
+
+export const updateJournalEntry = (id: string, updates: any) => {
+  return request(`/api/journal/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+};

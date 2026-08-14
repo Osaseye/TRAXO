@@ -1,0 +1,17 @@
+{
+  "watch": [
+    "index.js",
+    "routes",
+    "services",
+    "algorithms",
+    "scripts"
+  ],
+  "ext": "js,ts,json",
+  "ignore": [
+    "*.test.ts",
+    "*.spec.ts",
+    "node_modules",
+    ".git"
+  ],
+  "delay": "1000"
+}

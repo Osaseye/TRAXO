@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router'
 import {
   Activity,
   BadgeCheck,
@@ -11,12 +12,16 @@ import {
   SlidersHorizontal,
   Target,
   UserRound,
+  User,
+  Save,
+  CheckCircle2,
 } from 'lucide-react'
 import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
 import { ONBOARDING_STRATEGIES, useOnboardingStore } from '@/stores/useOnboardingStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useProfileStore } from '@/stores/useProfileStore'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
+import { cn } from '@/lib/utils'
 
 function formatCurrency(value: number) {
   return `$${value.toLocaleString(undefined, {
@@ -65,6 +70,7 @@ export default function Profile() {
   const displayName = authUser?.displayName || authUser?.fullName || 'TRAXO Trader'
   const dobLabel = authUser?.dob ? new Date(authUser.dob).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not set'
 
+  const [savedSuccess, setSavedSuccess] = useState(false)
   const [form, setForm] = useState({
     fullName: authUser?.fullName ?? '',
     displayName: authUser?.displayName ?? '',
@@ -123,335 +129,261 @@ export default function Profile() {
 
   function saveProfile() {
     updateProfile(form)
+    setSavedSuccess(true)
+    setTimeout(() => setSavedSuccess(false), 3000)
   }
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white pb-24 lg:pb-8">
-      <header className="h-14 border-b border-white/[0.05] bg-[#070709]/95 backdrop-blur px-3 sm:px-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <img src="/TRAXO-icon.png" alt="TRAXO" className="w-6 h-6 object-contain shrink-0" />
-          <span className="text-[10px] font-black tracking-[0.2em] uppercase text-white hidden sm:inline">TRAXO</span>
-          <span className="hidden sm:block h-4 w-px bg-white/[0.1]" />
-          <h1 className="text-[14px] font-semibold text-[#e5e7eb] truncate">Profile</h1>
+    <div className="min-h-screen bg-[#070709] text-white pb-24 lg:pb-8 selection:bg-blue-500/20">
+      {/* Header Bar */}
+      <header className="h-14 border-b border-white/[0.08] bg-[#070709]/95 backdrop-blur-xl px-3 sm:px-6 flex items-center justify-between gap-3 sticky top-0 z-40">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link to="/dashboard" className="flex items-center gap-2 shrink-0 group">
+            <div className="w-7 h-7 rounded-lg bg-[#0d1117] border border-white/[0.12] flex items-center justify-center group-hover:border-white/[0.25] transition-colors">
+              <img src="/TRAXO-icon.png" alt="TRAXO" className="w-4 h-4 object-contain" />
+            </div>
+            <span className="text-[11px] font-black tracking-[0.22em] uppercase text-white hidden sm:inline">
+              TRAXO
+            </span>
+          </Link>
+
+          <span className="h-4 w-px bg-white/[0.1] hidden sm:block shrink-0" />
+
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#0d1117] border border-white/[0.08]">
+              <User className="w-3.5 h-3.5 text-blue-400" />
+              <span className="text-[11px] font-semibold text-slate-200 truncate">Trader Profile</span>
+            </div>
+          </div>
         </div>
+
         <DesktopWorkspaceNav />
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
-        <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+      {/* Main Workspace */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* UNIFIED CONTIGUOUS TERMINAL WORKSPACE CONTAINER (NO FLOATING CARDS) */}
+        <div className="rounded-xl border border-white/[0.08] bg-[#090d14]/95 shadow-2xl backdrop-blur-xl overflow-hidden divide-y divide-white/[0.08]">
+          
+          {/* Top User Identity Banner */}
+          <div className="p-5 sm:p-6 bg-[#05080f]/50 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div className="flex items-center gap-4 min-w-0">
-              <div className="w-16 h-16 rounded-2xl border border-[#3b82f6]/25 bg-[#3b82f6]/10 flex items-center justify-center text-xl font-black text-[#bfdbfe] shrink-0">
+              <div className="w-14 h-14 rounded-xl border border-blue-500/30 bg-blue-500/10 flex items-center justify-center text-lg font-black text-blue-400 shrink-0">
                 {initials}
               </div>
-              <div className="min-w-0">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-[#64748b]">Trader Profile</p>
-                <h2 className="mt-1 text-2xl font-bold text-[#f8fafc] truncate">{displayName}</h2>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-[#94a3b8]">
+              <div className="space-y-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white truncate">{displayName}</h1>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                    {accountStatus}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
                   <span className="inline-flex items-center gap-1.5">
-                    <Mail size={13} />
+                    <Mail size={12} className="text-slate-500" />
                     {effectiveEmail}
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <MapPin size={13} />
+                    <MapPin size={12} className="text-slate-500" />
                     {authUser?.country || 'Country not set'}
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <CalendarClock size={13} />
+                    <CalendarClock size={12} className="text-slate-500" />
                     {dobLabel}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full lg:w-auto lg:min-w-[27rem]">
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Plan</p>
-                <p className="mt-1 text-[14px] font-bold text-[#f8fafc] capitalize">{plan}</p>
+            {/* Quick Account Status Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full lg:w-auto lg:min-w-[30rem]">
+              <div className="p-2.5 rounded-lg bg-[#070b12] border border-white/[0.06] text-center">
+                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Plan</span>
+                <span className="text-sm font-extrabold text-white capitalize">{plan}</span>
               </div>
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Status</p>
-                <p className="mt-1 text-[14px] font-bold text-[#86efac] capitalize">{accountStatus}</p>
+              <div className="p-2.5 rounded-lg bg-[#070b12] border border-white/[0.06] text-center">
+                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">2FA Security</span>
+                <span className={cn("text-sm font-extrabold", twoFaEnabled ? "text-emerald-400" : "text-amber-400")}>
+                  {twoFaEnabled ? 'Enabled' : 'Disabled'}
+                </span>
               </div>
-              <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3 col-span-2 sm:col-span-1">
-                <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Security</p>
-                <p className="mt-1 text-[14px] font-bold text-[#f8fafc]">
-                  {twoFaEnabled ? '2FA enabled' : '2FA off'}
-                </p>
+              <div className="p-2.5 rounded-lg bg-[#070b12] border border-white/[0.06] text-center">
+                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Logged Trades</span>
+                <span className="text-sm font-extrabold text-slate-200 tabular-nums">{journalStats.total}</span>
+              </div>
+              <div className="p-2.5 rounded-lg bg-[#070b12] border border-white/[0.06] text-center">
+                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Win Rate</span>
+                <span className="text-sm font-extrabold text-emerald-400 tabular-nums">{journalStats.winRate}%</span>
               </div>
             </div>
           </div>
-        </section>
 
-        <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_24rem] gap-5">
-          <div className="space-y-5">
-            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-              <div className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-4">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#64748b]">
-                  <Crown size={14} className="text-[#fde68a]" />
-                  Account Balance
+          {/* Account Metrics Strip */}
+          <div className="p-5 bg-[#070b12]/80 space-y-3">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trading Operating Context</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3.5 rounded-lg bg-[#090d14] border border-white/[0.06]">
+                <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold tracking-widest text-slate-500">
+                  <Crown size={12} className="text-amber-400" />
+                  <span>Account Balance</span>
                 </div>
-                <p className="mt-3 text-2xl font-bold text-[#f8fafc]">{formatCurrency(accountBalance)}</p>
+                <p className="mt-2 text-lg font-extrabold text-white tabular-nums">{formatCurrency(accountBalance)}</p>
               </div>
-              <div className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-4">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#64748b]">
-                  <Target size={14} className="text-[#93c5fd]" />
-                  Risk Per Trade
-                </div>
-                <p className="mt-3 text-2xl font-bold text-[#f8fafc]">{riskPerTradePct.toFixed(1)}%</p>
-              </div>
-              <div className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-4">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#64748b]">
-                  <ShieldCheck size={14} className="text-[#fca5a5]" />
-                  Daily Loss Cap
-                </div>
-                <p className="mt-3 text-2xl font-bold text-[#f8fafc]">{maxDailyLossPct.toFixed(1)}%</p>
-              </div>
-              <div className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-4">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-[#64748b]">
-                  <Activity size={14} className="text-[#86efac]" />
-                  Win Rate
-                </div>
-                <p className="mt-3 text-2xl font-bold text-[#f8fafc]">{journalStats.winRate}%</p>
-              </div>
-            </section>
 
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-[#64748b]">Trading Snapshot</p>
-                  <h2 className="mt-2 text-xl font-bold text-[#f8fafc]">Current operating profile</h2>
+              <div className="p-3.5 rounded-lg bg-[#090d14] border border-white/[0.06]">
+                <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold tracking-widest text-slate-500">
+                  <Target size={12} className="text-blue-400" />
+                  <span>Risk Per Trade</span>
                 </div>
-                <span className="h-8 px-3 rounded-lg border border-white/[0.08] bg-[#0b0f17] text-[11px] font-semibold text-[#cbd5e1] inline-flex items-center justify-center w-fit">
-                  {plan === 'pro' ? `${activeStrategies.length} active strategies` : '1 active strategy'}
+                <p className="mt-2 text-lg font-extrabold text-blue-400 tabular-nums">{riskPerTradePct.toFixed(1)}%</p>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-[#090d14] border border-white/[0.06]">
+                <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold tracking-widest text-slate-500">
+                  <ShieldCheck size={12} className="text-rose-400" />
+                  <span>Daily Loss Cap</span>
+                </div>
+                <p className="mt-2 text-lg font-extrabold text-rose-400 tabular-nums">{maxDailyLossPct.toFixed(1)}%</p>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-[#090d14] border border-white/[0.06]">
+                <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold tracking-widest text-slate-500">
+                  <Activity size={12} className="text-emerald-400" />
+                  <span>Win Rate</span>
+                </div>
+                <p className="mt-2 text-lg font-extrabold text-emerald-400 tabular-nums">{journalStats.winRate}%</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Operating Profile & Parameters */}
+          <div className="p-5 sm:p-6 space-y-4">
+            <h3 className="text-[12px] font-bold text-white uppercase tracking-wider">Strategy & Market Profile</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-lg bg-[#05080f] border border-white/[0.06]">
+                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Active Strategy Stack</span>
+                <span className="text-[12px] font-bold text-slate-200 mt-1 block">
+                  {activeStrategies.length > 0 ? activeStrategies.join(', ') : 'No strategy selected'}
                 </span>
               </div>
 
-              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Strategy Stack</p>
-                  <p className="mt-2 text-[14px] font-semibold text-[#e5e7eb]">
-                    {activeStrategies.length > 0 ? activeStrategies.join(', ') : 'No strategy selected'}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Experience</p>
-                  <p className="mt-2 text-[14px] font-semibold text-[#e5e7eb]">{formatLabel(experienceLevel)}</p>
-                </div>
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Markets</p>
-                  <p className="mt-2 text-[14px] font-semibold text-[#e5e7eb]">{instrumentsText}</p>
-                </div>
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Display name</p>
-                  <p className="mt-2 text-[14px] font-semibold text-[#e5e7eb]">{authUser?.displayName || 'Not set'}</p>
-                </div>
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-4">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Latest Journal Event</p>
-                  <p className="mt-2 text-[14px] font-semibold text-[#e5e7eb]">
-                    {journalStats.latest
-                      ? `${journalStats.latest.symbol} - ${journalStats.latest.outcome}`
-                      : 'No trades logged'}
-                  </p>
-                </div>
+              <div className="p-3.5 rounded-lg bg-[#05080f] border border-white/[0.06]">
+                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Experience Level</span>
+                <span className="text-[12px] font-bold text-slate-200 mt-1 block">{formatLabel(experienceLevel)}</span>
               </div>
-            </section>
 
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5 sm:p-6">
+              <div className="p-3.5 rounded-lg bg-[#05080f] border border-white/[0.06]">
+                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Traded Markets</span>
+                <span className="text-[12px] font-bold text-slate-200 mt-1 block">{instrumentsText}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Personal Information Form */}
+          <div className="p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[12px] font-bold text-white uppercase tracking-wider">Personal Information & Identity</h3>
+              {savedSuccess && (
+                <div className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/30">
+                  <CheckCircle2 size={12} />
+                  <span>Profile updated successfully!</span>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label className="text-[11px] font-bold text-slate-300">
+                Full Name
+                <input
+                  value={form.fullName}
+                  onChange={(event) => updateField('fullName', event.target.value)}
+                  className="mt-1 h-9 w-full rounded-lg border border-white/[0.1] bg-[#05080f] px-3 text-[12px] text-white outline-none focus:border-blue-500/50"
+                />
+              </label>
+
+              <label className="text-[11px] font-bold text-slate-300">
+                Display Name
+                <input
+                  value={form.displayName}
+                  onChange={(event) => updateField('displayName', event.target.value)}
+                  className="mt-1 h-9 w-full rounded-lg border border-white/[0.1] bg-[#05080f] px-3 text-[12px] text-white outline-none focus:border-blue-500/50"
+                />
+              </label>
+
+              <label className="text-[11px] font-bold text-slate-300">
+                Date of Birth
+                <input
+                  type="date"
+                  value={form.dob}
+                  onChange={(event) => updateField('dob', event.target.value)}
+                  className="mt-1 h-9 w-full rounded-lg border border-white/[0.1] bg-[#05080f] px-3 text-[12px] text-white outline-none focus:border-blue-500/50"
+                />
+              </label>
+
+              <label className="text-[11px] font-bold text-slate-300">
+                Country
+                <input
+                  value={form.country}
+                  onChange={(event) => updateField('country', event.target.value)}
+                  className="mt-1 h-9 w-full rounded-lg border border-white/[0.1] bg-[#05080f] px-3 text-[12px] text-white outline-none focus:border-blue-500/50"
+                />
+              </label>
+
+              <label className="text-[11px] font-bold text-slate-300 sm:col-span-2">
+                Email Address
+                <input
+                  type="email"
+                  value={form.email}
+                  readOnly
+                  className="mt-1 h-9 w-full rounded-lg border border-white/[0.08] bg-[#05080f] px-3 text-[12px] text-slate-500 outline-none cursor-not-allowed"
+                />
+              </label>
+
+              <label className="text-[11px] font-bold text-slate-300 sm:col-span-2">
+                Trader Bio & Operating Notes
+                <textarea
+                  value={form.bio}
+                  onChange={(event) => updateField('bio', event.target.value)}
+                  className="mt-1 min-h-20 w-full rounded-lg border border-white/[0.1] bg-[#05080f] px-3 py-2 text-[12px] text-white outline-none focus:border-blue-500/50"
+                />
+              </label>
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={saveProfile}
+                className="h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors shadow-lg"
+              >
+                <Save size={13} />
+                <span>Save Profile Changes</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Account Security & 2FA */}
+          <div className="p-5 sm:p-6 space-y-4 bg-[#070b12]/50">
+            <h3 className="text-[12px] font-bold text-white uppercase tracking-wider">Account Security & Two-Factor Auth</h3>
+            
+            <div className="p-4 rounded-lg bg-[#05080f] border border-white/[0.06] flex items-center justify-between gap-4">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.16em] text-[#64748b]">Identity</p>
-                <h2 className="mt-2 text-xl font-bold text-[#f8fafc]">Personal information</h2>
-              </div>
-
-              <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="text-[12px] text-[#94a3b8] sm:col-span-2">
-                  Full name
-                  <input
-                    value={form.fullName}
-                    onChange={(event) => updateField('fullName', event.target.value)}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
-                  />
-                </label>
-                <label className="text-[12px] text-[#94a3b8] sm:col-span-2">
-                  Display name
-                  <input
-                    value={form.displayName}
-                    onChange={(event) => updateField('displayName', event.target.value)}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
-                  />
-                </label>
-                <label className="text-[12px] text-[#94a3b8]">
-                  Date of birth
-                  <input
-                    type="date"
-                    value={form.dob}
-                    onChange={(event) => updateField('dob', event.target.value)}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
-                  />
-                </label>
-                <label className="text-[12px] text-[#94a3b8]">
-                  Country
-                  <input
-                    value={form.country}
-                    onChange={(event) => updateField('country', event.target.value)}
-                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
-                  />
-                </label>
-                <label className="text-[12px] text-[#94a3b8] sm:col-span-2">
-                  Email
-                  <input
-                    type="email"
-                    value={form.email}
-                    readOnly
-                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-[#94a3b8] outline-none cursor-not-allowed"
-                  />
-                  <span className="mt-1 block text-[10px] text-[#64748b]">Managed by sign-in email</span>
-                </label>
-                <label className="text-[12px] text-[#94a3b8] sm:col-span-2">
-                  Bio
-                  <textarea
-                    value={form.bio}
-                    onChange={(event) => updateField('bio', event.target.value)}
-                    className="mt-1.5 min-h-24 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 py-2 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
-                  />
-                </label>
+                <span className="text-[12px] font-bold text-white block">Two-Factor Authentication (2FA)</span>
+                <span className="text-[11px] text-slate-400 mt-0.5 block">Requires an authenticator code when signing into TRAXO.</span>
               </div>
 
               <button
-                onClick={saveProfile}
-                className="mt-5 h-10 px-4 rounded-lg bg-white text-[#111827] text-[12px] font-semibold hover:bg-[#e5e7eb] transition-colors"
+                onClick={() => setTwoFaEnabled(!twoFaEnabled)}
+                className={cn(
+                  "h-8 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0 border",
+                  twoFaEnabled
+                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                    : "bg-white/[0.06] text-slate-300 border-white/[0.08]"
+                )}
               >
-                Save profile changes
+                {twoFaEnabled ? 'Enabled' : 'Enable 2FA'}
               </button>
-              <p className="mt-3 text-[11px] text-[#64748b] leading-relaxed">
-                This information is synced with Firestore and reused across onboarding, dashboard identity, and the backend profile endpoint.
-              </p>
-            </section>
+            </div>
           </div>
-
-          <aside className="space-y-5">
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5">
-              <div className="flex items-center gap-2">
-                <SlidersHorizontal size={16} className="text-[#93c5fd]" />
-                <p className="text-[13px] font-semibold">Performance Context</p>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Logged</p>
-                  <p className="mt-2 text-2xl font-bold">{journalStats.total}</p>
-                </div>
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Wins</p>
-                  <p className="mt-2 text-2xl font-bold text-[#86efac]">{journalStats.wins}</p>
-                </div>
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Losses</p>
-                  <p className="mt-2 text-2xl font-bold text-[#fca5a5]">{journalStats.losses}</p>
-                </div>
-                <div className="rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">Win Rate</p>
-                  <p className="mt-2 text-2xl font-bold">{journalStats.winRate}%</p>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5">
-              <div className="flex items-center gap-2">
-                <ShieldCheck size={16} className="text-[#93c5fd]" />
-                <p className="text-[13px] font-semibold">Account Security</p>
-              </div>
-              <p className="mt-2 text-[12px] text-[#94a3b8]">
-                Keep account access protected before broker execution features arrive.
-              </p>
-
-              <div className="mt-4 rounded-lg border border-white/[0.08] bg-[#0b0f17] p-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <BadgeCheck size={16} className={twoFaEnabled ? 'text-[#86efac]' : 'text-[#64748b]'} />
-                    <div>
-                      <p className="text-[12px] font-semibold">Two-factor authentication</p>
-                      <p className="mt-1 text-[11px] text-[#94a3b8]">Authenticator app verification on login.</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setTwoFaEnabled(!twoFaEnabled)}
-                    className={`h-8 px-3 rounded-lg text-[11px] font-semibold transition-colors ${
-                      twoFaEnabled ? 'bg-[#14532d] text-[#bbf7d0]' : 'bg-[#1e293b] text-[#cbd5e1]'
-                    }`}
-                  >
-                    {twoFaEnabled ? 'Enabled' : 'Enable'}
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5">
-              <div className="flex items-center gap-2">
-                <KeyRound size={15} className="text-[#cbd5e1]" />
-                <p className="text-[13px] font-semibold">Change Password</p>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                <label className="block text-[12px] text-[#94a3b8]">
-                  Current password
-                  <input
-                    type="password"
-                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
-                  />
-                </label>
-                <label className="block text-[12px] text-[#94a3b8]">
-                  New password
-                  <input
-                    type="password"
-                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
-                  />
-                </label>
-                <label className="block text-[12px] text-[#94a3b8]">
-                  Confirm new password
-                  <input
-                    type="password"
-                    className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.12] bg-[#0b0f17] px-3 text-[13px] text-white outline-none focus:border-[#3b82f6]/50"
-                  />
-                </label>
-              </div>
-
-              <button className="mt-4 h-10 px-4 rounded-lg border border-white/[0.18] text-[12px] font-semibold text-[#e2e8f0] hover:bg-white/[0.05] transition-colors">
-                Update password
-              </button>
-            </section>
-
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5">
-              <div className="flex items-center gap-2">
-                <UserRound size={15} className="text-[#cbd5e1]" />
-                <p className="text-[13px] font-semibold">Contact Summary</p>
-              </div>
-              <div className="mt-4 space-y-3 text-[12px]">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[#94a3b8] inline-flex items-center gap-2">
-                    <Mail size={13} />
-                    Email
-                  </span>
-                  <span className="text-[#e5e7eb] text-right">{effectiveEmail}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[#94a3b8] inline-flex items-center gap-2">
-                    <MapPin size={13} />
-                    Country
-                  </span>
-                  <span className="text-[#e5e7eb] text-right">{authUser?.country || 'Not set'}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[#94a3b8] inline-flex items-center gap-2">
-                    <CalendarClock size={13} />
-                    Joined
-                  </span>
-                  <span className="text-[#e5e7eb] text-right">Pilot phase</span>
-                </div>
-              </div>
-            </section>
-          </aside>
-        </section>
+        </div>
       </main>
 
       <MobileFloatingWorkspaceNav />

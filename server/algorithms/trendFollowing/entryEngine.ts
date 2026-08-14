@@ -118,17 +118,13 @@ export function evaluateEntryTriggers(
     return assessLTFConfirmation(candles, zoneTop, zoneLow, isBull ? 'BUY' : 'SELL')
   }
 
+  const recentCandles = candles.slice(-3)
+
   // ── T1: FVG Fill (Highest Priority) ─────────────────────────────────────
-  // Depth gate is already applied in pullbackEngine (only FVGs with top ≤ fib_r500
-  // are stored in pullback.fvgInPullback). The engine simply checks if current
-  // price is inside the zone.
   const fvg = pullback.fvgInPullback
   if (fvg !== null) {
-    const inFVG = isBull
-      ? currentPrice >= fvg.bottom && currentPrice <= fvg.top
-      : currentPrice <= fvg.top && currentPrice >= fvg.bottom
-
-    if (inFVG) {
+    const touchedFVG = recentCandles.some(c => c.low <= fvg.top && c.high >= fvg.bottom)
+    if (touchedFVG) {
       const ltf = ltfFor(fvg.top, fvg.bottom)
       return {
         triggered:       true,
@@ -143,8 +139,8 @@ export function evaluateEntryTriggers(
   // ── T2: Order Block at Pullback ──────────────────────────────────────────
   const ob = pullback.obInPullback
   if (ob !== null) {
-    const inOB = currentPrice >= ob.low && currentPrice <= ob.high
-    if (inOB) {
+    const touchedOB = recentCandles.some(c => c.low <= ob.high && c.high >= ob.low)
+    if (touchedOB) {
       const ltf = ltfFor(ob.high, ob.low)
       return {
         triggered:       true,
@@ -157,15 +153,9 @@ export function evaluateEntryTriggers(
   }
 
   // ── T3: EMA + Fibonacci OTE Zone ─────────────────────────────────────────
-  // Price must be inside the 61.8–78.6% OTE zone AND at least one EMA
-  // (20 or 50) must also sit within or just above the zone (confluence).
-  const inOTE = isBull
-    ? currentPrice >= pullback.oteZoneLow && currentPrice <= pullback.oteZoneHigh
-    : currentPrice >= pullback.oteZoneLow && currentPrice <= pullback.oteZoneHigh
+  const touchedOTE = recentCandles.some(c => c.low <= pullback.oteZoneHigh && c.high >= pullback.oteZoneLow)
 
-  if (inOTE) {
-    // EMA must be within 2 ATR of the OTE zone — not necessarily inside it.
-    // In a bull trend EMAs sit above the pullback zone; in a bear trend below.
+  if (touchedOTE) {
     const ema20Near = isBull
       ? pullback.ema20Level >= pullback.oteZoneLow && pullback.ema20Level <= pullback.oteZoneHigh + 2 * atr14
       : pullback.ema20Level >= pullback.oteZoneLow - 2 * atr14 && pullback.ema20Level <= pullback.oteZoneHigh
@@ -179,7 +169,7 @@ export function evaluateEntryTriggers(
       return {
         triggered:       true,
         trigger:         'EMA_OTE_CONFLUENCE' as EntryTrigger,
-        entryPrice:      currentPrice,
+        entryPrice:      current.close,
         ltfConfirmation: ltf,
         volumeAtTrigger: volRatio,
       }
