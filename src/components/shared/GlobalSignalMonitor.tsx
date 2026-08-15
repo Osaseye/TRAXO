@@ -72,6 +72,33 @@ export function GlobalSignalMonitor() {
         const allFetched = [...liveArr, ...histArr];
         if (allFetched.length > 0) {
           useNotificationStore.getState().addNotifications(allFetched.map(signalToNotification));
+
+          // Populate historical resolved signals into Trading Journal
+          const tcStore = useTradingContextStore.getState();
+          allFetched.forEach((signal: any) => {
+            const statusStr = (signal.status || '').toLowerCase();
+            if (statusStr === 'win' || statusStr === 'loss') {
+              const exists = tcStore.journal.find((j: any) => j.suggestionKey === signal.id);
+              if (!exists) {
+                tcStore.addJournalEntry({
+                  suggestionKey: signal.id,
+                  symbol: signal.symbol,
+                  timeframe: signal.timeframe,
+                  strategy: signal.strategyId || signal.strategyLabel || 'System',
+                  action: signal.direction || 'BUY',
+                  entry: Number(signal.entry || 0),
+                  sl: Number(signal.sl || 0),
+                  tp: Number(signal.tp || 0),
+                  confidence: Number(signal.confidence || 50),
+                  risk: 'Medium',
+                  suggestedPosition: 0,
+                  riskAmount: 0,
+                  taken: false,
+                  outcome: statusStr as 'win' | 'loss'
+                });
+              }
+            }
+          });
         }
       } catch {
         // Non-fatal: websocket updates can still arrive after startup.

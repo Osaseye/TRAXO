@@ -40,21 +40,24 @@ export function calculateLots(symbol: string, entry: number, sl: number, riskAmo
   const riskDist = Math.abs(entry - sl)
   if (riskDist <= 0 || riskAmount <= 0) return 0.01
 
+  const cleanSymbol = symbol.toUpperCase().replace('/', '')
   let lotSize = 0.01
-  if (symbol.includes('JPY')) {
-    // 1 standard lot JPY = ~1000 JPY per pip ≈ $6.50 per pip
+
+  if (cleanSymbol.includes('JPY')) {
     lotSize = riskAmount / (riskDist * 650)
-  } else if (['XAUUSD', 'XAGUSD'].includes(symbol)) {
-    // Gold: 1 lot = 100 oz ($10 per $1.00 move per 0.1 lot)
+  } else if (cleanSymbol.includes('XAU') || cleanSymbol.includes('GOLD')) {
     lotSize = riskAmount / (riskDist * 100)
-  } else if (['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'BNBUSDT'].includes(symbol)) {
-    // Crypto: 1 lot = 1 coin
+  } else if (['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BTCUSD'].some(s => cleanSymbol.includes(s.replace(/USDT|USD/, '')))) {
+    // Crypto 1 unit per lot
     lotSize = riskAmount / riskDist
-  } else if (['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'].includes(symbol)) {
-    // Stocks: 1 lot = 1 share
+  } else if (['US30', 'NAS100', 'SPX500', 'DE40', 'UK100'].some(s => cleanSymbol.includes(s))) {
+    // Indices 1 contract per lot
+    lotSize = riskAmount / riskDist
+  } else if (['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'].some(s => cleanSymbol.includes(s))) {
+    // Stocks 1 share per lot
     lotSize = riskAmount / riskDist
   } else {
-    // Standard Forex (EURUSD, etc): 1 lot = 100,000 units ($10 per pip)
+    // Standard Forex (EURUSD, etc): 1 lot = 100,000 units
     lotSize = riskAmount / (riskDist * 100000)
   }
 

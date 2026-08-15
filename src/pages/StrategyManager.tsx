@@ -21,6 +21,7 @@ import {
 import { StrategiesHeader } from '@/components/layout/StrategiesHeader'
 import { MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
 import { ONBOARDING_STRATEGIES, useOnboardingStore } from '@/stores/useOnboardingStore'
+import { AutoTraderWidget } from '@/components/shared/AutoTraderWidget'
 import { cn } from '@/lib/utils'
 
 const STRATEGIES = [
@@ -147,6 +148,9 @@ export default function StrategyManager() {
       <StrategiesHeader title="Strategies" subtitle="Institutional Trading Frameworks" />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Live Auto Trader Controls Widget */}
+        <AutoTraderWidget />
+
         {/* UNIFIED CONTIGUOUS TERMINAL WORKSPACE (NO FLOATING CARDS) */}
         <div className="rounded-xl border border-white/[0.08] bg-[#090d14]/95 shadow-2xl backdrop-blur-xl overflow-hidden divide-y divide-white/[0.08]">
           

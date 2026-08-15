@@ -20,6 +20,7 @@ const scannerRouter = require('./routes/scanner');
 const globalSignalsRouter = require('./routes/globalSignals');
 const tradingContextRouter = require('./routes/tradingContext');
 const journalRouter = require('./routes/journal');
+const metaApiRouter = require('./routes/metaApi');
 
 // --- Legacy Auth/Profile Route Imports (to be refactored later if needed) ---
 const { setupAuthRoutes } = require('./routes/auth'); 
@@ -43,6 +44,7 @@ app.use('/api/scanner', scannerRouter);
 app.use('/api/global-signals', globalSignalsRouter);
 app.use('/api/trading-context', tradingContextRouter);
 app.use('/api/journal', journalRouter);
+app.use('/api/metaapi', metaApiRouter);
 
 // Setup legacy authentication and profile routes
 setupAuthRoutes(app);

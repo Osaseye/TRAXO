@@ -5,6 +5,7 @@ const signalStore = require('./signalStore');
 const websocketManager = require('./websocketManager');
 const redis = require('./redisClient');
 const { getCachedNews } = require('./newsCache');
+const { executeTrade, getAutoTradeEnabled } = require('./metaApiService');
 
 // ─────────────────────────────────────────────
 // Timeframe normalisation
@@ -458,6 +459,26 @@ async function runScan() {
           await signalStore.cacheLiveSignal(signal);
           await signalStore.saveHistoricalSignal(signal);
           websocketManager.broadcast({ type: 'NEW_SIGNAL', payload: signal });
+
+          // Auto-trade execution via MetaApi to Exness MT5
+          if (getAutoTradeEnabled()) {
+            executeTrade({
+              symbol: signal.symbol,
+              action: signal.direction,
+              volume: 0.01,
+              sl: signal.sl,
+              tp: signal.tp,
+              comment: `TRAXO ${signal.strategyId || 'Auto'}`,
+            }).then((res) => {
+              if (res.success) {
+                console.log(`[AutoTrader] Trade executed on Exness MT5 for ${signal.symbol} ${signal.direction}`);
+              } else {
+                console.error(`[AutoTrader] Trade execution failed: ${res.error}`);
+              }
+            }).catch((err) => {
+              console.error(`[AutoTrader] Execution exception: ${err.message}`);
+            });
+          }
         }
       } catch (error) {
         console.error(`Error scanning ${symbol} on ${timeframe}:`, error.message || error);

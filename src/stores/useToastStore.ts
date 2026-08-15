@@ -13,14 +13,26 @@ export interface SignalToastItem {
   confidence: number
 }
 
+export interface AppNotificationToast {
+  id: string
+  title: string
+  message: string
+  type: 'success' | 'error' | 'info'
+  createdAt: number
+}
+
 interface ToastState {
   toasts: SignalToastItem[]
+  appToasts: AppNotificationToast[]
   addToast: (item: SignalToastItem) => void
   removeToast: (id: string) => void
+  addAppToast: (item: AppNotificationToast) => void
+  removeAppToast: (id: string) => void
 }
 
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
+  appToasts: [],
   addToast: (item) =>
     set((state) => ({
       toasts: [item, ...state.toasts].slice(0, 4),
@@ -29,4 +41,22 @@ export const useToastStore = create<ToastState>((set) => ({
     set((state) => ({
       toasts: state.toasts.filter((t) => t.id !== id),
     })),
+  addAppToast: (item) =>
+    set((state) => ({
+      appToasts: [item, ...state.appToasts].slice(0, 5),
+    })),
+  removeAppToast: (id) =>
+    set((state) => ({
+      appToasts: state.appToasts.filter((t) => t.id !== id),
+    })),
 }))
+
+export function showToast(title: string, message: string, type: 'success' | 'error' | 'info' = 'info') {
+  useToastStore.getState().addAppToast({
+    id: `app-toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    title,
+    message,
+    type,
+    createdAt: Date.now(),
+  })
+}

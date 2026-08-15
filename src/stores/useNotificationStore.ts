@@ -54,7 +54,7 @@ function dedupeNotifications(next: StoredNotification[]) {
 
   return Array.from(bySetup.values())
     .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 300)
+    .slice(0, 1000)
 }
 
 export const useNotificationStore = create<NotificationState>()((set, get) => ({
@@ -114,7 +114,7 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
       const q = query(
         collection(db, 'users', uid, 'notifications'),
         orderBy('createdAt', 'desc'),
-        limit(300),
+        limit(1000),
       )
       const snap = await getDocs(q)
       if (!snap.empty) {

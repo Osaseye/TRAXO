@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { formatPrice } from '@/lib/utils'
+import { showToast } from '@/stores/useToastStore'
 import type { Signal } from '@/types'
 
 const STRATEGY_NAMES: Record<string, string> = {
@@ -107,7 +108,7 @@ export function SignalCard({ signal }: { signal: Signal }) {
           <p className="text-[9px] font-semibold text-[#374151] uppercase tracking-widest mb-2.5">
             Why this signal
           </p>
-          <div className="space-y-2">
+          <div className="space-y-2 mb-3">
             {signal.reason.map((r, i) => (
               <div key={i} className="flex items-start gap-2">
                 <div
@@ -118,6 +119,36 @@ export function SignalCard({ signal }: { signal: Signal }) {
               </div>
             ))}
           </div>
+
+          <button
+            onClick={async (e) => {
+              e.stopPropagation()
+              try {
+                const res = await fetch('/api/metaapi/execute', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    symbol: signal.symbol,
+                    action: signal.signal,
+                    volume: 0.01,
+                    sl: signal.sl,
+                    tp: signal.tp,
+                  }),
+                })
+                const data = await res.json()
+                if (data.success) {
+                  showToast('Trade Executed!', `Trade placed on Exness MT5 for ${signal.symbol}`, 'success')
+                } else {
+                  showToast('Execution Notice', data.error || 'Failed to place trade', 'info')
+                }
+              } catch (err) {
+                showToast('Server Error', 'Error connecting to execution server', 'error')
+              }
+            }}
+            className="w-full h-7 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] font-bold hover:bg-blue-500/20 transition-colors flex items-center justify-center gap-1.5"
+          >
+            Execute on Exness MT5
+          </button>
         </div>
       )}
     </div>

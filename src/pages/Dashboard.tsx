@@ -15,7 +15,8 @@ import { useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
 import { riskFromConfidence, priceDigits, type RiskLabel } from '@/lib/signalDetection'
 import { formatMT4OrderClipboardPayload } from '@/lib/utils'
 import { DashboardHeader } from '@/components/layout/DashboardHeader'
-import { cn, formatPrice } from '@/lib/utils'
+import { cn, formatPrice, calculateLots } from '@/lib/utils'
+import { showToast } from '@/stores/useToastStore'
 
 type SymbolOption =
   | 'EURUSD'
@@ -1005,8 +1006,30 @@ export default function Dashboard() {
                   <span>{orderCopied ? 'Copied Order!' : 'Copy Order Details'}</span>
                 </button>
                 <button
-                  onClick={() => {
-                    alert(`Executing ${lockedSignal.direction} ${symbol} on your connected Exness / FxPro account via MetaApi Cloud Bridge... (Lot size: ${(lockedMoneyContext ? lockedMoneyContext.maxLossAtSL / (Math.abs(lockedSignal.entry - lockedSignal.sl) * 100000) : 0.1).toFixed(2)})`)
+                  onClick={async () => {
+                    const riskAmt = lockedMoneyContext?.maxLossAtSL || 10
+                    const lotSize = calculateLots(symbol, lockedSignal.entry, lockedSignal.sl, riskAmt)
+                    try {
+                      const res = await fetch('/api/metaapi/execute', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          symbol: symbol,
+                          action: lockedSignal.direction,
+                          volume: lotSize,
+                          sl: lockedSignal.sl,
+                          tp: lockedSignal.tp,
+                        }),
+                      })
+                      const data = await res.json()
+                      if (data.success) {
+                        showToast(`Trade Executed!`, `Successfully executed ${lockedSignal.direction} ${symbol} on Exness MT5.\nPosition Lot Size: ${lotSize}`, 'success')
+                      } else {
+                        showToast(`Exness MT5 Notice`, `${data.error || 'MetaApi terminal standby'}\nCalculated Lot Size: ${lotSize}`, 'info')
+                      }
+                    } catch {
+                      showToast(`Execution Error`, `Calculated Lot Size: ${lotSize}\nError connecting to trading server backend.`, 'error')
+                    }
                   }}
                   className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-[10px] font-bold shadow-md transition-all border border-emerald-400/30"
                   title="1-Click execution on your connected Exness / FxPro account"

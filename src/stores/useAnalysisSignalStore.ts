@@ -20,13 +20,9 @@ interface AnalysisSignalState {
 
 /**
  * Rejects signals with zero (or near-zero) risk distance.
- * This guards against the crypto decimal-precision bug where
- * entry_price and sl_price were both rounded to the same 2-decimal
- * value (e.g. 0.07) making risk = 0 and R:R = 0.
  */
 function isSane(signal: StoredSignal) {
   const riskDist = Math.abs(signal.entry - signal.sl)
-  // Allow tiny dust only for JPY pairs (3-digit) — anything below 0.000001 is corrupt
   return riskDist > 0.000001
 }
 
@@ -68,7 +64,7 @@ export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
 
   addSignals: (newSignals) =>
     set((state) => {
-      const next = dedupeSignals([...newSignals, ...state.signals]).slice(0, 500)
+      const next = dedupeSignals([...newSignals, ...state.signals]).slice(0, 1000)
       if (next.length === state.signals.length && next.every((s, i) => s.id === state.signals[i]?.id && s.status === state.signals[i]?.status)) {
         return state
       }
@@ -91,11 +87,11 @@ export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
       const { collection, getDocs, query, orderBy, limit } = await import('firebase/firestore')
       const { db } = await import('@/lib/firebase')
       const colRef = uid ? collection(db, 'users', uid, 'signals') : collection(db, 'signals')
-      const q = query(colRef, orderBy('time', 'desc'), limit(500))
+      const q = query(colRef, orderBy('time', 'desc'), limit(1000))
       const snap = await getDocs(q)
       if (!snap.empty) {
         const signals: StoredSignal[] = snap.docs.map((d) => d.data() as StoredSignal).filter(isSane)
-        set({ signals: dedupeSignals(signals).slice(0, 500) })
+        set({ signals: dedupeSignals(signals).slice(0, 1000) })
       }
     } catch {
       // silently ignore
@@ -107,7 +103,6 @@ export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
     try {
       const { doc, writeBatch } = await import('firebase/firestore')
       const { db } = await import('@/lib/firebase')
-      // If no uid provided, prefer a build-time admin UID (Vite env var) to seed into admin's collection
       let targetUid = uid ?? null
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -117,7 +112,6 @@ export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
         // ignore env lookup failures
       }
 
-      // Firestore writeBatch limit is 500 ops
       for (let i = 0; i < signals.length; i += 500) {
         const chunk = signals.slice(i, i + 500)
         const batch = writeBatch(db)
