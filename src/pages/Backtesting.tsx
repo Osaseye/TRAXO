@@ -13,9 +13,8 @@ import type { WickRejectionAssetType } from '../../server/algorithms/wickRejecti
 // ---------------------------------------------------------------------------
 
 const SYMBOLS: ChartSymbol[] = [
-  'EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD',
-  'EURJPY', 'GBPJPY', 'EURGBP', 'BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT',
-  'SPX500', 'NAS100', 'US30', 'AAPL', 'MSFT', 'NVDA', 'TSLA',
+  'XAUUSD',
+  'EURUSD',
 ]
 
 const TIMEFRAMES: ChartTimeframe[] = ['1m', '5m', '15m', '1H', '4H', '1D']
@@ -27,11 +26,7 @@ const LOOKBACKS = [
   { label: '1000 candles', value: 1000 },
 ]
 
-function getAssetType(symbol: ChartSymbol): WickRejectionAssetType {
-  const crypto = ['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT']
-  const stocks = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI']
-  if (crypto.includes(symbol)) return 'CRYPTO'
-  if (stocks.includes(symbol)) return 'STOCKS'
+function getAssetType(_symbol: ChartSymbol): WickRejectionAssetType {
   return 'FOREX'
 }
 

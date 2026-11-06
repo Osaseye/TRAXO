@@ -147,10 +147,8 @@ const LEVELS: { id: ExperienceLevel; label: string; sub: string }[] = [
 ]
 
 const INSTRUMENTS: { id: Instrument; label: string }[] = [
-  { id: 'forex',       label: 'Forex'       },
-  { id: 'crypto',      label: 'Crypto'      },
-  { id: 'stocks',      label: 'Stocks'      },
-  { id: 'commodities', label: 'Commodities' },
+  { id: 'commodities', label: 'Gold (XAUUSD)' },
+  { id: 'forex',       label: 'EURUSD (Forex)' },
 ]
 
 function StepProfile({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
@@ -368,7 +366,7 @@ function StepPersonal({ onNext, onBack }: { onNext: () => void; onBack: () => vo
       })
       onNext()
     } catch (err) {
-       
+
       console.error(err)
       setError('We could not save your profile. Please try again.')
     } finally {

@@ -1,12 +1,8 @@
 import ScrollReveal from '@/components/ui/ScrollReveal'
 
 const MARKETS = [
-  { name: 'Bitcoin (BTC)', src: '/markets/bitcoin-btc-logo.png' },
-  { name: 'Ethereum (ETH)', src: '/markets/ethereum-eth-logo.png' },
-  { name: 'Binance (BNB)', src: '/markets/bnb-bnb-logo.png' },
-  { name: 'Tether (USDT)', src: '/markets/tether-usdt-logo.png' },
-  { name: 'Gold (XAU)', src: '/markets/tether-gold-xaut-logo.png' },
-  { name: 'Euro (EUR)', src: '/markets/stasis-euro-eurs-logo.png' },
+  { name: 'Gold (XAUUSD)', src: '/markets/tether-gold-xaut-logo.png' },
+  { name: 'Euro / US Dollar (EURUSD)', src: '/markets/stasis-euro-eurs-logo.png' },
 ]
 
 export function SupportedMarkets() {
@@ -15,7 +11,7 @@ export function SupportedMarkets() {
       <ScrollReveal>
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <p className="text-center text-[11px] font-semibold tracking-[0.2em] uppercase text-[#6b7280] mb-6">
-          Supporting Global Crypto & Forex Markets
+          Precision-Engineered for Prime Institutional Markets: Gold (XAUUSD) & Euro (EURUSD)
         </p>
 
         {/* Marquee Container */}

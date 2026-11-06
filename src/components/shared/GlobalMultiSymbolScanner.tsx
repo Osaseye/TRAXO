@@ -30,11 +30,7 @@ import type { ChartSymbol, ChartTimeframe } from '@/stores/useTradingContextStor
 
 /** Symbols that will be scanned automatically in the background. */
 const SCAN_SYMBOLS: ChartSymbol[] = [
-  'EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'XAGUSD', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD',
-  'EURJPY', 'GBPJPY', 'EURGBP', 'SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'FRA40',
-  'AUS200', 'WTI', 'BRENT', 'NATGAS', 'BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT',
-  'DOGEUSDT', 'BNBUSDT', 'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX',
-  'AMD', 'COIN', 'MSTR', 'SMCI', 'MNQ',
+  'XAUUSD', 'EURUSD',
 ]
 
 /** Timeframes to scan per symbol. Lower TFs are excluded to protect API quota. */

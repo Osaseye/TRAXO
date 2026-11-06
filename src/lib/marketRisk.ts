@@ -13,16 +13,11 @@ export interface MarketRiskContext {
   userFacingWarning: string
 }
 
-const FOREX_SYMBOLS = new Set(['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'NZDUSD', 'USDCAD', 'USDCHF'])
-const CRYPTO_SYMBOLS = new Set(['BTCUSDT', 'ETHUSD'])
 const COMMODITY_SYMBOLS = new Set(['XAUUSD'])
 
 export function getMarketTypeForSymbol(symbol: string): MarketType {
-  if (FOREX_SYMBOLS.has(symbol)) return 'forex'
-  if (CRYPTO_SYMBOLS.has(symbol)) return 'crypto'
   if (COMMODITY_SYMBOLS.has(symbol)) return 'commodities'
-  if (symbol.includes('US') || symbol.includes('SP') || symbol.includes('QQ')) return 'stocks'
-  return 'futures'
+  return 'forex'
 }
 
 function getTimeframeFactor(timeframe: Timeframe) {

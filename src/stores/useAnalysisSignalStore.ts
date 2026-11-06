@@ -70,7 +70,7 @@ export const useAnalysisSignalStore = create<AnalysisSignalState>()((set) => ({
       const idx = state.signals.findIndex((s) => s.id === signalId)
       if (idx === -1) return state
       const nextSignals = [...state.signals]
-      nextSignals[idx] = { ...nextSignals[idx], status }
+      nextSignals[idx] = { ...nextSignals[idx], status: status as 'live' | 'expired' }
       return { signals: nextSignals }
     }),
 

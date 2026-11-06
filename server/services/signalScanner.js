@@ -27,19 +27,10 @@ function toFrontendTimeframe(tf) {
 // ─────────────────────────────────────────────
 // Asset-type helper (mirrors signalDetection.ts)
 // ─────────────────────────────────────────────
-const CRYPTO_SYMBOLS  = ['BTCUSDT','ETHUSD','SOLUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','BNBUSDT'];
-const STOCK_SYMBOLS   = ['AAPL','MSFT','NVDA','TSLA','AMZN','META','GOOGL','NFLX','AMD','COIN','MSTR','SMCI'];
-const INDEX_SYMBOLS   = ['SPX500','NAS100','US30','DE40','UK100','JP225','FRA40','AUS200'];
-const ENERGY_SYMBOLS  = ['WTI','BRENT','NATGAS'];
-const FUTURES_SYMBOLS = ['MNQ'];
-// Metals (XAUUSD, XAGUSD) are treated as FOREX by the strategy engines (price-action based)
+// Focused exclusively on the two most viable real-world markets:
+// XAUUSD (Gold) and EURUSD (Euro / US Dollar).
 function getAssetType(sym) {
-  if (CRYPTO_SYMBOLS.includes(sym))  return 'CRYPTO';
-  if (STOCK_SYMBOLS.includes(sym))   return 'STOCKS';
-  if (INDEX_SYMBOLS.includes(sym))   return 'STOCKS';  // indices use stock-market rules
-  if (ENERGY_SYMBOLS.includes(sym))  return 'FOREX';   // commodities use forex-style PA
-  if (FUTURES_SYMBOLS.includes(sym)) return 'STOCKS';  // futures use stock-market rules
-  return 'FOREX'; // forex pairs + metals
+  return 'FOREX'; // XAUUSD and EURUSD are treated as FOREX (price-action & session based)
 }
 
 // ─────────────────────────────────────────────
@@ -272,21 +263,8 @@ function runAllStrategies(candles, symbol, timeframe) {
 // To enable these, upgrade the TwelveData subscription and uncomment.
 // ─────────────────────────────────────────────
 const SYMBOLS = [
-  // ── Forex (10) ── confirmed free plan ───────────────────────────────
-  'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD',
-  'USD/CHF', 'NZD/USD', 'EUR/JPY', 'GBP/JPY', 'EUR/GBP',
-  // ── Metals (1) ── confirmed free plan ───────────────────────────────
   'XAU/USD',
-  // ── Crypto (7) ── confirmed free plan ───────────────────────────────
-  'BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT',
-  // ── US Stocks (12) ── confirmed free plan ───────────────────────────
-  'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI',
-
-  // ── Requires plan upgrade (uncomment when subscribed) ───────────────
-  // Indices: 'SPX500','NAS100','US30','DE40','UK100','JP225','FRA40','AUS200',
-  // Energy:  'WTI','BRENT','NATGAS',
-  // Silver:  'XAG/USD',
-  // Futures: 'MNQ',
+  'EUR/USD',
 ];
 
 // All 6 timeframes the charts support.
