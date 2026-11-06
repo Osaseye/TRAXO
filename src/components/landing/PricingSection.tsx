@@ -15,7 +15,7 @@ const PLANS = [
       '1 pre-built strategy',
       'Signals with 5-minute delay',
       'Basic dashboard',
-      'Forex + crypto market coverage',
+      'Focused coverage for XAUUSD & EURUSD',
     ],
     cta: 'Start for free',
     to: '/register',
@@ -34,7 +34,7 @@ const PLANS = [
       'Full risk management tools',
       'Complete signal history',
       'API key connection',
-      'Market filter for forex, gold, BTC, ETH, and majors',
+      'Focused coverage for Gold (XAUUSD) & EURUSD',
     ],
     cta: 'Start 7-day trial',
     to: '/register',
@@ -60,7 +60,7 @@ const PLANS = [
   },
 ]
 
-const MARKET_TAGS = ['Forex majors', 'Gold (XAU)', 'Bitcoin', 'Ethereum', 'BNB', 'Indices', 'Commodities']
+const MARKET_TAGS = ['Gold (XAUUSD)', 'EURUSD Forex Major']
 
 const AUTOPILOT_POINTS = [
   {

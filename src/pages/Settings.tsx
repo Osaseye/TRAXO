@@ -91,11 +91,7 @@ const AUTOPILOT_BENEFITS = [
 ]
 
 const NOTIF_SYMBOL_GROUPS = [
-  { label: 'Forex', symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'EURJPY', 'GBPJPY', 'EURGBP'] },
-  { label: 'Indices', symbols: ['SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'FRA40', 'AUS200'] },
-  { label: 'Metals & Energy', symbols: ['XAUUSD', 'XAGUSD', 'WTI', 'BRENT', 'NATGAS'] },
-  { label: 'Crypto', symbols: ['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT'] },
-  { label: 'Stocks & Futures', symbols: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI', 'MNQ'] },
+  { label: 'Focus Markets', symbols: ['XAUUSD', 'EURUSD'] },
 ] as const
 
 const NOTIF_TIMEFRAMES = ['1m', '5m', '15m', '1H', '4H', '1D'] as const

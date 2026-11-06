@@ -14,50 +14,7 @@ import { useMarketWebSocket } from '@/hooks/useMarketWebSocket'
 import { useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
 import { riskFromConfidence, priceDigits, type RiskLabel } from '@/lib/signalDetection'
 
-type SymbolOption =
-  | 'EURUSD'
-  | 'GBPUSD'
-  | 'USDJPY'
-  | 'XAUUSD'
-  | 'XAGUSD'
-  | 'AUDUSD'
-  | 'USDCAD'
-  | 'USDCHF'
-  | 'NZDUSD'
-  | 'EURJPY'
-  | 'GBPJPY'
-  | 'EURGBP'
-  | 'SPX500'
-  | 'NAS100'
-  | 'US30'
-  | 'DE40'
-  | 'UK100'
-  | 'JP225'
-  | 'FRA40'
-  | 'AUS200'
-  | 'WTI'
-  | 'BRENT'
-  | 'NATGAS'
-  | 'BTCUSDT'
-  | 'ETHUSD'
-  | 'SOLUSDT'
-  | 'XRPUSDT'
-  | 'ADAUSDT'
-  | 'DOGEUSDT'
-  | 'BNBUSDT'
-  | 'AAPL'
-  | 'MSFT'
-  | 'NVDA'
-  | 'TSLA'
-  | 'AMZN'
-  | 'META'
-  | 'GOOGL'
-  | 'NFLX'
-  | 'AMD'
-  | 'COIN'
-  | 'MSTR'
-  | 'SMCI'
-  | 'MNQ'
+type SymbolOption = 'XAUUSD' | 'EURUSD'
 
 type TradeAction = 'BUY' | 'SELL'
 
@@ -95,13 +52,10 @@ interface MoneyContext {
   capitalRisk: RiskLabel
 }
 
-const FX_SYMBOLS: SymbolOption[] = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'EURJPY', 'GBPJPY', 'EURGBP']
-const METAL_SYMBOLS: SymbolOption[] = ['XAUUSD', 'XAGUSD']
-const INDEX_SYMBOLS: SymbolOption[] = ['SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'FRA40', 'AUS200']
-const ENERGY_SYMBOLS: SymbolOption[] = ['WTI', 'BRENT', 'NATGAS']
-const CRYPTO_SYMBOLS: SymbolOption[] = ['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT']
-const STOCK_SYMBOLS: SymbolOption[] = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI']
-const FUTURES_SYMBOLS: SymbolOption[] = ['MNQ']
+const TARGET_SYMBOLS: { symbol: SymbolOption; label: string; market: string }[] = [
+  { symbol: 'XAUUSD', label: 'Gold (XAU/USD)', market: 'Commodity / Metals' },
+  { symbol: 'EURUSD', label: 'EUR/USD', market: 'Forex Major' },
+]
 
 const STRATEGY_LABELS: Record<string, string> = {
   'wick-rejection': 'Wick Rejection',
@@ -387,20 +341,6 @@ export default function Dashboard() {
     setDismissedNoticeKeys((prev) => (prev.includes(noticeId) ? prev : [...prev, noticeId]))
   }
 
-  const stockMarketFilter: 'forex' | 'metals' | 'indices' | 'energy' | 'crypto' | 'stocks' | 'futures' = FX_SYMBOLS.includes(symbol)
-    ? 'forex'
-    : METAL_SYMBOLS.includes(symbol)
-      ? 'metals'
-      : INDEX_SYMBOLS.includes(symbol)
-        ? 'indices'
-        : ENERGY_SYMBOLS.includes(symbol)
-          ? 'energy'
-          : CRYPTO_SYMBOLS.includes(symbol)
-            ? 'crypto'
-            : FUTURES_SYMBOLS.includes(symbol)
-              ? 'futures'
-              : 'stocks'
-  const marketFilter = stockMarketFilter
 
   const chartMarkers = useMemo(() => {
     const markerBySetup = new Map<string, ChartPanelMarker>()
@@ -706,54 +646,13 @@ export default function Dashboard() {
 
           <div className="relative">
             <select
-              value={marketFilter}
-              onChange={(e) => {
-                const m = e.target.value as 'forex' | 'crypto' | 'stocks' | 'metals' | 'indices' | 'energy' | 'futures'
-                let nextSymbol = symbol
-                if (m === 'forex') nextSymbol = FX_SYMBOLS[0]
-                if (m === 'metals') nextSymbol = METAL_SYMBOLS[0]
-                if (m === 'indices') nextSymbol = INDEX_SYMBOLS[0]
-                if (m === 'energy') nextSymbol = ENERGY_SYMBOLS[0]
-                if (m === 'crypto') nextSymbol = CRYPTO_SYMBOLS[0]
-                if (m === 'stocks') nextSymbol = STOCK_SYMBOLS[0]
-                if (m === 'futures') nextSymbol = FUTURES_SYMBOLS[0]
-                setSearchParams({ symbol: nextSymbol, timeframe }, { replace: true })
-              }}
-              className="appearance-none h-9 pl-3 pr-8 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-bold text-white focus:outline-none focus:border-[#3b82f6]/50 uppercase"
-            >
-              <option value="forex">FOREX</option>
-              <option value="metals">METALS</option>
-              <option value="indices">INDICES</option>
-              <option value="energy">ENERGY</option>
-              <option value="crypto">CRYPTO</option>
-              <option value="stocks">STOCKS</option>
-              <option value="futures">FUTURES</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#4b5563] pointer-events-none" />
-          </div>
-
-          <div className="relative">
-            <select
               value={symbol}
               onChange={(e) => setSearchParams({ symbol: e.target.value, timeframe }, { replace: true })}
-              className="appearance-none h-9 pl-3 pr-8 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-semibold text-white focus:outline-none focus:border-[#3b82f6]/50"
+              className="appearance-none h-9 pl-3 pr-8 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-bold text-white focus:outline-none focus:border-[#3b82f6]/50"
             >
-              {(stockMarketFilter === 'forex'
-                ? FX_SYMBOLS
-                : stockMarketFilter === 'metals'
-                  ? METAL_SYMBOLS
-                  : stockMarketFilter === 'indices'
-                    ? INDEX_SYMBOLS
-                    : stockMarketFilter === 'energy'
-                      ? ENERGY_SYMBOLS
-                      : stockMarketFilter === 'crypto'
-                        ? CRYPTO_SYMBOLS
-                        : stockMarketFilter === 'futures'
-                          ? FUTURES_SYMBOLS
-                          : STOCK_SYMBOLS
-              ).map((s) => (
-                <option key={s} value={s}>
-                  {s}
+              {TARGET_SYMBOLS.map((t) => (
+                <option key={t.symbol} value={t.symbol}>
+                  {t.label} ({t.market})
                 </option>
               ))}
             </select>
@@ -903,12 +802,12 @@ export default function Dashboard() {
                 <span 
                   className="text-[10px] items-center gap-1 inline-flex px-2 py-0.5 rounded-full border font-bold uppercase tracking-wider shrink-0"
                   style={{
-                    color: hoveredSignal.status === 'WIN' ? '#22c55e' : hoveredSignal.status === 'LOSS' ? '#ef4444' : '#94a3b8',
-                    borderColor: hoveredSignal.status === 'WIN' ? 'rgba(34,197,94,0.3)' : hoveredSignal.status === 'LOSS' ? 'rgba(239,68,68,0.3)' : 'rgba(148,163,184,0.3)',
-                    background: hoveredSignal.status === 'WIN' ? 'rgba(34,197,94,0.1)' : hoveredSignal.status === 'LOSS' ? 'rgba(239,68,68,0.1)' : 'rgba(148,163,184,0.1)',
+                    color: (hoveredSignal.status as string) === 'WIN' ? '#22c55e' : (hoveredSignal.status as string) === 'LOSS' ? '#ef4444' : '#94a3b8',
+                    borderColor: (hoveredSignal.status as string) === 'WIN' ? 'rgba(34,197,94,0.3)' : (hoveredSignal.status as string) === 'LOSS' ? 'rgba(239,68,68,0.3)' : 'rgba(148,163,184,0.3)',
+                    background: (hoveredSignal.status as string) === 'WIN' ? 'rgba(34,197,94,0.1)' : (hoveredSignal.status as string) === 'LOSS' ? 'rgba(239,68,68,0.1)' : 'rgba(148,163,184,0.1)',
                   }}
                 >
-                  OUTCOME: {hoveredSignal.status === 'WIN' ? 'HIT TP' : hoveredSignal.status === 'LOSS' ? 'HIT SL' : 'EXPIRED'}
+                  OUTCOME: {(hoveredSignal.status as string) === 'WIN' ? 'HIT TP' : (hoveredSignal.status as string) === 'LOSS' ? 'HIT SL' : 'EXPIRED'}
                 </span>
               )}
 
