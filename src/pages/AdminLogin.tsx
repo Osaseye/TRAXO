@@ -1,15 +1,17 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router'
-import { Eye, EyeOff, ShieldAlert, Lock } from 'lucide-react'
+import { useState, useId } from 'react'
+import { Link, useNavigate } from 'react-router'
+import { motion } from 'framer-motion'
+import { PiEye, PiEyeSlash, PiWarning, PiLock, PiArrowLeft, PiShieldCheck, PiEnvelopeSimple, PiLockKey } from 'react-icons/pi'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { getFirebaseErrorMessage } from '@/lib/utils'
-
-const ic = 'w-full h-11 px-4 rounded-xl bg-[#0d1117] border border-white/[0.08] text-[13px] text-white placeholder:text-[#2d3748] focus:outline-none focus:border-[#fca5a5]/40 focus:ring-1 focus:ring-[#fca5a5]/15 transition-colors'
 
 function isAdminEmail(email: string): boolean {
   const raw = import.meta.env.VITE_ADMIN_EMAILS as string | undefined
   if (!raw) return false
-  return raw.split(',').map((e) => e.trim().toLowerCase()).includes(email.trim().toLowerCase())
+  return raw
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .includes(email.trim().toLowerCase())
 }
 
 export default function AdminLogin() {
@@ -18,6 +20,8 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const emailId = useId()
+  const passwordId = useId()
   const navigate = useNavigate()
   const signIn = useAuthStore((s) => s.signIn)
   const logout = useAuthStore((s) => s.logout)
@@ -27,7 +31,7 @@ export default function AdminLogin() {
     setError(null)
 
     if (!isAdminEmail(email)) {
-      setError('This email is not authorised for admin access.')
+      setError('This identity is not authorised for root diagnostic clearance.')
       return
     }
 
@@ -36,7 +40,6 @@ export default function AdminLogin() {
       await signIn(email, password)
       navigate('/admin', { replace: true })
     } catch (err: unknown) {
-      // Sign out silently if Firebase already signed them in before the check failed
       logout().catch(() => undefined)
       setError(getFirebaseErrorMessage(err))
     } finally {
@@ -45,94 +48,147 @@ export default function AdminLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white flex items-center justify-center px-4">
-      {/* Subtle radial glow */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="w-[600px] h-[600px] bg-[#ef4444]/4 blur-[160px] rounded-full" />
+    <div className="relative min-h-[100dvh] w-full bg-[#09090B] text-[#FAFAFA] flex flex-col justify-between overflow-x-hidden select-none">
+      {/* ── Background Canvas: Crimson Security Grid ──────────────────────── */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-[0.14]"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(248,113,113,0.3) 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+          }}
+        />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-[#F87171]/10 via-white/[0.02] to-transparent blur-3xl rounded-full" />
       </div>
 
-      <div className="relative w-full max-w-sm">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-[#ef4444]/20 bg-[#ef4444]/10 mb-4">
-            <ShieldAlert size={24} className="text-[#fca5a5]" />
+      {/* ── Top Wordmark ────────────────────────────────────────────────────── */}
+      <header className="relative z-10 pt-8 sm:pt-12 px-6 flex justify-center">
+        <Link to="/" className="inline-flex items-center gap-2.5 group focus:outline-none">
+          <div className="relative w-8 h-8 rounded-lg bg-[#F87171]/10 border border-[#F87171]/30 flex items-center justify-center group-hover:border-[#F87171]/50 transition-colors">
+            <img src="/brand/traxo-mark.png" className="w-5 h-5 object-contain" alt="TRAXO" />
           </div>
-          <h1 className="text-[20px] font-bold text-[#f8fafc]">Admin Access</h1>
-          <p className="mt-1.5 text-[12px] text-[#64748b]">Restricted area — authorised accounts only</p>
-        </div>
+          <span className="text-[12px] font-mono font-bold tracking-[0.24em] uppercase text-[#FAFAFA]">
+            TRAXO ROOT
+          </span>
+        </Link>
+      </header>
 
-        {/* Card */}
-        <div className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-6 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            {/* Email */}
-            <div>
-              <label className="block text-[11px] uppercase tracking-wider text-[#64748b] mb-1.5">Email</label>
-              <input
-                type="email"
-                autoComplete="email"
-                placeholder="admin@traxo.io"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={ic}
-                required
-              />
+      {/* ── Center Open Canvas Admin Login ──────────────────────────────────── */}
+      <main className="relative z-10 flex-1 flex flex-col justify-center items-center px-6 py-10 w-full max-w-md mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full space-y-7"
+        >
+          {/* Header Typography */}
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F87171]/10 border border-[#F87171]/20 text-[11px] font-mono text-[#F87171]">
+              <PiLock />
+              <span>RESTRICTED PERIMETER</span>
+            </div>
+            <h1 className="text-[26px] sm:text-[30px] font-semibold text-[#FAFAFA] tracking-tight">
+              Root diagnostic station
+            </h1>
+            <p className="text-[13px] text-[#71717A]">
+              Infrastructure diagnostics, signal auditing & engine parameter overrides
+            </p>
+          </div>
+
+          {/* Error notice */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="px-3.5 py-2.5 rounded-lg bg-[#F87171]/15 border border-[#F87171]/30 text-[12px] text-[#F87171] text-center flex items-center justify-center gap-2"
+            >
+              <PiWarning size={15} className="shrink-0" />
+              <span>{error}</span>
+            </motion.div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor={emailId} className="text-[11px] font-mono uppercase tracking-wider text-[#71717A] flex items-center justify-between">
+                <span>Authorized Admin Identity</span>
+                <span className="text-[10px] text-[#F87171]">ROOT</span>
+              </label>
+              <div className="relative flex items-center group">
+                <PiEnvelopeSimple className="absolute left-3.5 text-[#71717A] group-focus-within:text-[#F87171] transition-colors" size={17} />
+                <input
+                  id={emailId}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@traxo.io"
+                  required
+                  autoComplete="email"
+                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#F87171]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#F87171]/20 transition-all font-mono"
+                />
+              </div>
             </div>
 
-            {/* Password */}
-            <div>
-              <label className="block text-[11px] uppercase tracking-wider text-[#64748b] mb-1.5">Password</label>
-              <div className="relative">
+            <div className="space-y-1.5">
+              <label htmlFor={passwordId} className="text-[11px] font-mono uppercase tracking-wider text-[#71717A]">
+                Cryptographic Key
+              </label>
+              <div className="relative flex items-center group">
+                <PiLockKey className="absolute left-3.5 text-[#71717A] group-focus-within:text-[#F87171] transition-colors" size={17} />
                 <input
+                  id={passwordId}
                   type={showPw ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={`${ic} pr-10`}
+                  placeholder="••••••••••••"
                   required
+                  autoComplete="current-password"
+                  className="w-full h-11 pl-10 pr-10 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#F87171]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#F87171]/20 transition-all font-mono"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPw((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748b] hover:text-white transition-colors"
-                  tabIndex={-1}
+                  className="absolute right-3.5 text-[#71717A] hover:text-[#FAFAFA] transition-colors"
+                  aria-label={showPw ? 'Hide password' : 'Show password'}
                 >
-                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {showPw ? <PiEyeSlash size={16} /> : <PiEye size={16} />}
                 </button>
               </div>
             </div>
 
-            {/* Error */}
-            {error && (
-              <div className="rounded-lg border border-[#ef4444]/25 bg-[#ef4444]/10 px-3 py-2.5">
-                <p className="text-[12px] text-[#fca5a5]">{error}</p>
-              </div>
-            )}
-
-            {/* Submit */}
             <button
               type="submit"
-              disabled={submitting || !email || !password}
-              className="w-full h-11 rounded-xl bg-[#ef4444]/90 hover:bg-[#ef4444] disabled:opacity-50 disabled:cursor-not-allowed text-white text-[13px] font-bold flex items-center justify-center gap-2 transition-colors mt-2"
+              disabled={submitting}
+              className="w-full h-11 mt-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] active:scale-[0.99] text-[#09090B] text-[13px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_0_24px_rgba(255,255,255,0.08)] cursor-pointer disabled:opacity-50"
             >
               {submitting ? (
-                <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                <span className="inline-flex items-center gap-2 font-mono text-[12px]">
+                  <span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  AUTHENTICATING ROOT...
+                </span>
               ) : (
-                <Lock size={14} />
+                <span>Access Diagnostic Station</span>
               )}
-              {submitting ? 'Verifying…' : 'Enter Admin Panel'}
             </button>
           </form>
-        </div>
 
-        {/* Footer */}
-        <p className="mt-6 text-center text-[11px] text-[#334155]">
-          Not an admin?{' '}
-          <a href="/login" className="text-[#475569] hover:text-white transition-colors underline underline-offset-2">
-            Back to regular login
-          </a>
-        </p>
-      </div>
+          <div className="text-center pt-2">
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-1.5 text-[12px] text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+            >
+              <PiArrowLeft size={14} />
+              Return to standard operator login
+            </Link>
+          </div>
+        </motion.div>
+      </main>
+
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      <footer className="relative z-10 pb-6 px-6 flex items-center justify-center gap-2 text-[11px] font-mono text-[#52525B]">
+        <PiShieldCheck className="text-[#F87171]" size={14} />
+        <span>ALL DIAGNOSTIC ACCESS ATTEMPTS ARE CRYPTOGRAPHICALLY LOGGED</span>
+      </footer>
     </div>
   )
 }

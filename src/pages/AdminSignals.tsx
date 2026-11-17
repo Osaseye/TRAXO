@@ -1,680 +1,751 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  ShieldAlert,
-  Radio,
-  TrendingUp,
-  TrendingDown,
-  ArrowLeft,
-  Filter,
-  Download,
-  ChevronUp,
-  ChevronDown,
-  ArrowUpDown,
-  Zap,
-  Target,
-  BarChart2,
-  Clock,
-  Search,
-  X,
-  AlertCircle,
-  RefreshCw,
-  CheckCircle2,
-} from 'lucide-react'
-import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
-import { useAnalysisSignalStore, type StoredSignal } from '@/stores/useAnalysisSignalStore'
-import { getScannerRejects } from '@/lib/api'
-import { useEffect } from 'react'
+  PiArrowsClockwise,
+  PiArrowsDownUp,
+  PiArrowUpRight,
+  PiDownloadSimple,
+  PiMagnifyingGlass,
+  PiGauge,
+  PiShieldCheck,
+} from 'react-icons/pi'
+import { getHistoricalSignals, getLiveSignals, getScannerRejects } from '@/lib/api'
+import { auth } from '@/lib/firebase'
+import { normalizeStrategyId } from '@/lib/strategyId'
+import { ONBOARDING_STRATEGIES } from '@/stores/useOnboardingStore'
 
-// ... (Keep all constants, helpers, and sub-components as they are)
-
-const STRATEGY_COLORS: Record<string, string> = {
-  'wick-rejection':  '#f59e0b',
-  'breakout':        '#6366f1',
-  'order-block':     '#10b981',
-  'supply-demand':   '#3b82f6',
-  'trend-following': '#a855f7',
+interface AdminSignalRow {
+  id: string
+  symbol: string
+  timeframe: string
+  strategyId: string
+  strategyLabel: string
+  direction: 'BUY' | 'SELL'
+  entry: number
+  sl: number
+  tp: number
+  rr: number
+  confidence: number
+  status: 'WIN' | 'LOSS' | 'EXPIRED' | 'LIVE'
+  timestampMs: number
 }
 
-const STRATEGY_LABELS: Record<string, string> = {
-  'wick-rejection':  'Wick Rejection',
-  'breakout':        'Breakout',
-  'order-block':     'Order Block',
-  'supply-demand':   'Supply & Demand',
-  'trend-following': 'Trend Following',
+interface AdminRejectRow {
+  id: string
+  symbol: string
+  timeframe: string
+  strategy: string
+  reason: string
+  confidence: string | null
+  spread: string | null
+  timestampMs: number | null
 }
 
-const ALL_TIMEFRAMES = ['1m', '5m', '15m', '1H', '4H', '1D'] as const
+type AdminTab = 'signals' | 'rejects'
+type SortKey = 'timestampMs' | 'symbol' | 'confidence' | 'rr' | 'status'
 
-type SortKey = 'time' | 'confidence' | 'rr' | 'symbol' | 'strategy'
-type SortDir = 'asc' | 'desc'
+const REJECT_SWEEP_PAIRS = [
+  { symbol: 'EURUSD', timeframe: '1H' },
+  { symbol: 'EURUSD', timeframe: '15m' },
+  { symbol: 'GBPUSD', timeframe: '1H' },
+  { symbol: 'USDJPY', timeframe: '1H' },
+  { symbol: 'XAUUSD', timeframe: '15m' },
+  { symbol: 'XAUUSD', timeframe: '1H' },
+  { symbol: 'BTCUSD', timeframe: '1H' },
+  { symbol: 'AAPL', timeframe: '1H' },
+]
 
-function timeAgo(ts: number): string {
-  const diff = Math.floor(Date.now() / 1000) - ts
-  if (diff < 60) return `${diff}s ago`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
+const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/$/, '')
+
+function formatPrice(val: number): string {
+  if (!Number.isFinite(val)) return '—'
+  if (val >= 100) return val.toFixed(2)
+  if (val >= 10) return val.toFixed(3)
+  return val.toFixed(5)
 }
 
-function fmtDate(ts: number): string {
-  return new Date(ts * 1000).toLocaleString(undefined, {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-  })
+function normalizeTs(raw: unknown): number {
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw > 1e12 ? raw : raw * 1000
+  if (typeof raw === 'string') {
+    const num = Number(raw)
+    if (Number.isFinite(num) && raw.trim() !== '') return num > 1e12 ? num : num * 1000
+    const parsed = Date.parse(raw)
+    if (!Number.isNaN(parsed)) return parsed
+  }
+  if (raw && typeof raw === 'object') {
+    const obj = raw as { seconds?: number; _seconds?: number }
+    const sec = obj.seconds ?? obj._seconds
+    if (typeof sec === 'number') return sec * 1000
+  }
+  return Date.now()
 }
 
-
-function confColor(c: number) {
-  if (c >= 75) return 'text-[#86efac]'
-  if (c >= 55) return 'text-[#fde68a]'
-  return 'text-[#fca5a5]'
+function normalizeStatus(raw: unknown): 'WIN' | 'LOSS' | 'EXPIRED' | 'LIVE' {
+  const s = String(raw || '').trim().toLowerCase()
+  if (s === 'win' || s === 'tp_hit' || s === 'tp') return 'WIN'
+  if (s === 'loss' || s === 'sl_hit' || s === 'sl') return 'LOSS'
+  if (s === 'expired' || s === 'stale' || s === 'closed') return 'EXPIRED'
+  return 'LIVE'
 }
 
-function exportCSV(signals: StoredSignal[]) {
-  const headers = ['Time', 'Symbol', 'Timeframe', 'Strategy', 'Direction', 'Entry', 'SL', 'TP', 'RR', 'Confidence', 'Risk', 'Reasons']
-  const rows = signals.map((s) => [
-    fmtDate(s.time as unknown as number),
-    s.symbol,
-    s.timeframe,
-    STRATEGY_LABELS[s.strategyId] ?? s.strategyLabel,
-    s.direction,
-    s.entry,
-    s.sl,
-    s.tp,
-    s.rr.toFixed(2),
-    `${s.confidence}%`,
-    s.risk,
-    s.reason.join(' | '),
-  ])
-  const csv = [headers, ...rows].map((r) => r.map((v) => `"${v}"`).join(',')).join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `traxo-signals-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+function compactSym(s: string): string {
+  return s.replace('/', '').trim().toUpperCase()
 }
 
-function SortHeader({
-  label, sortKey, current, dir, onSort,
-}: {
-  label: string
-  sortKey: SortKey
-  current: SortKey
-  dir: SortDir
-  onSort: (k: SortKey) => void
-}) {
-  const active = current === sortKey
-  return (
-    <button
-      onClick={() => onSort(sortKey)}
-      className="flex items-center gap-1 text-[11px] uppercase tracking-wider font-semibold select-none group"
-    >
-      <span className={active ? 'text-[#e5e7eb]' : 'text-[#475569] group-hover:text-[#94a3b8]'}>{label}</span>
-      {active ? (
-        dir === 'desc' ? <ChevronDown size={11} className="text-[#6366f1]" /> : <ChevronUp size={11} className="text-[#6366f1]" />
-      ) : (
-        <ArrowUpDown size={10} className="text-[#334155] group-hover:text-[#475569]" />
-      )}
-    </button>
-  )
+function strategyName(id: string, fallback?: string): string {
+  if (fallback && fallback.trim()) return fallback
+  const norm = normalizeStrategyId(id)
+  const found = ONBOARDING_STRATEGIES.find((st) => normalizeStrategyId(st.id) === norm)
+  return found ? found.name : id
 }
 
-function StatCard({ label, value, sub, icon: Icon, color }: {
-  label: string; value: string | number; sub?: string; icon: React.ElementType; color: string
-}) {
-  return (
-    <div className="rounded-xl border border-white/[0.07] bg-[#0d1117] p-4 flex items-center gap-3">
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0`} style={{ background: `${color}18` }}>
-        <Icon size={16} style={{ color }} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[10px] uppercase tracking-wider text-[#475569]">{label}</p>
-        <p className="text-xl font-bold text-[#f8fafc] leading-tight">{value}</p>
-        {sub && <p className="text-[10px] text-[#64748b] mt-0.5">{sub}</p>}
-      </div>
-    </div>
-  )
+function parseRejects(payload: unknown, fallbackSym = '', fallbackTf = ''): AdminRejectRow[] {
+  const out: AdminRejectRow[] = []
+  if (!payload || typeof payload !== 'object') return out
+
+  const pushOne = (sym: string, tf: string, strat: string, val: unknown, idx: number) => {
+    const reason =
+      typeof val === 'string'
+        ? val
+        : val && typeof val === 'object'
+          ? String(
+              (val as Record<string, unknown>).reason ??
+                (val as Record<string, unknown>).message ??
+                JSON.stringify(val)
+            )
+          : String(val ?? '')
+    if (!reason.trim()) return
+    const meta = val && typeof val === 'object' ? (val as Record<string, unknown>) : {}
+    const confMatch = reason.match(/conf(?:idence)?\s*[:=]?\s*(\d+(?:\.\d+)?%?)/i)
+    const spreadMatch = reason.match(/spread\s*[:=]?\s*(\d+(?:\.\d+)?(?:\s*(?:pips?|bps))?)/i)
+    out.push({
+      id: `${sym}-${tf}-${strat}-${idx}-${reason.slice(0, 20)}`,
+      symbol: compactSym(String(meta.symbol || sym || 'UNKNOWN')),
+      timeframe: String(meta.timeframe || tf || '—'),
+      strategy: String(meta.strategy || meta.strategyId || strat || 'scanner'),
+      reason: reason.trim(),
+      confidence:
+        meta.confidence !== undefined ? String(meta.confidence) : confMatch?.[1] ?? null,
+      spread: meta.spread !== undefined ? String(meta.spread) : spreadMatch?.[1] ?? null,
+      timestampMs: meta.timestamp ? normalizeTs(meta.timestamp) : null,
+    })
+  }
+
+  const root = payload as Record<string, unknown>
+  const target = root.rejects ?? root.items ?? root.entries ?? root
+  const defSym = String(root.symbol || fallbackSym)
+  const defTf = String(root.timeframe || fallbackTf)
+
+  if (Array.isArray(target)) {
+    target.forEach((item, idx) => {
+      if (item && typeof item === 'object' && 'rejects' in item) {
+        out.push(
+          ...parseRejects(
+            (item as Record<string, unknown>).rejects,
+            String((item as Record<string, unknown>).symbol || defSym),
+            String((item as Record<string, unknown>).timeframe || defTf)
+          )
+        )
+      } else {
+        pushOne(defSym, defTf, 'scanner', item, idx)
+      }
+    })
+  } else if (target && typeof target === 'object') {
+    Object.entries(target as Record<string, unknown>).forEach(([k, v]) => {
+      let sym = defSym
+      let tf = defTf
+      let strat = k
+      const parts = k.replace(/^scan_rejects:/i, '').split(':')
+      if (parts.length >= 2 && /^(1m|5m|15m|1h|4h|1d)$/i.test(parts[1])) {
+        sym = parts[0] || sym
+        tf = parts[1] || tf
+        strat = parts.slice(2).join(':') || 'scanner'
+      }
+      if (Array.isArray(v)) {
+        v.forEach((entry, idx) => pushOne(sym, tf, strat, entry, idx))
+      } else if (typeof v === 'string' || (v && typeof v === 'object')) {
+        if (v && typeof v === 'object' && !('reason' in v) && !('message' in v)) {
+          out.push(...parseRejects(v, sym, tf))
+        } else {
+          pushOne(sym, tf, strat, v, 0)
+        }
+      }
+    })
+  }
+
+  return out
 }
 
 export default function AdminSignals() {
-  const allSignals = useAnalysisSignalStore((s) => s.signals)
+  const [tab, setTab] = useState<AdminTab>('signals')
+  const [signals, setSignals] = useState<AdminSignalRow[]>([])
+  const [rejects, setRejects] = useState<AdminRejectRow[]>([])
+  const [loading, setLoading] = useState(false)
 
-  // Filters
-  const [searchSymbol, setSearchSymbol] = useState('')
-  const [filterStrategy, setFilterStrategy] = useState('ALL')
-  const [filterTimeframe, setFilterTimeframe] = useState('ALL')
-  const [filterDirection, setFilterDirection] = useState<'ALL' | 'BUY' | 'SELL'>('ALL')
-  const [filterRisk, setFilterRisk] = useState('ALL')
-  const [sortKey, setSortKey] = useState<SortKey>('time')
-  const [sortDir, setSortDir] = useState<SortDir>('desc')
-  const [page, setPage] = useState(0)
-  const [activeTab, setActiveTab] = useState<'signals' | 'rejects'>('signals')
-  const [rejectSymbol, setRejectSymbol] = useState('EURUSD')
-  const [rejectTimeframe, setRejectTimeframe] = useState('15m')
-  const [rejectsData, setRejectsData] = useState<Record<string, string[]> | null>(null)
-  const [isLoadingRejects, setIsLoadingRejects] = useState(false)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL')
+  const [directionFilter, setDirectionFilter] = useState('ALL')
+  const [sortKey, setSortKey] = useState<SortKey>('timestampMs')
+  const [sortAsc, setSortAsc] = useState(false)
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 25
 
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    try {
+      const token = await auth.currentUser?.getIdToken().catch(() => null)
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
 
+      const [liveRes, histRes] = await Promise.allSettled([
+        getLiveSignals(),
+        getHistoricalSignals(),
+      ])
+
+      const byId = new Map<string, AdminSignalRow>()
+      const ingest = (rawList: Record<string, unknown>[], fallbackStatus: 'LIVE' | 'EXPIRED') => {
+        for (const s of rawList) {
+          const id = String(s.id || `${s.symbol}-${s.timeframe}-${s.strategyId}-${s.time}`)
+          const entry = Number(s.entry ?? 0)
+          const sl = Number(s.sl ?? 0)
+          const tp = Number(s.tp ?? 0)
+          const risk = Math.abs(entry - sl)
+          const reward = Math.abs(tp - entry)
+          const rr = Number(s.rr ?? (risk > 0 ? Number((reward / risk).toFixed(2)) : 0))
+          const strategyId = String(s.strategyId || s.strategy || 'scanner')
+          byId.set(id, {
+            id,
+            symbol: compactSym(String(s.symbol || 'UNKNOWN')),
+            timeframe: String(s.timeframe || '1H'),
+            strategyId,
+            strategyLabel: strategyName(
+              strategyId,
+              typeof s.strategyLabel === 'string' ? s.strategyLabel : undefined
+            ),
+            direction: String(s.direction || s.action || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
+            entry,
+            sl,
+            tp,
+            rr,
+            confidence: Number(s.confidence ?? 0),
+            status: s.status ? normalizeStatus(s.status) : fallbackStatus,
+            timestampMs: normalizeTs(s.time ?? s.createdAt),
+          })
+        }
+      }
+
+      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value?.signals)) {
+        ingest(histRes.value.signals as Record<string, unknown>[], 'EXPIRED')
+      }
+      if (liveRes.status === 'fulfilled' && Array.isArray(liveRes.value)) {
+        ingest(liveRes.value as Record<string, unknown>[], 'LIVE')
+      }
+      setSignals(Array.from(byId.values()))
+
+      const collectedRejects: AdminRejectRow[] = []
+      const seen = new Set<string>()
+      const addRejects = (list: AdminRejectRow[]) => {
+        for (const item of list) {
+          const k = `${item.symbol}|${item.timeframe}|${item.strategy}|${item.reason}`
+          if (!seen.has(k)) {
+            seen.add(k)
+            collectedRejects.push(item)
+          }
+        }
+      }
+
+      let globalOk = false
+      try {
+        const res = await fetch(
+          API_BASE ? `${API_BASE}/api/scanner/rejects` : '/api/scanner/rejects',
+          { headers }
+        )
+        if (res.ok) {
+          const body = await res.json()
+          const parsed = parseRejects(body)
+          addRejects(parsed)
+          if (parsed.length > 0 || Array.isArray(body?.rejects)) globalOk = true
+        }
+      } catch {
+        // Fallback below
+      }
+
+      if (!globalOk) {
+        const sweep = await Promise.allSettled(
+          REJECT_SWEEP_PAIRS.map(async ({ symbol, timeframe }) => {
+            const res = await getScannerRejects(symbol, timeframe).catch(() => null)
+            if (res?.rejects) return parseRejects(res, symbol, timeframe)
+            if (symbol.length === 6) {
+              const slashed = `${symbol.slice(0, 3)}/${symbol.slice(3)}`
+              const alt = await getScannerRejects(slashed, timeframe).catch(() => null)
+              if (alt?.rejects) return parseRejects(alt, symbol, timeframe)
+            }
+            return []
+          })
+        )
+        for (const r of sweep) {
+          if (r.status === 'fulfilled') addRejects(r.value)
+        }
+      }
+
+      setRejects(collectedRejects)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    if (activeTab === 'rejects') {
-      setIsLoadingRejects(true)
-      getScannerRejects(rejectSymbol, rejectTimeframe)
-        .then((res) => setRejectsData(res.rejects))
-        .catch(console.error)
-        .finally(() => setIsLoadingRejects(false))
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (!cancelled) void loadData()
+    })
+    return () => {
+      cancelled = true
     }
-  }, [activeTab, rejectSymbol, rejectTimeframe])
+  }, [loadData])
 
-  const PAGE_SIZE = 50
-
-  // Derived collections
-  const allStrategies = useMemo(() => {
-    const s = new Set(allSignals.map((x) => x.strategyId))
-    return Array.from(s).sort()
-  }, [allSignals])
-
-  const allSymbols = useMemo(() => {
-    const s = new Set(allSignals.map((x) => x.symbol))
-    return Array.from(s).sort()
-  }, [allSignals])
-
-  // Stats (over full dataset)
-  const stats = useMemo(() => {
-    const buys = allSignals.filter((s) => s.direction === 'BUY').length
-    const sells = allSignals.filter((s) => s.direction === 'SELL').length
-    const avgConf = allSignals.length > 0
-      ? (allSignals.reduce((a, s) => a + s.confidence, 0) / allSignals.length).toFixed(0)
-      : '—'
-    const avgRR = allSignals.length > 0
-      ? (allSignals.reduce((a, s) => a + s.rr, 0) / allSignals.length).toFixed(2)
-      : '—'
-    return { total: allSignals.length, buys, sells, avgConf, avgRR, symbols: allSymbols.length }
-  }, [allSignals, allSymbols])
-
-  // Filtered + sorted
-  const filtered = useMemo(() => {
-    let list = [...allSignals]
-    if (searchSymbol) list = list.filter((s) => s.symbol.toLowerCase().includes(searchSymbol.toLowerCase()))
-    if (filterStrategy !== 'ALL') list = list.filter((s) => s.strategyId === filterStrategy)
-    if (filterTimeframe !== 'ALL') list = list.filter((s) => s.timeframe === filterTimeframe)
-    if (filterDirection !== 'ALL') list = list.filter((s) => s.direction === filterDirection)
-    if (filterRisk !== 'ALL') list = list.filter((s) => s.risk === filterRisk)
+  const filteredSignals = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const list = signals.filter((s) => {
+      if (statusFilter !== 'ALL' && s.status !== statusFilter) return false
+      if (directionFilter !== 'ALL' && s.direction !== directionFilter) return false
+      if (q) {
+        const hay = `${s.symbol} ${s.strategyLabel} ${s.timeframe} ${s.id}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
 
     list.sort((a, b) => {
-      let cmp = 0
-      if (sortKey === 'time')       cmp = (a.time as unknown as number) - (b.time as unknown as number)
-      else if (sortKey === 'confidence') cmp = a.confidence - b.confidence
-      else if (sortKey === 'rr')    cmp = a.rr - b.rr
-      else if (sortKey === 'symbol') cmp = a.symbol.localeCompare(b.symbol)
-      else if (sortKey === 'strategy') cmp = a.strategyId.localeCompare(b.strategyId)
-      return sortDir === 'desc' ? -cmp : cmp
+      const av = a[sortKey]
+      const bv = b[sortKey]
+      if (typeof av === 'number' && typeof bv === 'number') {
+        return sortAsc ? av - bv : bv - av
+      }
+      return sortAsc
+        ? String(av).localeCompare(String(bv))
+        : String(bv).localeCompare(String(av))
     })
     return list
-  }, [allSignals, searchSymbol, filterStrategy, filterTimeframe, filterDirection, filterRisk, sortKey, sortDir])
+  }, [signals, search, statusFilter, directionFilter, sortKey, sortAsc])
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
-  const pageSlice = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const filteredRejects = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return rejects
+    return rejects.filter((r) =>
+      `${r.symbol} ${r.timeframe} ${r.strategy} ${r.reason}`.toLowerCase().includes(q)
+    )
+  }, [rejects, search])
 
-  function handleSort(k: SortKey) {
-    if (sortKey === k) setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
-    else { setSortKey(k); setSortDir('desc') }
-    setPage(0)
+  const totalPages = Math.max(1, Math.ceil(filteredSignals.length / PAGE_SIZE))
+  const paginatedSignals = useMemo(() => {
+    const clamped = Math.min(page, totalPages)
+    return filteredSignals.slice((clamped - 1) * PAGE_SIZE, clamped * PAGE_SIZE)
+  }, [filteredSignals, page, totalPages])
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortAsc((p) => !p)
+    else {
+      setSortKey(key)
+      setSortAsc(false)
+    }
   }
 
-  function resetFilters() {
-    setSearchSymbol('')
-    setFilterStrategy('ALL')
-    setFilterTimeframe('ALL')
-    setFilterDirection('ALL')
-    setFilterRisk('ALL')
-    setPage(0)
+  const exportCsv = () => {
+    const header = [
+      'ID',
+      'Time',
+      'Symbol',
+      'Timeframe',
+      'Strategy',
+      'Direction',
+      'Status',
+      'Entry',
+      'SL',
+      'TP',
+      'RR',
+      'Confidence',
+    ]
+    const rows = filteredSignals.map((s) => [
+      s.id,
+      new Date(s.timestampMs).toISOString(),
+      s.symbol,
+      s.timeframe,
+      `"${s.strategyLabel.replace(/"/g, '""')}"`,
+      s.direction,
+      s.status,
+      formatPrice(s.entry),
+      formatPrice(s.sl),
+      formatPrice(s.tp),
+      s.rr.toFixed(2),
+      `${s.confidence}%`,
+    ])
+    const csv = [header.join(','), ...rows.map((r) => r.join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `admin-signals-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
-
-  const hasActiveFilters =
-    searchSymbol || filterStrategy !== 'ALL' || filterTimeframe !== 'ALL' ||
-    filterDirection !== 'ALL' || filterRisk !== 'ALL'
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white pb-24 lg:pb-8">
-      {/* Header */}
-      <header className="h-14 border-b border-white/[0.05] bg-[#070709]/95 backdrop-blur px-3 sm:px-4 flex items-center justify-between gap-3 sticky top-0 z-30">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <Link to="/admin" className="p-1.5 rounded-lg hover:bg-white/[0.05] transition-colors shrink-0">
-            <ArrowLeft size={15} className="text-[#94a3b8]" />
-          </Link>
-          <span className="hidden sm:block h-4 w-px bg-white/[0.1]" />
-          <ShieldAlert size={14} className="text-[#fca5a5] shrink-0" />
-          <Radio size={14} className="text-[#6366f1] shrink-0" />
-          <h1 className="text-[14px] font-semibold text-[#e5e7eb] truncate">Admin View</h1>
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA]">
+      <div className="max-w-[1360px] mx-auto px-6 sm:px-8 py-8 space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div className="space-y-1.5">
+            <p className="text-[12px] font-medium text-[#71717A]">Admin Archive</p>
+            <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
+              Signal &amp; Rejection Archive
+            </h1>
+            <p className="text-[14px] text-[#A1A1AA]">
+              Raw scanner output ledger and guardrail rejection inspection log.
+            </p>
+          </div>
 
-          {/* Tab switcher */}
-          <div className="flex items-center bg-[#0b0f17] rounded-lg border border-white/[0.08] p-0.5 ml-2">
-            <button
-              onClick={() => setActiveTab('signals')}
-              className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${
-                activeTab === 'signals' ? 'bg-[#6366f1] text-white' : 'text-[#64748b] hover:text-[#94a3b8]'
-              }`}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <Link
+              to="/notifications"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
             >
-              Signals {allSignals.length > 0 && `(${allSignals.length})`}
+              <span>Signals &amp; Ops</span>
+              <PiArrowUpRight className="h-4 w-4 text-[#A1A1AA]" />
+            </Link>
+            <button
+              type="button"
+              onClick={exportCsv}
+              disabled={filteredSignals.length === 0}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] disabled:opacity-40 text-[13px] font-medium text-[#FAFAFA] transition-colors"
+            >
+              <PiDownloadSimple className="h-4 w-4 text-[#A1A1AA]" />
+              <span>Export CSV</span>
             </button>
             <button
-              onClick={() => setActiveTab('rejects')}
-              className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${
-                activeTab === 'rejects' ? 'bg-[#f59e0b] text-black' : 'text-[#64748b] hover:text-[#94a3b8]'
-              }`}
+              type="button"
+              onClick={loadData}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
             >
-              Scan Rejects
+              <PiArrowsClockwise className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Sleek Rounded-Full Tab Switcher */}
+        <div className="inline-flex items-center gap-1 rounded-full bg-[#111113] border border-white/[0.07] p-1.5">
           <button
-            onClick={() => exportCSV(filtered)}
-            disabled={filtered.length === 0}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-[11px] font-medium text-[#94a3b8] hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            type="button"
+            onClick={() => setTab('signals')}
+            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
+              tab === 'signals'
+                ? 'bg-[#FAFAFA] text-[#09090B]'
+                : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+            }`}
           >
-            <Download size={12} />
-            Export CSV
+            <PiGauge className="h-4 w-4" />
+            <span>Signals Table</span>
+            <span
+              className={`text-[12px] font-mono tabular-nums ${
+                tab === 'signals' ? 'text-[#52525B]' : 'text-[#71717A]'
+              }`}
+            >
+              {signals.length}
+            </span>
           </button>
-          <DesktopWorkspaceNav />
+          <button
+            type="button"
+            onClick={() => setTab('rejects')}
+            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
+              tab === 'rejects'
+                ? 'bg-[#FAFAFA] text-[#09090B]'
+                : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+            }`}
+          >
+            <PiShieldCheck className="h-4 w-4" />
+            <span>Scan Rejects</span>
+            <span
+              className={`text-[12px] font-mono tabular-nums ${
+                tab === 'rejects' ? 'text-[#52525B]' : 'text-[#71717A]'
+              }`}
+            >
+              {rejects.length}
+            </span>
+          </button>
         </div>
-      </header>
 
-      <main className="max-w-[1400px] mx-auto px-3 sm:px-6 py-5 sm:py-7 space-y-5">
+        {/* Filter Bar */}
+        <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="relative flex-1">
+            <PiMagnifyingGlass className="h-4 w-4 text-[#71717A] absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(1)
+              }}
+              placeholder={
+                tab === 'signals'
+                  ? 'Search symbol, strategy, ID...'
+                  : 'Search rejection reason, symbol, strategy...'
+              }
+              className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-[13px] text-[#FAFAFA] placeholder:text-[#71717A]"
+            />
+          </div>
 
-        {/* ─── Scan Rejects Tab ─── */}
-        {activeTab === 'rejects' && (
-          <div className="space-y-4">
-            {/* Controls */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <label className="text-[11px] text-[#64748b] uppercase tracking-wider">Symbol</label>
-                <input
-                  value={rejectSymbol}
-                  onChange={(e) => setRejectSymbol(e.target.value.toUpperCase())}
-                  placeholder="e.g. EURUSD"
-                  className="h-8 px-3 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-semibold text-white focus:outline-none focus:border-[#f59e0b]/50 w-32"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-[11px] text-[#64748b] uppercase tracking-wider">Timeframe</label>
-                <select
-                  value={rejectTimeframe}
-                  onChange={(e) => setRejectTimeframe(e.target.value)}
-                  className="h-8 px-3 rounded-lg bg-[#0b0f17] border border-white/[0.08] text-[12px] font-semibold text-white focus:outline-none focus:border-[#f59e0b]/50"
-                >
-                  {['1m','5m','15m','1H','4H','1D'].map((tf) => <option key={tf} value={tf}>{tf}</option>)}
-                </select>
-              </div>
-              <button
-                onClick={() => {
-                  setIsLoadingRejects(true)
-                  getScannerRejects(rejectSymbol, rejectTimeframe)
-                    .then((res) => setRejectsData(res.rejects))
-                    .catch(console.error)
-                    .finally(() => setIsLoadingRejects(false))
+          {tab === 'signals' && (
+            <div className="flex items-center gap-2.5">
+              <select
+                value={directionFilter}
+                onChange={(e) => {
+                  setDirectionFilter(e.target.value)
+                  setPage(1)
                 }}
-                className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#f59e0b]/30 bg-[#f59e0b]/10 text-[11px] font-semibold text-[#fcd34d] hover:bg-[#f59e0b]/20 transition-all"
+                aria-label="Direction filter"
+                className="px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
               >
-                <RefreshCw size={11} className={isLoadingRejects ? 'animate-spin' : ''} />
-                Refresh
-              </button>
-              <p className="text-[11px] text-[#475569]">
-                Showing why each strategy rejected a signal for <span className="text-[#e5e7eb] font-semibold">{rejectSymbol}</span> on <span className="text-[#e5e7eb] font-semibold">{rejectTimeframe}</span>
-              </p>
-            </div>
+                <option value="ALL">All sides</option>
+                <option value="BUY">Buy</option>
+                <option value="SELL">Sell</option>
+              </select>
 
-            {/* Results */}
-            {isLoadingRejects ? (
-              <div className="flex items-center justify-center py-16">
-                <RefreshCw size={20} className="animate-spin text-[#f59e0b]" />
-              </div>
-            ) : !rejectsData ? (
-              <div className="rounded-xl border border-white/[0.06] bg-[#0d1117] p-8 text-center">
-                <AlertCircle size={28} className="text-[#475569] mx-auto mb-2" />
-                <p className="text-[#64748b] text-sm">No scan data found.</p>
-                <p className="text-[#475569] text-[12px] mt-1">The scanner may not have run yet, or this symbol/timeframe hasn't been scanned.</p>
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value)
+                  setPage(1)
+                }}
+                aria-label="Status filter"
+                className="px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
+              >
+                <option value="ALL">All status</option>
+                <option value="LIVE">Live</option>
+                <option value="WIN">Win</option>
+                <option value="LOSS">Loss</option>
+                <option value="EXPIRED">Expired</option>
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Table Container */}
+        {tab === 'signals' ? (
+          <div className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden">
+            {filteredSignals.length === 0 ? (
+              <div className="p-12 text-center space-y-3">
+                <img
+                  src="/brand/empty-signals.png"
+                  alt="No archived signals"
+                  className="w-full max-w-[260px] mx-auto rounded-xl object-cover opacity-90"
+                />
+                <p className="text-[14px] text-[#A1A1AA]">
+                  {loading ? 'Loading signals...' : 'No signals matched current query.'}
+                </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                {Object.entries(rejectsData).map(([strategyId, reasons]) => {
-                  const label = {
-                    breakout: 'Breakout',
-                    order_block: 'Order Block',
-                    supply_demand: 'Supply & Demand',
-                    trend_following: 'Trend Following',
-                    wick_rejection: 'Wick Rejection',
-                  }[strategyId] ?? strategyId
-                  const color = {
-                    breakout: '#6366f1',
-                    order_block: '#10b981',
-                    supply_demand: '#3b82f6',
-                    trend_following: '#a855f7',
-                    wick_rejection: '#f59e0b',
-                  }[strategyId] ?? '#94a3b8'
-                  return (
-                    <div key={strategyId} className="rounded-xl border border-white/[0.07] bg-[#0d1117] p-4 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
-                        <span className="text-[13px] font-bold text-[#e5e7eb]">{label}</span>
-                        <span className="ml-auto px-1.5 py-0.5 rounded-md bg-[#ef4444]/10 border border-[#ef4444]/20 text-[9px] font-bold text-[#fca5a5] uppercase">REJECTED</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {(Array.isArray(reasons) ? reasons : [reasons]).map((r, i) => (
-                          <div key={i} className="flex items-start gap-2 text-[11px] text-[#94a3b8] leading-relaxed">
-                            <X size={11} className="text-[#ef4444] mt-0.5 shrink-0" />
-                            <span>{r}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
-                {Object.keys(rejectsData).length === 0 && (
-                  <div className="col-span-full rounded-xl border border-[#22c55e]/20 bg-[#22c55e]/5 p-8 text-center">
-                    <CheckCircle2 size={28} className="text-[#86efac] mx-auto mb-2" />
-                    <p className="text-[#86efac] text-sm font-semibold">All strategies fired a signal!</p>
-                    <p className="text-[#4ade80] text-[12px] mt-1">No rejections were recorded for this combination.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ─── Signals Tab ─── */}
-        {activeTab === 'signals' && (
-          <div className="space-y-5">
-        {/* Stats bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <StatCard label="Total Signals" value={stats.total.toLocaleString()} icon={Zap} color="#6366f1" />
-          <StatCard label="BUY Signals" value={stats.buys} sub={stats.total > 0 ? `${((stats.buys / stats.total) * 100).toFixed(0)}% of total` : undefined} icon={TrendingUp} color="#86efac" />
-          <StatCard label="SELL Signals" value={stats.sells} sub={stats.total > 0 ? `${((stats.sells / stats.total) * 100).toFixed(0)}% of total` : undefined} icon={TrendingDown} color="#fca5a5" />
-          <StatCard label="Avg Confidence" value={stats.avgConf === '—' ? '—' : `${stats.avgConf}%`} icon={Target} color="#f59e0b" />
-          <StatCard label="Avg R:R" value={stats.avgRR} icon={BarChart2} color="#a855f7" />
-          <StatCard label="Symbols Seen" value={stats.symbols} sub={`${allStrategies.length} strategies`} icon={Clock} color="#3b82f6" />
-        </div>
-
-        {/* Filters row */}
-        <div className="rounded-2xl border border-white/[0.07] bg-[#0d1117] p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Filter size={13} className="text-[#6366f1]" />
-            <span className="text-[12px] font-semibold text-[#94a3b8]">Filters</span>
-            {hasActiveFilters && (
-              <button
-                onClick={resetFilters}
-                className="ml-auto flex items-center gap-1 text-[11px] text-[#94a3b8] hover:text-white px-2 py-0.5 rounded-lg border border-white/[0.08] hover:bg-white/[0.05] transition-all"
-              >
-                <X size={10} /> Clear all
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            {/* Symbol search */}
-            <div className="relative">
-              <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#475569]" />
-              <input
-                value={searchSymbol}
-                onChange={(e) => { setSearchSymbol(e.target.value); setPage(0) }}
-                placeholder="Symbol…"
-                className="w-full pl-7 pr-3 py-2 rounded-lg border border-white/[0.08] bg-[#0b0f17] text-[12px] text-[#e5e7eb] placeholder-[#334155] focus:outline-none focus:border-[#6366f1]/50 transition-colors"
-              />
-            </div>
-
-            {/* Strategy */}
-            <select
-              value={filterStrategy}
-              onChange={(e) => { setFilterStrategy(e.target.value); setPage(0) }}
-              className="px-3 py-2 rounded-lg border border-white/[0.08] bg-[#0b0f17] text-[12px] text-[#e5e7eb] focus:outline-none focus:border-[#6366f1]/50"
-            >
-              <option value="ALL">All Strategies</option>
-              {allStrategies.map((s) => (
-                <option key={s} value={s}>{STRATEGY_LABELS[s] ?? s}</option>
-              ))}
-            </select>
-
-            {/* Timeframe */}
-            <select
-              value={filterTimeframe}
-              onChange={(e) => { setFilterTimeframe(e.target.value); setPage(0) }}
-              className="px-3 py-2 rounded-lg border border-white/[0.08] bg-[#0b0f17] text-[12px] text-[#e5e7eb] focus:outline-none focus:border-[#6366f1]/50"
-            >
-              <option value="ALL">All Timeframes</option>
-              {ALL_TIMEFRAMES.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
-            </select>
-
-            {/* Direction */}
-            <div className="flex rounded-lg border border-white/[0.08] bg-[#0b0f17] overflow-hidden">
-              {(['ALL', 'BUY', 'SELL'] as const).map((d) => (
-                <button
-                  key={d}
-                  onClick={() => { setFilterDirection(d); setPage(0) }}
-                  className={`flex-1 py-2 text-[11px] font-semibold transition-all ${
-                    filterDirection === d
-                      ? d === 'BUY' ? 'bg-[#86efac]/15 text-[#86efac]'
-                        : d === 'SELL' ? 'bg-[#fca5a5]/15 text-[#fca5a5]'
-                        : 'bg-[#6366f1]/15 text-[#818cf8]'
-                      : 'text-[#475569] hover:text-[#94a3b8]'
-                  }`}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-
-            {/* Risk */}
-            <select
-              value={filterRisk}
-              onChange={(e) => { setFilterRisk(e.target.value); setPage(0) }}
-              className="px-3 py-2 rounded-lg border border-white/[0.08] bg-[#0b0f17] text-[12px] text-[#e5e7eb] focus:outline-none focus:border-[#6366f1]/50"
-            >
-              <option value="ALL">All Risk Levels</option>
-              <option value="Low">Low Risk</option>
-              <option value="Medium">Medium Risk</option>
-              <option value="High">High Risk</option>
-            </select>
-
-            {/* Results count */}
-            <div className="flex items-center justify-center px-3 py-2 rounded-lg border border-white/[0.05] bg-[#0b0f17]">
-              <span className="text-[12px] text-[#475569]">
-                <span className="text-[#94a3b8] font-semibold">{filtered.length.toLocaleString()}</span> result{filtered.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Signal table */}
-        {allSignals.length === 0 ? (
-          <div className="rounded-2xl border border-white/[0.07] bg-[#0d1117] p-16 flex flex-col items-center justify-center gap-4 text-center">
-            <div className="w-14 h-14 rounded-full bg-[#6366f1]/10 flex items-center justify-center">
-              <Radio size={24} className="text-[#6366f1] animate-pulse" />
-            </div>
-            <div>
-              <p className="text-[14px] font-semibold text-[#94a3b8]">No signals yet</p>
-              <p className="text-[12px] text-[#475569] mt-1">
-                Signals are generated automatically as the system scans markets. <br />
-                Navigate to the dashboard or strategy pages to trigger scanning.
-              </p>
-            </div>
-            <Link
-              to="/dashboard"
-              className="mt-2 px-4 py-2 rounded-xl bg-[#6366f1]/15 border border-[#6366f1]/25 text-[12px] font-semibold text-[#818cf8] hover:bg-[#6366f1]/25 transition-colors"
-            >
-              Open Dashboard
-            </Link>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="rounded-2xl border border-white/[0.07] bg-[#0d1117] p-12 flex flex-col items-center gap-3 text-center">
-            <Search size={20} className="text-[#334155]" />
-            <p className="text-[13px] text-[#64748b]">No signals match your filters</p>
-            <button onClick={resetFilters} className="text-[12px] text-[#6366f1] hover:underline">Reset filters</button>
-          </div>
-        ) : (
-          <>
-            {/* Table */}
-            <div className="rounded-2xl border border-white/[0.07] bg-[#0d1117] overflow-hidden">
-              {/* Table header */}
-              <div className="grid grid-cols-[1fr_80px_60px_90px_80px_80px_80px_80px_80px] gap-x-3 px-4 py-3 border-b border-white/[0.05] bg-[#0b0f17]">
-                <SortHeader label="Symbol / Strategy" sortKey="symbol" current={sortKey} dir={sortDir} onSort={handleSort} />
-                <span className="text-[11px] uppercase tracking-wider text-[#475569] font-semibold">TF</span>
-                <SortHeader label="Dir" sortKey="strategy" current={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortHeader label="Entry" sortKey="time" current={sortKey} dir={sortDir} onSort={handleSort} />
-                <span className="text-[11px] uppercase tracking-wider text-[#475569] font-semibold">SL</span>
-                <span className="text-[11px] uppercase tracking-wider text-[#475569] font-semibold">TP</span>
-                <SortHeader label="R:R" sortKey="rr" current={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortHeader label="Conf" sortKey="confidence" current={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortHeader label="Time" sortKey="time" current={sortKey} dir={sortDir} onSort={handleSort} />
-              </div>
-
-              {/* Rows */}
-              <div className="divide-y divide-white/[0.03]">
-                {pageSlice.map((sig) => {
-                  const entry = Number(sig.entry) || 0
-                  const sl = Number(sig.sl) || 0
-                  const tp = Number(sig.tp) || 0
-                  const rr = Number(sig.rr) || 0
-                  const color = STRATEGY_COLORS[sig.strategyId] ?? '#6366f1'
-                  const isBuy = sig.direction === 'BUY'
-                  const digits = entry >= 1000 ? 1 : entry >= 10 ? 2 : entry >= 1 ? 4 : 5
-                  return (
-                    <div
-                      key={sig.id}
-                      className="grid grid-cols-[1fr_80px_60px_90px_80px_80px_80px_80px_80px] gap-x-3 px-4 py-3 hover:bg-white/[0.015] transition-colors group"
-                      style={{ borderLeft: `2px solid ${color}30` }}
-                    >
-                      {/* Symbol + strategy */}
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] font-bold text-[#f1f5f9]">{sig.symbol}</span>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/[0.06] text-[12px] font-medium text-[#71717A]">
+                      <th className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => toggleSort('timestampMs')}
+                          className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
+                        >
+                          <span>Time</span>
+                          <PiArrowsDownUp className="h-3.5 w-3.5" />
+                        </button>
+                      </th>
+                      <th className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => toggleSort('symbol')}
+                          className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
+                        >
+                          <span>Symbol</span>
+                          <PiArrowsDownUp className="h-3.5 w-3.5" />
+                        </button>
+                      </th>
+                      <th className="py-3.5 px-4">Strategy</th>
+                      <th className="py-3.5 px-4">Side</th>
+                      <th className="py-3.5 px-4 text-right">Entry</th>
+                      <th className="py-3.5 px-4 text-right">SL</th>
+                      <th className="py-3.5 px-4 text-right">TP</th>
+                      <th className="py-3.5 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => toggleSort('rr')}
+                          className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
+                        >
+                          <span>R:R</span>
+                          <PiArrowsDownUp className="h-3.5 w-3.5" />
+                        </button>
+                      </th>
+                      <th className="py-3.5 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => toggleSort('confidence')}
+                          className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
+                        >
+                          <span>Conf</span>
+                          <PiArrowsDownUp className="h-3.5 w-3.5" />
+                        </button>
+                      </th>
+                      <th className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => toggleSort('status')}
+                          className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
+                        >
+                          <span>Status</span>
+                          <PiArrowsDownUp className="h-3.5 w-3.5" />
+                        </button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
+                    {paginatedSignals.map((s) => (
+                      <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="py-3.5 px-4 font-mono tabular-nums text-[#71717A] whitespace-nowrap">
+                          {new Date(s.timestampMs).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false,
+                          })}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className="font-medium text-[#FAFAFA]">{s.symbol}</span>{' '}
+                          <span className="text-[12px] text-[#71717A]">{s.timeframe}</span>
+                        </td>
+                        <td className="py-3.5 px-4 text-[#A1A1AA]">{s.strategyLabel}</td>
+                        <td className="py-3.5 px-4">
                           <span
-                            className="hidden sm:inline text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider border"
-                            style={{ color, borderColor: `${color}30`, background: `${color}12` }}
+                            className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+                              s.direction === 'BUY'
+                                ? 'bg-[#34D399]/10 text-[#34D399]'
+                                : 'bg-[#F87171]/10 text-[#F87171]'
+                            }`}
                           >
-                            {STRATEGY_LABELS[sig.strategyId]?.split(' ')[0] ?? sig.strategyId}
+                            {s.direction}
                           </span>
-                        </div>
-                        <p className="text-[10px] text-[#475569] mt-0.5 truncate">{(sig.reason?.[0]) ?? ''}</p>
-                      </div>
-
-                      {/* Timeframe */}
-                      <span className="text-[12px] text-[#64748b] self-center">{sig.timeframe}</span>
-
-                      {/* Direction */}
-                      <div className="self-center">
-                        <span className={`inline-flex items-center gap-0.5 text-[11px] font-bold px-1.5 py-0.5 rounded ${isBuy ? 'bg-[#86efac]/10 text-[#86efac]' : 'bg-[#fca5a5]/10 text-[#fca5a5]'}`}>
-                          {isBuy ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                          {sig.direction}
-                        </span>
-                      </div>
-
-                      {/* Entry */}
-                      <span className="text-[12px] font-mono text-[#e5e7eb] self-center">
-                        {entry.toFixed(digits)}
-                      </span>
-
-                      {/* SL */}
-                      <span className="text-[12px] font-mono text-[#fca5a5] self-center">
-                        {sl.toFixed(digits)}
-                      </span>
-
-                      {/* TP */}
-                      <span className="text-[12px] font-mono text-[#86efac] self-center">
-                        {tp.toFixed(digits)}
-                      </span>
-
-                      {/* RR */}
-                      <span className="text-[12px] font-semibold text-[#fde68a] self-center">
-                        {rr.toFixed(2)}R
-                      </span>
-
-                      {/* Confidence */}
-                      <div className="self-center">
-                        <span className={`text-[12px] font-bold ${confColor(sig.confidence)}`}>
-                          {sig.confidence}%
-                        </span>
-                        <div className="w-full h-1 rounded-full bg-white/[0.05] mt-1 overflow-hidden">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${sig.confidence}%`,
-                              background: sig.confidence >= 75 ? '#86efac' : sig.confidence >= 55 ? '#fde68a' : '#fca5a5',
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Time */}
-                      <div className="self-center text-right">
-                        <p className="text-[11px] text-[#64748b]">{timeAgo(sig.time as unknown as number)}</p>
-                        <p className="text-[9px] text-[#334155] mt-0.5">{fmtDate(sig.time as unknown as number)}</p>
-                      </div>
-                    </div>
-                  )
-                })}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#FAFAFA]">
+                          {formatPrice(s.entry)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#F87171]">
+                          {formatPrice(s.sl)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#34D399]">
+                          {formatPrice(s.tp)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
+                          {s.rr.toFixed(2)}R
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#FAFAFA]">
+                          {s.confidence}%
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+                              s.status === 'WIN'
+                                ? 'bg-[#34D399]/10 text-[#34D399]'
+                                : s.status === 'LOSS'
+                                  ? 'bg-[#F87171]/10 text-[#F87171]'
+                                  : s.status === 'LIVE'
+                                    ? 'bg-[#18181B] text-[#FAFAFA]'
+                                    : 'bg-[#161619] text-[#71717A]'
+                            }`}
+                          >
+                            {s.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </div>
+            )}
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-1">
-                <p className="text-[11px] text-[#475569]">
-                  Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length.toLocaleString()}
-                </p>
-                <div className="flex items-center gap-1">
+            {filteredSignals.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-5 py-3.5 border-t border-white/[0.06] text-[13px] text-[#A1A1AA]">
+                <span className="font-mono tabular-nums">
+                  Page {page} / {totalPages} ({filteredSignals.length} records)
+                </span>
+                <div className="flex gap-2">
                   <button
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                    className="px-3 py-1.5 rounded-lg border border-white/[0.08] bg-[#0d1117] text-[11px] text-[#94a3b8] hover:bg-white/[0.05] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#FAFAFA]"
                   >
-                    Prev
+                    Previous
                   </button>
-                  {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
-                    const p = totalPages <= 7 ? i : page < 4 ? i : page > totalPages - 4 ? totalPages - 7 + i : page - 3 + i
-                    return (
-                      <button
-                        key={p}
-                        onClick={() => setPage(p)}
-                        className={`w-8 h-8 rounded-lg text-[11px] font-semibold transition-all ${
-                          p === page
-                            ? 'bg-[#6366f1] text-white'
-                            : 'border border-white/[0.08] bg-[#0d1117] text-[#64748b] hover:bg-white/[0.05]'
-                        }`}
-                      >
-                        {p + 1}
-                      </button>
-                    )
-                  })}
                   <button
-                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                    disabled={page === totalPages - 1}
-                    className="px-3 py-1.5 rounded-lg border border-white/[0.08] bg-[#0d1117] text-[11px] text-[#94a3b8] hover:bg-white/[0.05] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#FAFAFA]"
                   >
                     Next
                   </button>
                 </div>
               </div>
             )}
-
-            {/* Mobile export */}
-            <div className="sm:hidden">
-              <button
-                onClick={() => exportCSV(filtered)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-white/[0.08] bg-[#0d1117] text-[12px] font-semibold text-[#94a3b8] hover:text-white hover:bg-white/[0.03] transition-all"
-              >
-                <Download size={14} />
-                Export {filtered.length} Signals as CSV
-              </button>
-            </div>
-          </>
-        )}
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden">
+            {filteredRejects.length === 0 ? (
+              <div className="p-12 text-center space-y-3">
+                <img
+                  src="/brand/empty-signals.png"
+                  alt="No scan rejections"
+                  className="w-full max-w-[260px] mx-auto rounded-xl object-cover opacity-90"
+                />
+                <p className="text-[14px] text-[#A1A1AA]">
+                  {loading ? 'Loading scan rejections...' : 'No scanner rejections currently buffered.'}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/[0.06] text-[12px] font-medium text-[#71717A]">
+                      <th className="py-3.5 px-4">Symbol</th>
+                      <th className="py-3.5 px-4">Strategy</th>
+                      <th className="py-3.5 px-4">Rejection Reason</th>
+                      <th className="py-3.5 px-4 text-right">Conf</th>
+                      <th className="py-3.5 px-4 text-right">Spread</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
+                    {filteredRejects.map((r) => (
+                      <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className="font-medium text-[#FAFAFA]">{r.symbol}</span>{' '}
+                          <span className="text-[12px] text-[#71717A]">{r.timeframe}</span>
+                        </td>
+                        <td className="py-3.5 px-4 text-[#A1A1AA]">{strategyName(r.strategy)}</td>
+                        <td className="py-3.5 px-4 text-[#FAFAFA]">{r.reason}</td>
+                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
+                          {r.confidence ?? '—'}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
+                          {r.spread ?? '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
-      </main>
-
-      <MobileFloatingWorkspaceNav />
+      </div>
     </div>
   )
 }

@@ -1,27 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { UTCTimestamp } from 'lightweight-charts'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
 import { useToastStore } from '@/stores/useToastStore'
 import { useNotificationStore } from '@/stores/useNotificationStore'
-
-function intervalSeconds(timeframe: string): number {
-  switch (timeframe.toLowerCase()) {
-    case '1m':
-    case '1min':   return 60;
-    case '5m':
-    case '5min':   return 300;
-    case '15m':
-    case '15min':  return 900;
-    case '1h':
-    case '1H':     return 3600;
-    case '4h':
-    case '4H':     return 14400;
-    case '1d':
-    case '1D':
-    case '1day':   return 86400;
-    default:       return 3600; // safe fallback: treat as 1H so signals don't die too fast
-  }
-}
 
 const globalSeenIds = new Set<string>()
 
@@ -117,7 +97,7 @@ export function notifySignal(signal: SignalForNotification): boolean {
 
   const symPass = !notifSymbolFilters || notifSymbolFilters.length === 0 || notifSymbolFilters.some((f) => cleanSym(f) === cleanSym(signal.symbol))
   const tfPass = !notifTimeframeFilters || notifTimeframeFilters.length === 0 || notifTimeframeFilters.some((f) => cleanTF(f) === cleanTF(signal.timeframe))
-  const stratPass = !notifStrategyFilters || notifStrategyFilters.length === 0 || !signal.strategyId || notifStrategyFilters.some((f) => cleanStrat(f) === cleanStrat(signal.strategyId))
+  const stratPass = !notifStrategyFilters || notifStrategyFilters.length === 0 || !signal.strategyId || notifStrategyFilters.some((f) => cleanStrat(f) === cleanStrat(signal.strategyId ?? ''))
   const confPass = sigConf >= minConf
 
   console.log(`[notifySignal] Filter checks: sym=${symPass}, tf=${tfPass}, strat=${stratPass}, conf=${confPass} (sigConf=${sigConf} >= minConf=${minConf})`)

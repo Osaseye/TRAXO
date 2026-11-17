@@ -1,84 +1,121 @@
-import { TrendingUp, TrendingDown, Activity, Zap } from 'lucide-react'
+import {
+  PiLightning,
+  PiChartLineUp,
+  PiTrendDown,
+  PiTrendUp,
+} from 'react-icons/pi'
+import { cn } from '@/lib/utils'
 import type { DashboardStats } from '@/types'
 
-interface StatsRowProps {
+export interface StatsRowProps {
   stats: DashboardStats
+  compact?: boolean
+  className?: string
 }
 
-export function StatsRow({ stats }: StatsRowProps) {
+export function StatsRow({ stats, compact = false, className }: StatsRowProps) {
   const pnlPositive = stats.pnlToday >= 0
-  const winRateGood = stats.weeklyWinRate >= 0.6
+  const hasWinRate = stats.weeklyWinRate > 0
+  const winRateGood = stats.weeklyWinRate >= 0.55
 
-  const cards = [
+  const metrics = [
     {
-      label: 'Signals Today',
+      label: 'Signals today',
       value: String(stats.signalsToday),
-      sub: '+3 vs yesterday',
-      subColor: '#22c55e',
-      valueColor: '#e5e7eb',
-      icon: <Zap size={13} />,
-      iconColor: '#3b82f6',
+      sub: 'Active scan cycle',
+      valueTone: 'text-[#FAFAFA]',
+      icon: <PiLightning size={15} className="text-[#71717A]" />,
     },
     {
-      label: 'Win Rate',
-      value: `${Math.round(stats.weeklyWinRate * 100)}%`,
-      sub: winRateGood ? 'Above target' : 'Below target',
-      subColor: winRateGood ? '#22c55e' : '#ef4444',
-      valueColor: winRateGood ? '#22c55e' : '#ef4444',
-      icon: <TrendingUp size={13} />,
-      iconColor: winRateGood ? '#22c55e' : '#ef4444',
+      label: 'Win rate',
+      value: hasWinRate ? `${Math.round(stats.weeklyWinRate * 100)}%` : '—',
+      sub: hasWinRate ? (winRateGood ? 'Above 55% baseline' : 'Below 55% baseline') : 'No settled trades',
+      valueTone: hasWinRate ? (winRateGood ? 'text-[#34D399]' : 'text-[#F87171]') : 'text-[#FAFAFA]',
+      icon: (
+        <PiTrendUp
+          size={15}
+          className={hasWinRate && winRateGood ? 'text-[#34D399]' : 'text-[#71717A]'}
+        />
+      ),
     },
     {
-      label: 'Active Trades',
+      label: 'Active trades',
       value: String(stats.activeTrades),
-      sub: 'Analyst mode · manual',
-      subColor: '#374151',
-      valueColor: '#e5e7eb',
-      icon: <Activity size={13} />,
-      iconColor: '#6b7280',
+      sub: 'Open MT5 & pending',
+      valueTone: 'text-[#FAFAFA]',
+      icon: <PiChartLineUp size={15} className="text-[#71717A]" />,
     },
     {
-      label: 'P&L Today',
-      value: `${pnlPositive ? '+' : ''}$${stats.pnlToday.toFixed(2)}`,
-      sub: pnlPositive ? 'In profit' : 'In drawdown',
-      subColor: pnlPositive ? '#22c55e' : '#ef4444',
-      valueColor: pnlPositive ? '#22c55e' : '#ef4444',
-      icon: pnlPositive ? <TrendingUp size={13} /> : <TrendingDown size={13} />,
-      iconColor: pnlPositive ? '#22c55e' : '#ef4444',
+      label: 'Floating P&L',
+      value: `${pnlPositive ? '+' : '-'}$${Math.abs(stats.pnlToday).toFixed(2)}`,
+      sub: stats.pnlToday === 0 ? 'Flat exposure' : pnlPositive ? 'Net positive' : 'Net drawdown',
+      valueTone:
+        stats.pnlToday === 0 ? 'text-[#FAFAFA]' : pnlPositive ? 'text-[#34D399]' : 'text-[#F87171]',
+      icon: pnlPositive ? (
+        <PiTrendUp
+          size={15}
+          className={stats.pnlToday > 0 ? 'text-[#34D399]' : 'text-[#71717A]'}
+        />
+      ) : (
+        <PiTrendDown size={15} className="text-[#F87171]" />
+      ),
     },
   ]
 
-  return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-4 sm:px-6 pt-4 shrink-0">
-      {cards.map((card) => (
-        <div
-          key={card.label}
-          className="bg-[#0d1117] border border-[#1e293b] rounded-xl p-4"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold text-[#374151] uppercase tracking-wider mb-1.5">
-                {card.label}
-              </p>
-              <p
-                className="text-[1.4rem] font-bold tabular leading-none"
-                style={{ color: card.valueColor }}
-              >
-                {card.value}
-              </p>
-              <p className="text-[11px] mt-1.5 font-medium" style={{ color: card.subColor }}>
-                {card.sub}
-              </p>
+  if (compact) {
+    return (
+      <div
+        className={cn(
+          'grid grid-cols-2 gap-x-5 gap-y-4 pb-4 border-b border-white/[0.06]',
+          className
+        )}
+      >
+        {metrics.map((metric) => (
+          <div key={metric.label} className="min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[12px] font-medium text-[#71717A] truncate">
+                {metric.label}
+              </span>
+              {metric.icon}
             </div>
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-              style={{ background: card.iconColor + '20', color: card.iconColor }}
+            <p
+              className={cn(
+                'text-[18px] font-mono font-semibold tabular-nums tracking-[-0.02em] mt-1 leading-tight',
+                metric.valueTone
+              )}
             >
-              {card.icon}
-            </div>
+              {metric.value}
+            </p>
+            <p className="text-[12px] text-[#71717A] mt-0.5 truncate">{metric.sub}</p>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className={cn('px-4 sm:px-6 pt-4 shrink-0', className)}>
+      <div className="rounded-2xl bg-[#111113] border border-white/[0.07] grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06] overflow-hidden">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="p-5 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[12px] font-medium text-[#71717A] truncate">
+                {metric.label}
+              </span>
+              {metric.icon}
+            </div>
+            <p
+              className={cn(
+                'text-[22px] font-mono font-semibold tabular-nums tracking-[-0.02em] mt-1.5 leading-tight',
+                metric.valueTone
+              )}
+            >
+              {metric.value}
+            </p>
+            <p className="text-[12px] text-[#71717A] mt-1 truncate">{metric.sub}</p>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

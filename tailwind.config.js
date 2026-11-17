@@ -5,24 +5,33 @@ export default {
   theme: {
     extend: {
       colors: {
-        background:  '#0B0F17',
-        surface:     '#111827',
-        border:      '#1E293B',
-        primary: {
-          DEFAULT: '#3B82F6',
-          light:   '#93C5FD',
+        background: '#09090B',
+        canvas:     '#09090B',
+        surface:    '#111113',
+        elevated:   '#18181B',
+        border: {
+          DEFAULT: '#27272A',
+          active:  '#52525B',
+          bright:  '#FAFAFA',
         },
-        success:     '#22C55E',
-        danger:      '#EF4444',
-        warning:     '#F59E0B',
+        primary: {
+          DEFAULT: '#FAFAFA',
+          light:   '#A1A1AA',
+        },
+        buy:        '#34D399',
+        sell:       '#F87171',
+        success:    '#34D399',
+        danger:     '#F87171',
+        warning:    '#A1A1AA',
         text: {
-          primary: '#E5E7EB',
-          muted:   '#6B7280',
+          primary:   '#FAFAFA',
+          secondary: '#A1A1AA',
+          muted:     '#71717A',
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
       },
       borderRadius: {
         DEFAULT: '0.375rem',
@@ -43,4 +52,3 @@ export default {
   },
   plugins: [],
 }
-

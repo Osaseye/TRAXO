@@ -97,6 +97,14 @@ export function GlobalSignalMonitor() {
                   outcome: statusStr as 'win' | 'loss'
                 });
               }
+
+              if (statusStr === 'loss') {
+                fetch('/api/strategy-optimization/analyze-loss', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(signal),
+                }).catch(() => {});
+              }
             }
           });
         }

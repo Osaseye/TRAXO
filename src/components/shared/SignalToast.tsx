@@ -1,10 +1,16 @@
 import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { X, ArrowUpRight, ArrowDownRight, ExternalLink, Copy, Check } from 'lucide-react'
-import { formatPrice, formatMT4OrderClipboardPayload } from '@/lib/utils'
+import {
+  PiX,
+  PiArrowUpRight,
+  PiArrowDownRight,
+  PiArrowSquareOut,
+  PiCopy,
+  PiCheck,
+} from 'react-icons/pi'
+import { formatPrice, formatMT4OrderClipboardPayload, cn } from '@/lib/utils'
 import { useToastStore, type SignalToastItem } from '@/stores/useToastStore'
 import { useTradingContextStore, type ChartSymbol, type ChartTimeframe } from '@/stores/useTradingContextStore'
-import { cn } from '@/lib/utils'
 
 const AUTO_DISMISS_MS = 7000
 
@@ -50,80 +56,100 @@ export function SignalToast({ toast }: { toast: SignalToastItem }) {
     <div
       onClick={handleToastClick}
       className={cn(
-        'group relative w-[320px] bg-[#090d14]/95 border rounded-2xl shadow-[0_16px_36px_rgba(0,0,0,0.6)] backdrop-blur-xl p-3.5 select-none transition-all duration-200 cursor-pointer',
-        'hover:border-white/[0.25] hover:scale-[1.02] active:scale-[0.99]',
-        isBuy ? 'border-emerald-500/30' : 'border-rose-500/30'
+        'obsidian-toast group relative w-[336px] bg-[#111113] border border-white/[0.08] hover:border-white/[0.14] rounded-xl p-4 select-none transition-colors duration-100 cursor-pointer',
       )}
     >
       {/* Top Header Row */}
-      <div className="flex items-center justify-between gap-2 mb-2.5">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
           <span
             className={cn(
-              'h-5 px-2 rounded-md text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 border',
+              'h-5 px-2 rounded-md text-[11px] font-medium flex items-center gap-1 shrink-0',
               isBuy
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                ? 'bg-[#34D399]/12 text-[#34D399]'
+                : 'bg-[#F87171]/12 text-[#F87171]',
             )}
           >
-            {isBuy ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+            {isBuy ? <PiArrowUpRight size={13} /> : <PiArrowDownRight size={13} />}
             {toast.direction}
           </span>
-          <span className="text-[13px] font-extrabold text-white tracking-wide">{toast.symbol}</span>
-          <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 rounded bg-white/[0.06] border border-white/[0.06]">
+          <span className="text-[13.5px] font-semibold text-[#FAFAFA] tracking-[-0.01em] truncate">
+            {toast.symbol}
+          </span>
+          <span className="text-[11px] font-mono tabular-nums text-[#A1A1AA] px-1.5 py-0.5 rounded-md bg-[#18181B] shrink-0">
             {toast.timeframe}
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           <button
+            type="button"
             onClick={handleCopyOrder}
-            className="p-1 rounded-md text-slate-400 hover:text-emerald-400 hover:bg-white/[0.1] transition-colors flex items-center gap-1 text-[10px] font-semibold"
+            className="p-1.5 rounded-lg text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.06] transition-colors flex items-center"
             title="Copy order parameters"
           >
-            {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+            {copied ? <PiCheck size={13} className="text-[#34D399]" /> : <PiCopy size={13} />}
           </button>
-          <span className="text-[10px] font-semibold text-blue-400 opacity-80 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 ml-1">
-            View <ExternalLink size={10} />
+          <span className="text-[11px] font-medium text-[#71717A] group-hover:text-[#FAFAFA] transition-colors flex items-center gap-1 ml-0.5">
+            View <PiArrowSquareOut size={12} />
           </span>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation()
               removeToast(toast.id)
             }}
-            className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/[0.1] transition-colors"
+            className="p-1.5 rounded-lg text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.06] transition-colors"
             title="Dismiss notification"
           >
-            <X size={13} />
+            <PiX size={14} />
           </button>
         </div>
       </div>
 
       {/* Main Metrics Grid */}
-      <div className="grid grid-cols-4 gap-1 p-2 rounded-xl bg-[#06090e] border border-white/[0.06] mb-2 text-center">
+      <div className="grid grid-cols-4 gap-2 rounded-xl bg-[#18181B] px-3 py-2.5 mb-2.5 text-center">
         <div className="min-w-0">
-          <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Entry</span>
-          <span className="text-[11px] font-bold text-slate-200 tabular-nums truncate block">{formatPrice(toast.entry, undefined, toast.symbol)}</span>
+          <span className="block text-[11px] font-medium text-[#71717A] mb-0.5">
+            Entry
+          </span>
+          <span className="text-[12px] font-mono font-medium text-[#FAFAFA] tabular-nums truncate block">
+            {formatPrice(toast.entry, undefined, toast.symbol)}
+          </span>
         </div>
         <div className="min-w-0">
-          <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">SL</span>
-          <span className="text-[11px] font-bold text-rose-400 tabular-nums truncate block">{formatPrice(toast.sl, undefined, toast.symbol)}</span>
+          <span className="block text-[11px] font-medium text-[#71717A] mb-0.5">
+            SL
+          </span>
+          <span className="text-[12px] font-mono font-medium text-[#F87171] tabular-nums truncate block">
+            {formatPrice(toast.sl, undefined, toast.symbol)}
+          </span>
         </div>
         <div className="min-w-0">
-          <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">TP</span>
-          <span className="text-[11px] font-bold text-emerald-400 tabular-nums truncate block">{formatPrice(toast.tp, undefined, toast.symbol)}</span>
+          <span className="block text-[11px] font-medium text-[#71717A] mb-0.5">
+            TP
+          </span>
+          <span className="text-[12px] font-mono font-medium text-[#34D399] tabular-nums truncate block">
+            {formatPrice(toast.tp, undefined, toast.symbol)}
+          </span>
         </div>
         <div className="min-w-0">
-          <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">R:R</span>
-          <span className="text-[11px] font-bold text-blue-400 tabular-nums truncate block">{rrValue.toFixed(1)}x</span>
+          <span className="block text-[11px] font-medium text-[#71717A] mb-0.5">
+            R:R
+          </span>
+          <span className="text-[12px] font-mono font-medium text-[#FAFAFA] tabular-nums truncate block">
+            {rrValue.toFixed(1)}x
+          </span>
         </div>
       </div>
 
       {/* Footer Info */}
-      <div className="flex items-center justify-between text-[10px]">
-        <span className="text-slate-400 font-medium truncate max-w-[170px]">{toast.strategyLabel}</span>
-        <span className="text-slate-300 font-bold tracking-tight">
-          Confidence <span className={cn('ml-0.5', isBuy ? 'text-emerald-400' : 'text-rose-400')}>{confidencePct}%</span>
+      <div className="flex items-center justify-between text-[12px]">
+        <span className="text-[#A1A1AA] font-medium truncate max-w-[185px]">
+          {toast.strategyLabel}
+        </span>
+        <span className="text-[#71717A]">
+          Confidence <span className="text-[#FAFAFA] font-mono font-medium tabular-nums ml-1">{confidencePct}%</span>
         </span>
       </div>
     </div>

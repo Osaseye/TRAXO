@@ -1,181 +1,308 @@
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { motion } from 'framer-motion'
+import {
+  PiEye,
+  PiEyeSlash,
+  PiArrowRight,
+  PiGoogleLogo,
+  PiLockKey,
+  PiEnvelopeSimple,
+  PiShieldCheck,
+} from 'react-icons/pi'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { getFirebaseErrorMessage } from '@/lib/utils'
-
-const ic = 'w-full h-11 px-4 rounded-xl bg-[#0d1117] border border-white/[0.08] text-[13px] text-white placeholder:text-[#2d3748] focus:outline-none focus:border-[#3b82f6]/50 focus:ring-1 focus:ring-[#3b82f6]/20 transition-colors'
 
 export default function Login() {
   const [showPw, setShowPw] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const emailId = useId()
+  const passwordId = useId()
   const navigate = useNavigate()
   const signIn = useAuthStore((s) => s.signIn)
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle)
   const isLoading = useAuthStore((s) => s.isLoading)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    signIn(email, password).then(() => {
-      navigate('/dashboard')
-    }).catch((err) => {
-      setError(getFirebaseErrorMessage(err))
-    })
+    signIn(email, password)
+      .then(() => {
+        navigate('/dashboard')
+      })
+      .catch((err: unknown) => {
+        setError(getFirebaseErrorMessage(err))
+      })
+  }
+
+  const handleGoogleSignIn = () => {
+    setError(null)
+    signInWithGoogle()
+      .then(() => {
+        navigate('/dashboard')
+      })
+      .catch((err: unknown) => {
+        setError(getFirebaseErrorMessage(err))
+      })
   }
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white flex">
+    <div className="relative min-h-[100dvh] w-full bg-[#09090B] text-[#FAFAFA] flex flex-col justify-between overflow-x-hidden select-none">
+      {/* ── Ambient Background Canvas: Candlestick Wicks & Market Grid ──────── */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        {/* Subtle coordinate dot grid */}
+        <div
+          className="absolute inset-0 opacity-[0.14]"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(255,255,255,0.25) 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+          }}
+        />
 
-      {/* ── Left brand panel (lg+) ── */}
-      <div className="hidden lg:flex w-[440px] shrink-0 flex-col bg-[#09090d] border-r border-white/[0.05] p-10 relative overflow-hidden">
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[380px] h-[380px] bg-[#3b82f6]/6 blur-[110px] rounded-full pointer-events-none" />
+        {/* Ambient glow pulses */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-[#34D399]/10 via-white/[0.03] to-transparent blur-3xl rounded-full" />
+        <div className="absolute bottom-10 left-10 w-96 h-96 bg-white/[0.02] blur-3xl rounded-full" />
 
-        {/* Wordmark */}
-        <div className="flex items-center gap-2.5 relative">
-          <img src="/TRAXO-icon.png" className="w-7 h-7 object-contain" alt="" />
-          <span className="text-[11px] font-black tracking-[0.2em] uppercase text-white">TRAXO</span>
+        {/* Animated background candlestick wicks & price trajectories */}
+        <svg
+          className="absolute inset-0 w-full h-full opacity-20"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          {/* Subtle horizontal session bias lines */}
+          <line x1="0" y1="28%" x2="100%" y2="28%" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 6" />
+          <line x1="0" y1="50%" x2="100%" y2="50%" stroke="rgba(52,211,153,0.12)" strokeDasharray="3 8" />
+          <line x1="0" y1="72%" x2="100%" y2="72%" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 6" />
+
+          {/* Floating candlestick wicks */}
+          <g className="animate-pulse" style={{ animationDuration: '6s' }}>
+            {/* Candle 1 */}
+            <line x1="12%" y1="22%" x2="12%" y2="44%" stroke="#34D399" strokeWidth="1" />
+            <rect x="calc(12% - 3px)" y="27%" width="6" height="11%" fill="#34D399" rx="1" opacity="0.6" />
+            {/* Candle 2 */}
+            <line x1="24%" y1="40%" x2="24%" y2="62%" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+            <rect x="calc(24% - 3px)" y="46%" width="6" height="8%" fill="#27272A" rx="1" />
+            {/* Candle 3 (Displacement wick) */}
+            <line x1="78%" y1="18%" x2="78%" y2="52%" stroke="#34D399" strokeWidth="1" />
+            <rect x="calc(78% - 3px)" y="25%" width="6" height="18%" fill="#34D399" rx="1" opacity="0.4" />
+            {/* Candle 4 */}
+            <line x1="88%" y1="54%" x2="88%" y2="78%" stroke="#F87171" strokeWidth="1" opacity="0.5" />
+            <rect x="calc(88% - 3px)" y="58%" width="6" height="12%" fill="#F87171" rx="1" opacity="0.3" />
+          </g>
+
+          {/* Vector trajectory curve */}
+          <path
+            d="M 50 320 Q 250 290 480 340 T 900 260 T 1400 210"
+            fill="none"
+            stroke="url(#chartGrad)"
+            strokeWidth="1.5"
+            strokeDasharray="6 6"
+          />
+          <defs>
+            <linearGradient id="chartGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="transparent" />
+              <stop offset="50%" stopColor="#34D399" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="transparent" />
+            </linearGradient>
+          </defs>
+        </svg>
+
+        {/* Ambient floating ticker telemetry badges */}
+        <div className="absolute top-8 left-8 hidden md:flex items-center gap-4 text-[11px] font-mono text-[#71717A]">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-ping" />
+            SYS.ONLINE · 14ms
+          </span>
+          <span className="text-white/10">/</span>
+          <span>EURUSD 1.0842 ▲</span>
+          <span className="text-white/10">/</span>
+          <span>XAUUSD 2742.80 ▼</span>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 flex flex-col justify-center gap-8 relative">
-          <div>
-            <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[#3b82f6] mb-3">Live signals</p>
-            <h2 className="text-[1.55rem] font-extrabold text-white leading-tight mb-2">
-              Real edge.<br />No noise.
-            </h2>
-            <p className="text-[13px] text-[#4b5563] leading-relaxed max-w-xs">
-              Every signal arrives with entry, stop-loss, take-profit, and the exact reasoning behind it.
+        <div className="absolute top-8 right-8 hidden md:flex items-center gap-3 text-[11px] font-mono text-[#71717A]">
+          <span>ORCHESTRATOR v4.2</span>
+          <span className="w-1 h-1 rounded-full bg-white/30" />
+          <span className="text-[#34D399]">QUANT ENGINE ACTIVE</span>
+        </div>
+      </div>
+
+      {/* ── Top Floating Wordmark ───────────────────────────────────────────── */}
+      <header className="relative z-10 pt-8 sm:pt-12 px-6 flex justify-center">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2.5 group focus:outline-none"
+        >
+          <div className="relative w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.1] flex items-center justify-center group-hover:border-white/25 transition-colors">
+            <img src="/brand/traxo-mark.png" className="w-5 h-5 object-contain" alt="TRAXO" />
+          </div>
+          <span className="text-[12px] font-mono font-bold tracking-[0.24em] uppercase text-[#FAFAFA]">
+            TRAXO
+          </span>
+        </Link>
+      </header>
+
+      {/* ── Center Open-Canvas Terminal: No Boxed Cards ─────────────────────── */}
+      <main className="relative z-10 flex-1 flex flex-col justify-center items-center px-6 py-10 w-full max-w-md mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full space-y-7"
+        >
+          {/* Header Typography: Directly on canvas */}
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center gap-2 text-[11px] font-medium tracking-wider text-[#A1A1AA] uppercase">
+              <span>TERMINAL CLEARANCE</span>
+            </div>
+            <h1 className="text-[26px] sm:text-[30px] font-semibold text-[#FAFAFA] tracking-tight">
+              Sign in to your station
+            </h1>
+            <p className="text-[13px] text-[#71717A]">
+              Connect to institutional signals and direct MT5 trade execution
             </p>
           </div>
 
-          {/* Live signal card */}
-          <div className="rounded-xl border border-[#22c55e]/20 bg-[#22c55e]/[0.03] overflow-hidden">
-            <div className="px-4 py-3 flex items-center justify-between border-b border-[#22c55e]/10">
-              <div className="flex items-center gap-2">
-                <span className="text-[8px] font-bold px-2 py-0.5 rounded-full bg-[#22c55e]/15 text-[#22c55e] uppercase tracking-wider">BUY</span>
-                <span className="text-[13px] font-bold text-white">EURUSD</span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.06] text-[#4b5563]">4H</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[12px] font-bold text-[#22c55e]">82%</span>
-                <span className="text-[8px] text-[#374151]">conf</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 divide-x divide-white/[0.04]">
-              {([['Entry','1.08432','#e5e7eb'],['SL','1.08190','#ef4444'],['TP','1.08916','#22c55e'],['R:R','2.2R','#e5e7eb']] as const).map(([l,v,c]) => (
-                <div key={l} className="px-2 py-2.5 bg-[#0b0f17] text-center">
-                  <div className="text-[8px] text-[#374151]">{l}</div>
-                  <div className="text-[9px] font-bold tabular-nums mt-0.5" style={{ color: c }}>{v}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* Error notice */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="px-3.5 py-2.5 rounded-lg bg-[#F87171]/10 border border-[#F87171]/20 text-[12px] text-[#F87171] text-center"
+            >
+              {error}
+            </motion.div>
+          )}
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/[0.05]">
-            {([['7,200+','Signals sent'],['71%','Win rate'],['5','Strategies']] as const).map(([v,l]) => (
-              <div key={l}>
-                <div className="text-[1.1rem] font-extrabold text-white tabular-nums">{v}</div>
-                <div className="text-[9px] text-[#374151] mt-0.5">{l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p className="text-[9px] tracking-[0.25em] uppercase text-[#1e293b] font-bold relative">
-          LOOK FIRST. THEN TRADE.
-        </p>
-      </div>
-
-      {/* ── Right form panel ── */}
-      <div className="flex-1 flex flex-col p-7 sm:p-10 lg:p-14">
-        {/* Mobile wordmark */}
-        <div className="flex items-center gap-2 mb-10 lg:hidden">
-          <img src="/TRAXO-icon.png" className="w-6 h-6 object-contain" alt="" />
-          <span className="text-[11px] font-black tracking-[0.2em] uppercase text-white">TRAXO</span>
-        </div>
-
-        <div className="my-auto w-full max-w-sm">
-          <h1 className="text-[1.75rem] font-extrabold text-white tracking-tight mb-1">Welcome back</h1>
-          <p className="text-[13px] text-[#4b5563] mb-8">Sign in to your TRAXO account</p>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="text-[10px] font-semibold text-[#4b5563] uppercase tracking-wider block mb-2">
-                Email
+          {/* Open-Canvas Form: borderless fields sitting on the dark canvas */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Email input field */}
+            <div className="space-y-1.5">
+              <label htmlFor={emailId} className="text-[11px] font-mono uppercase tracking-wider text-[#71717A] flex items-center justify-between">
+                <span>Operator Identifier / Email</span>
+                <span className="text-[10px] text-white/30">REQ</span>
               </label>
-              <input
-                type="email" className={ic} placeholder="you@example.com"
-                value={email} onChange={(e) => setEmail(e.target.value)}
-                required autoComplete="email"
-              />
+              <div className="relative flex items-center group">
+                <PiEnvelopeSimple className="absolute left-3.5 text-[#71717A] group-focus-within:text-[#34D399] transition-colors" size={17} />
+                <input
+                  id={emailId}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="operator@hedgefund.com"
+                  required
+                  autoComplete="email"
+                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
+                />
+              </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-[10px] font-semibold text-[#4b5563] uppercase tracking-wider">Password</label>
-                <Link to="/forgot-password" className="text-[11px] text-[#3b82f6] hover:text-[#60a5fa] transition-colors">
-                  Forgot password?
+            {/* Password input field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label htmlFor={passwordId} className="text-[11px] font-mono uppercase tracking-wider text-[#71717A]">
+                  Clearance Key / Password
+                </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-[11px] font-mono text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                >
+                  Forgot key?
                 </Link>
               </div>
-              <div className="relative">
+              <div className="relative flex items-center group">
+                <PiLockKey className="absolute left-3.5 text-[#71717A] group-focus-within:text-[#34D399] transition-colors" size={17} />
                 <input
-                  type={showPw ? 'text' : 'password'} className={ic + ' pr-11'}
-                  placeholder="Enter your password"
-                  value={password} onChange={(e) => setPassword(e.target.value)}
-                  required autoComplete="current-password"
+                  id={passwordId}
+                  type={showPw ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  required
+                  autoComplete="current-password"
+                  className="w-full h-11 pl-10 pr-10 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
                 />
                 <button
-                  type="button" onClick={() => setShowPw(v => !v)} tabIndex={-1}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#374151] hover:text-[#6b7280] transition-colors"
+                  type="button"
+                  onClick={() => setShowPw((v) => !v)}
+                  className="absolute right-3.5 text-[#71717A] hover:text-[#FAFAFA] transition-colors"
+                  aria-label={showPw ? 'Hide password' : 'Show password'}
                 >
-                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {showPw ? <PiEyeSlash size={16} /> : <PiEye size={16} />}
                 </button>
               </div>
             </div>
 
+            {/* Primary Action Button */}
             <button
               type="submit"
-              className="w-full h-11 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-[13px] font-bold tracking-wide flex items-center justify-center gap-2 transition-colors mt-1"
               disabled={isLoading}
+              className="w-full h-11 mt-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] active:scale-[0.99] text-[#09090B] text-[13px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_0_24px_rgba(255,255,255,0.08)] cursor-pointer disabled:opacity-50"
             >
-              {isLoading ? 'Signing in…' : 'Sign in'} <ArrowRight size={14} />
+              {isLoading ? (
+                <span className="inline-flex items-center gap-2 font-mono text-[12px]">
+                  <span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  AUTHENTICATING...
+                </span>
+              ) : (
+                <>
+                  <span>Initialize Terminal</span>
+                  <PiArrowRight size={15} />
+                </>
+              )}
             </button>
           </form>
 
-          {error && (
-            <div className="text-sm text-red-400 mt-3">{error}</div>
-          )}
-
-          <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 h-px bg-white/[0.06]" />
-            <span className="text-[11px] text-[#2d3748]">or</span>
-            <div className="flex-1 h-px bg-white/[0.06]" />
+          {/* Divider */}
+          <div className="relative flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/[0.06]" />
+            </div>
+            <span className="relative px-3 bg-[#09090B] text-[10px] font-mono text-[#52525B] uppercase tracking-wider">
+              or connect via identity
+            </span>
           </div>
 
+          {/* Google OAuth Button */}
           <button
             type="button"
-            className="w-full h-11 rounded-xl border border-white/[0.08] bg-transparent hover:bg-white/[0.03] text-[13px] text-[#6b7280] hover:text-white flex items-center justify-center gap-2.5 transition-colors"
+            onClick={handleGoogleSignIn}
+            disabled={isLoading}
+            className="w-full h-11 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-white/20 text-[#FAFAFA] text-[13px] font-medium flex items-center justify-center gap-2.5 transition-all cursor-pointer"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Continue with Google
+            <PiGoogleLogo size={17} />
+            <span>Continue with Google</span>
           </button>
 
-          <p className="text-[12px] text-[#374151] mt-7 text-center">
-            No account?{' '}
-            <Link to="/register" className="text-white hover:text-[#3b82f6] font-semibold transition-colors">
-              Sign up free →
-            </Link>
-          </p>
+          {/* Secondary Links directly on canvas */}
+          <div className="text-center pt-2">
+            <p className="text-[12px] text-[#71717A]">
+              New operator?{' '}
+              <Link
+                to="/register"
+                className="text-[#FAFAFA] hover:underline font-medium ml-1"
+              >
+                Provision terminal access
+              </Link>
+            </p>
+          </div>
+        </motion.div>
+      </main>
+
+      {/* ── Footer Telemetry ────────────────────────────────────────────────── */}
+      <footer className="relative z-10 pb-6 px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] font-mono text-[#52525B] max-w-5xl mx-auto w-full">
+        <div className="flex items-center gap-2">
+          <PiShieldCheck className="text-[#34D399]" size={14} />
+          <span>END-TO-END ENCRYPTED PROTOCOL</span>
         </div>
-      </div>
+        <div className="flex items-center gap-4">
+          <Link to="/admin/login" className="hover:text-[#A1A1AA] transition-colors">
+            Admin Station
+          </Link>
+          <span>·</span>
+          <span>© 2026 TRAXO INTELLIGENCE</span>
+        </div>
+      </footer>
     </div>
   )
 }

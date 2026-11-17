@@ -1,18 +1,12 @@
-import { useState } from 'react';
-import { useMetaApi } from '@/hooks/useMetaApi';
 import {
-  Zap,
-  Activity,
-  ShieldCheck,
-  Power,
-  RefreshCw,
-  XCircle,
-  TrendingUp,
-  TrendingDown,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+  PiArrowsClockwise,
+  PiPower,
+  PiLightning,
+  PiShieldCheck,
+  PiWarningCircle,
+  PiX,
+} from 'react-icons/pi';
+import { useMetaApi } from '@/hooks/useMetaApi';
 
 export function AutoTraderWidget() {
   const {
@@ -21,187 +15,237 @@ export function AutoTraderWidget() {
     autoTradeEnabled,
     loading,
     toggleAutoTrade,
-    closeOpenPosition,
     refreshAccount,
     refreshPositions,
+    closeOpenPosition,
   } = useMetaApi();
 
-  const [expanded, setExpanded] = useState<boolean>(true);
+  const isConnected = account?.connected ?? false;
+  const totalFloatingPnl = positions.reduce((acc, p) => acc + (p.profit || 0), 0);
+
+  const handleToggle = () => {
+    void toggleAutoTrade(!autoTradeEnabled);
+  };
+
+  const handleRefresh = () => {
+    void refreshAccount();
+    void refreshPositions();
+  };
 
   return (
-    <div className="rounded-xl border border-blue-500/20 bg-[#090d14]/95 backdrop-blur-xl overflow-hidden shadow-2xl transition-all">
+    <section className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden">
       {/* Header Bar */}
-      <div className="p-4 bg-gradient-to-r from-blue-950/40 via-[#070b12] to-[#090d14] flex items-center justify-between gap-3 border-b border-white/[0.08]">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
-            <Zap size={18} className={cn(autoTradeEnabled && "animate-pulse text-emerald-400")} />
+      <div className="p-6 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-[#18181B] flex items-center justify-center shrink-0">
+            <PiLightning
+              size={18}
+              className={isConnected && autoTradeEnabled ? 'text-[#34D399]' : 'text-[#A1A1AA]'}
+            />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-white tracking-wide">Exness Auto Trader</h2>
-              <span
-                className={cn(
-                  "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border",
-                  account?.connected
-                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                    : account?.state === 'UNDEPLOYED'
-                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                    : "bg-slate-500/10 text-slate-400 border-slate-500/30"
-                )}
-              >
-                {account?.connected ? "Connected" : account?.state === 'UNDEPLOYED' ? "Standby / Undeployed" : "Connecting..."}
+            <div className="flex items-center gap-2.5">
+              <h3 className="text-[16px] font-medium tracking-[-0.015em] text-[#FAFAFA]">
+                Auto-execution router
+              </h3>
+              <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#A1A1AA]">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isConnected ? 'bg-[#34D399]' : 'bg-[#71717A]'
+                  }`}
+                />
+                {isConnected ? account?.platform?.toUpperCase() || 'MT5' : 'Offline'}
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">MetaApi Cloud MT5 Bridge • Real-Time Execution</p>
+            <p className="text-[13px] text-[#71717A] mt-0.5">
+              MetaApi execution bridge and live exposure monitor
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Refresh Button */}
           <button
-            onClick={() => {
-              void refreshAccount();
-              void refreshPositions();
-            }}
-            className="p-1.5 rounded-lg border border-white/[0.08] bg-[#070b12] text-slate-400 hover:text-white hover:bg-white/[0.05] transition-colors"
-            title="Refresh Account Data"
-          >
-            <RefreshCw size={14} className={cn(loading && "animate-spin")} />
-          </button>
-
-          {/* Toggle Switch */}
-          <button
-            onClick={() => void toggleAutoTrade(!autoTradeEnabled)}
+            type="button"
+            onClick={handleRefresh}
             disabled={loading}
-            className={cn(
-              "h-8 px-3 rounded-lg border font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-md",
-              autoTradeEnabled
-                ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30"
-                : "bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20"
-            )}
+            title="Sync broker account & positions"
+            aria-label="Sync broker account and positions"
+            className="h-9 w-9 rounded-xl bg-[#18181B] border border-white/[0.08] hover:border-white/[0.16] text-[#A1A1AA] hover:text-[#FAFAFA] flex items-center justify-center transition-colors disabled:opacity-50"
           >
-            <Power size={13} />
-            <span>{autoTradeEnabled ? "Auto-Trade ON" : "Auto-Trade OFF"}</span>
+            <PiArrowsClockwise size={15} className={loading ? 'animate-spin' : ''} />
           </button>
 
-          {/* Expand/Collapse */}
           <button
-            onClick={() => setExpanded(!expanded)}
-            className="p-1.5 rounded-lg border border-white/[0.08] bg-[#070b12] text-slate-400 hover:text-white transition-colors"
+            type="button"
+            onClick={handleToggle}
+            disabled={loading}
+            className={`h-9 px-3.5 rounded-xl text-[13px] font-medium inline-flex items-center gap-1.5 border transition-colors disabled:opacity-50 ${
+              autoTradeEnabled
+                ? 'bg-[#34D399]/10 text-[#34D399] border-[#34D399]/25 hover:bg-[#34D399]/15'
+                : 'bg-[#18181B] text-[#A1A1AA] border-white/[0.08] hover:text-[#FAFAFA] hover:border-white/[0.16]'
+            }`}
           >
-            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            <PiPower size={14} />
+            {autoTradeEnabled ? 'Auto-trade on' : 'Auto-trade off'}
           </button>
         </div>
       </div>
 
-      {/* Expanded Content */}
-      {expanded && (
-        <div className="p-4 space-y-4">
-          {/* Account Metrics Strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="p-3 rounded-lg bg-[#05080f] border border-white/[0.06]">
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Balance</span>
-              <span className="text-base font-bold text-white tabular-nums mt-0.5 block">
-                ${(account?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-
-            <div className="p-3 rounded-lg bg-[#05080f] border border-white/[0.06]">
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Equity</span>
-              <span className={cn(
-                "text-base font-bold tabular-nums mt-0.5 block",
-                (account?.equity || 0) >= (account?.balance || 0) ? "text-emerald-400" : "text-rose-400"
-              )}>
-                ${(account?.equity || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-
-            <div className="p-3 rounded-lg bg-[#05080f] border border-white/[0.06]">
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Used Margin</span>
-              <span className="text-base font-bold text-slate-300 tabular-nums mt-0.5 block">
-                ${(account?.margin || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-
-            <div className="p-3 rounded-lg bg-[#05080f] border border-white/[0.06]">
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Free Margin</span>
-              <span className="text-base font-bold text-blue-400 tabular-nums mt-0.5 block">
-                ${(account?.freeMargin || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
+      <div className="p-6 space-y-5">
+        {/* Account Telemetry Strip */}
+        <div className="rounded-xl bg-[#161619] grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06]">
+          <div className="p-4">
+            <p className="text-[12px] font-medium text-[#71717A]">Balance</p>
+            <p className="text-[15px] font-mono font-semibold tabular-nums text-[#FAFAFA] mt-1">
+              {isConnected && typeof account?.balance === 'number'
+                ? `$${account.balance.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`
+                : '—'}
+            </p>
           </div>
 
-          {/* Active MT5 Positions */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Activity size={14} className="text-blue-400" />
-                Active MT5 Positions ({positions.length})
+          <div className="p-4 !border-t-0">
+            <p className="text-[12px] font-medium text-[#71717A]">Equity</p>
+            <p className="text-[15px] font-mono font-semibold tabular-nums text-[#FAFAFA] mt-1">
+              {isConnected && typeof account?.equity === 'number'
+                ? `$${account.equity.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`
+                : '—'}
+            </p>
+          </div>
+
+          <div className="p-4">
+            <p className="text-[12px] font-medium text-[#71717A]">Free margin</p>
+            <p className="text-[15px] font-mono font-semibold tabular-nums text-[#FAFAFA] mt-1">
+              {isConnected && typeof account?.freeMargin === 'number'
+                ? `$${account.freeMargin.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`
+                : '—'}
+            </p>
+          </div>
+
+          <div className="p-4">
+            <p className="text-[12px] font-medium text-[#71717A]">Floating P&amp;L</p>
+            <p
+              className={`text-[15px] font-mono font-semibold tabular-nums mt-1 ${
+                !isConnected
+                  ? 'text-[#71717A]'
+                  : totalFloatingPnl >= 0
+                  ? 'text-[#34D399]'
+                  : 'text-[#F87171]'
+              }`}
+            >
+              {isConnected
+                ? `${totalFloatingPnl >= 0 ? '+' : ''}$${totalFloatingPnl.toFixed(2)}`
+                : '—'}
+            </p>
+          </div>
+        </div>
+
+        {/* Standby / Disconnected Notice */}
+        {!isConnected && (
+          <div className="px-4 py-3.5 rounded-xl bg-[#161619] flex items-start gap-2.5 text-[13px] text-[#A1A1AA]">
+            <PiWarningCircle size={16} className="text-[#71717A] shrink-0 mt-0.5" />
+            <span className="leading-relaxed">
+              {account?.error ||
+                'MetaApi bridge standby. Configure broker credentials on the backend to enable live MT4/MT5 order routing.'}
+            </span>
+          </div>
+        )}
+
+        {/* Active Positions List */}
+        {isConnected && (
+          <div className="rounded-xl bg-[#161619] overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+              <span className="text-[12px] font-medium text-[#71717A]">
+                Open broker positions ({positions.length})
               </span>
-              <span className="text-[10px] text-slate-500">Live Exness Broker Execution</span>
+              <span className="text-[12px] font-mono text-[#71717A] tabular-nums">
+                {account?.leverage ? `1:${account.leverage}` : 'MT5'}
+              </span>
             </div>
 
-            {positions.length > 0 ? (
-              <div className="divide-y divide-white/[0.06] rounded-lg border border-white/[0.06] bg-[#05080f] overflow-hidden">
-                {positions.map((pos) => (
-                  <div key={pos.id} className="p-3 flex items-center justify-between gap-3 hover:bg-white/[0.01] transition-colors">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={cn(
-                          "px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border",
-                          pos.type.includes("BUY")
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                            : "bg-rose-500/10 text-rose-400 border-rose-500/30"
-                        )}
-                      >
-                        {pos.type.replace("POSITION_TYPE_", "")}
-                      </span>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-white">{pos.symbol}</span>
-                          <span className="text-[10px] text-slate-400">{pos.volume} lots</span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5">
-                          Open: {pos.openPrice} • Price: {pos.currentPrice}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <span
-                          className={cn(
-                            "text-xs font-bold tabular-nums block",
-                            pos.profit >= 0 ? "text-emerald-400" : "text-rose-400"
-                          )}
-                        >
-                          {pos.profit >= 0 ? "+" : ""}${pos.profit.toFixed(2)}
-                        </span>
-                        <span className="text-[9px] text-slate-500">P/L</span>
-                      </div>
-
-                      <button
-                        onClick={() => void closeOpenPosition(pos.id)}
-                        className="p-1.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 text-[10px] font-bold flex items-center gap-1 transition-colors"
-                        title="Close Position Now"
-                      >
-                        <XCircle size={13} />
-                        <span className="hidden sm:inline">Close</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+            {positions.length === 0 ? (
+              <div className="px-4 py-6 text-center text-[13px] text-[#71717A]">
+                No open broker positions.
               </div>
             ) : (
-              <div className="p-4 text-center rounded-lg border border-dashed border-white/[0.08] bg-[#05080f]/50">
-                <ShieldCheck size={18} className="mx-auto text-slate-500 mb-1" />
-                <p className="text-[11px] font-medium text-slate-400">No active positions on Exness MT5</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">New high-confidence signals will automatically enter trades here.</p>
+              <div className="divide-y divide-white/[0.05]">
+                {positions.map((pos) => {
+                  const isBuy = pos.type.includes('BUY');
+                  const isProfit = pos.profit >= 0;
+
+                  return (
+                    <div
+                      key={pos.id}
+                      className="px-4 py-3 flex items-center justify-between gap-3 text-[13px] hover:bg-white/[0.02] transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                            isBuy
+                              ? 'bg-[#34D399]/10 text-[#34D399]'
+                              : 'bg-[#F87171]/10 text-[#F87171]'
+                          }`}
+                        >
+                          {isBuy ? 'Buy' : 'Sell'}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-[#FAFAFA]">{pos.symbol}</span>
+                            <span className="text-[12px] font-mono text-[#71717A] tabular-nums">
+                              {pos.volume} lots
+                            </span>
+                          </div>
+                          <div className="text-[12px] font-mono text-[#71717A] tabular-nums truncate">
+                            {pos.openPrice} → {pos.currentPrice}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span
+                          className={`font-mono font-semibold tabular-nums ${
+                            isProfit ? 'text-[#34D399]' : 'text-[#F87171]'
+                          }`}
+                        >
+                          {isProfit ? '+' : ''}${pos.profit.toFixed(2)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void closeOpenPosition(pos.id)}
+                          disabled={loading}
+                          title="Close position at market"
+                          className="h-7 px-2.5 rounded-lg bg-[#111113] border border-white/[0.08] hover:border-[#F87171]/40 hover:text-[#F87171] text-[#A1A1AA] text-[12px] font-medium inline-flex items-center gap-1 transition-colors disabled:opacity-50"
+                        >
+                          <PiX size={13} />
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        {/* Protection Note */}
+        {isConnected && autoTradeEnabled && (
+          <div className="px-4 py-3 rounded-xl bg-[#161619] flex items-center gap-2.5 text-[12px] text-[#A1A1AA]">
+            <PiShieldCheck size={15} className="text-[#34D399] shrink-0" />
+            <span>
+              Autonomous orders enforce strategy SL/TP levels and account risk caps automatically.
+            </span>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

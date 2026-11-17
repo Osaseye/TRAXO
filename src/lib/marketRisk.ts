@@ -1,6 +1,6 @@
 import type { Timeframe } from '@/types'
 
-export type MarketType = 'forex' | 'crypto' | 'stocks' | 'futures' | 'commodities'
+export type MarketType = 'forex' | 'crypto' | 'stocks' | 'commodities' | 'futures'
 export type MarketRiskLevel = 'Low' | 'Medium' | 'High'
 
 export interface MarketRiskContext {
@@ -13,16 +13,13 @@ export interface MarketRiskContext {
   userFacingWarning: string
 }
 
-const FOREX_SYMBOLS = new Set(['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'NZDUSD', 'USDCAD', 'USDCHF'])
-const CRYPTO_SYMBOLS = new Set(['BTCUSDT', 'ETHUSD'])
-const COMMODITY_SYMBOLS = new Set(['XAUUSD'])
+const FOREX_SYMBOLS = new Set(['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'NZDUSD', 'USDCAD', 'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP'])
+const METAL_SYMBOLS = new Set(['XAUUSD', 'XAGUSD'])
 
 export function getMarketTypeForSymbol(symbol: string): MarketType {
   if (FOREX_SYMBOLS.has(symbol)) return 'forex'
-  if (CRYPTO_SYMBOLS.has(symbol)) return 'crypto'
-  if (COMMODITY_SYMBOLS.has(symbol)) return 'commodities'
-  if (symbol.includes('US') || symbol.includes('SP') || symbol.includes('QQ')) return 'stocks'
-  return 'futures'
+  if (METAL_SYMBOLS.has(symbol)) return 'commodities'
+  return 'stocks'
 }
 
 function getTimeframeFactor(timeframe: Timeframe) {

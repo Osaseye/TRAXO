@@ -4,6 +4,8 @@ import { auth, db } from '@/lib/firebase'
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut as fbSignOut,
   onAuthStateChanged,
   type User as FirebaseUser,
@@ -20,6 +22,7 @@ interface AuthState {
   setOnboardingComplete: (v: boolean) => void
   signUp: (name: string, email: string, password: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
   updateProfile: (data: Partial<User>) => Promise<void>
   logout: () => Promise<void>
 }
@@ -46,7 +49,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const profile = snapshot.exists() ? (snapshot.data() as Partial<User>) : null
         set({ user: mapFirebaseUser(fu, profile), isAuthenticated: true, idToken: token, isLoading: false })
       } catch (err) {
-         
         console.warn('Failed to hydrate Firestore profile', err)
         set({ user: mapFirebaseUser(fu), isAuthenticated: true, idToken: token, isLoading: false })
       }
@@ -75,6 +77,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       try {
         const { useAnalysisSignalStore } = await import('@/stores/useAnalysisSignalStore')
         useAnalysisSignalStore.getState().setUid(null)
+        useAnalysisSignalStore.setState({ signals: [] })
       } catch { /* non-fatal */ }
       try {
         const { useNotificationStore } = await import('@/stores/useNotificationStore')
@@ -99,9 +102,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const res = await createUserWithEmailAndPassword(auth, email, password)
         const fu = res.user
         const token = await fu.getIdToken()
-        // persist a basic profile document to Firestore
         try {
-          // lazy import Firestore helpers to avoid top-level bundling issues
           const { doc, setDoc, serverTimestamp } = await import('firebase/firestore')
           if (fu) {
             const userRef = doc(db, 'users', fu.uid)
@@ -114,8 +115,6 @@ export const useAuthStore = create<AuthState>((set, get) => {
             })
           }
         } catch (err) {
-          // non-fatal: log and continue — devs can inspect Firestore writes separately
-           
           console.warn('Failed to write user profile to Firestore', err)
         }
 
@@ -150,11 +149,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const cleaned = cleanUndefined(rawNormalized)
         const toWrite = { ...cleaned, updatedAt: serverTimestamp() }
         await setDoc(userRef, toWrite, { merge: true })
-        // update local store user (shallow merge)
         set({ user: { ...(current ?? {}), ...cleaned } as User, isLoading: false })
       } catch (err) {
         set({ isLoading: false })
-         
         console.error('Failed to update profile', err)
         throw err
       }
@@ -171,11 +168,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
           const profile = snapshot.exists() ? (snapshot.data() as Partial<User>) : null
           set({ user: mapFirebaseUser(fu, profile), isAuthenticated: true, idToken: token, isLoading: false })
         } catch (err) {
-           
           console.warn('Failed to hydrate Firestore profile on sign-in', err)
           set({ user: mapFirebaseUser(fu), isAuthenticated: true, idToken: token, isLoading: false })
         }
-        // Hydrate onboarding preferences and signals from Firestore
         try {
           const { useOnboardingStore } = await import('@/stores/useOnboardingStore')
           useOnboardingStore.getState().setUid(fu.uid)
@@ -190,6 +185,32 @@ export const useAuthStore = create<AuthState>((set, get) => {
           const { useNotificationStore } = await import('@/stores/useNotificationStore')
           useNotificationStore.getState().setUid(fu.uid)
           void useNotificationStore.getState().hydrateFromFirestore(fu.uid)
+        } catch { /* non-fatal */ }
+      } catch (error) {
+        set({ isLoading: false })
+        throw error
+      }
+    },
+    signInWithGoogle: async () => {
+      set({ isLoading: true })
+      try {
+        const provider = new GoogleAuthProvider()
+        const res = await signInWithPopup(auth, provider)
+        const fu = res.user
+        const token = await fu.getIdToken()
+        try {
+          const { getDoc, doc } = await import('firebase/firestore')
+          const snapshot = await getDoc(doc(db, 'users', fu.uid))
+          const profile = snapshot.exists() ? (snapshot.data() as Partial<User>) : null
+          set({ user: mapFirebaseUser(fu, profile), isAuthenticated: true, idToken: token, isLoading: false })
+        } catch (err) {
+          console.warn('Failed to hydrate Firestore profile on Google sign-in', err)
+          set({ user: mapFirebaseUser(fu), isAuthenticated: true, idToken: token, isLoading: false })
+        }
+        try {
+          const { useOnboardingStore } = await import('@/stores/useOnboardingStore')
+          useOnboardingStore.getState().setUid(fu.uid)
+          void useOnboardingStore.getState().hydrateFromFirestore(fu.uid)
         } catch { /* non-fatal */ }
       } catch (error) {
         set({ isLoading: false })

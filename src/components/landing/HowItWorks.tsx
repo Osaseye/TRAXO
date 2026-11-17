@@ -1,143 +1,185 @@
-import { TrendingUp, Target, Settings } from 'lucide-react'
-import riskPlanImg from '../../assets/risk-plan.png'
-import chooseStrategyImg from '../../assets/choose-strategy.png'
-import signalChartImg from '../../assets/signal-chart.png'
-import ScrollReveal from '@/components/ui/ScrollReveal'
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { cn } from '@/lib/utils'
 
-// ─── Step 1 Visual ────────────────────────────────────────────────────────
-function ConnectVisual() {
-  return (
-    <div className="rounded-xl border border-white/[0.07] bg-[#0b0f17] p-1 overflow-hidden">
-      <img src={riskPlanImg} alt="Risk Management Setup" className="w-full h-auto rounded-lg" />
-    </div>
-  )
+interface Step {
+  id: string
+  num: string
+  title: string
+  tagline: string
+  detail: string
+  image: string
+  telemetry: { label: string; val: string }[]
 }
 
-// ─── Step 2 Visual ────────────────────────────────────────────────────────
-function StrategyVisual() {
-  return (
-    <div className="rounded-xl border border-white/[0.07] bg-[#0b0f17] p-1 overflow-hidden">
-      <img src={chooseStrategyImg} alt="Choose your strategy" className="w-full h-auto rounded-lg" />
-    </div>
-  )
-}
-
-// ─── Step 3 Visual ────────────────────────────────────────────────────────
-function SignalVisual() {
-  return (
-    <div className="rounded-xl border border-white/[0.07] bg-[#0b0f17] p-1 overflow-hidden">
-      <img src={signalChartImg} alt="Signal reasoning and chart" className="w-full h-auto rounded-lg" />
-    </div>
-  )
-}
-
-// ─── Section ─────────────────────────────────────────────────────────────────
-
-const STEPS = [
+const STEPS: Step[] = [
   {
-    number: '01',
-    Icon: Settings,
-    title: 'Configure Risk Parameters',
-    description:
-      'Define your risk tolerance, maximum daily loss, and position sizing rules. Keep complete control over your trading parameters.',
-    Visual: StrategyVisual,
-    position: 'top'
+    id: 'detection',
+    num: '01',
+    title: 'Multi-Timeframe Order Flow Mapping',
+    tagline: 'Higher timeframe liquidity sweeps and fair value gaps.',
+    detail:
+      'TRAXO tracks institutional liquidity pools on H4 and H1 before monitoring execution timeframes (M15 / M5). Signals fire only when structural bias, session timing (London / NY Open), and volume expansion align.',
+    image: '/brand/strategy-order-block.png',
+    telemetry: [
+      { label: 'Higher Timeframe Bias', val: 'H4 Bullish Trend' },
+      { label: 'Mitigation Level', val: 'M15 Order Block + FVG' },
+      { label: 'Confluence Score', val: '9.2 / 10' },
+    ],
   },
   {
-    number: '02',
-    Icon: Target,
-    title: 'Choose Your Strategy',
-    description:
-      'Select from multiple algorithmic models with proven track records. Each strategy comes with detailed backtesting metrics and risk profiles.',
-    Visual: ConnectVisual,
-    position: 'top'
+    id: 'guardrails',
+    num: '02',
+    title: '9-Point Pre-Trade Risk Verification',
+    tagline: 'Zero execution without passing quantitative gates.',
+    detail:
+      'Before any setup touches your terminal, the 9-point risk circuit breaker verifies live spread tolerance, daily drawdown ceiling, news release windows, and automated lot sizing down to sub-pip precision.',
+    image: '/brand/strategy-wick-rejection.png',
+    telemetry: [
+      { label: 'Spread Threshold', val: 'Under 1.2 Pips' },
+      { label: 'Drawdown Protection', val: '0.4% / 3.0% Max' },
+      { label: 'Risk Sizing', val: '1.0% Fixed per Setup' },
+    ],
   },
   {
-    number: '03',
-    Icon: TrendingUp,
-    title: 'Live Signal Analysis',
-    description:
-      'Monitor real-time trading signals with detailed technical analysis, risk ratios, and live chart context. Execute with confidence backed by deep market intelligence.',
-    Visual: SignalVisual,
-    position: 'bottom'
+    id: 'execution',
+    num: '03',
+    title: 'Direct Exness MT5 Routing & Ledger',
+    tagline: 'Sub-40ms execution with automated journal logging.',
+    detail:
+      'Verified setups execute directly to your MT5 account with bracketed stop-loss and tiered take-profit orders. Every fill, partial take-profit, and journal outcome is recorded in your live analytics ledger.',
+    image: '/brand/phase3-execution-mt5.png',
+    telemetry: [
+      { label: 'Execution Speed', val: '34ms Low Latency' },
+      { label: 'Direct Access', val: 'DMA Bridge Protocol' },
+      { label: 'Trade Journal', val: 'Synchronized Ledger' },
+    ],
   },
 ]
 
 export function HowItWorks() {
+  const [activeStep, setActiveStep] = useState(0)
+  const current = STEPS[activeStep]
+
   return (
-    <section id="how-it-works" className="py-16 sm:py-40 px-4 sm:px-6 border-t border-white/[0.05]">
-      <ScrollReveal>
-      <div className="max-w-7xl mx-auto">
-        {/* Heading */}
-        <div className="mb-16 sm:mb-24 max-w-2xl">
-          <p className="text-[11px] font-semibold tracking-[0.15em] uppercase text-[#3b82f6] mb-3">
-            Analyst Mode
-          </p>
-          <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-extrabold text-white tracking-tight leading-tight">
-            How TRAXO works.
-          </h2>
-          <p className="mt-4 text-[15px] text-[#6b7280] leading-relaxed max-w-2xl">
-            No complexity. No guesswork. Our quantitative engine handles the scanning — you handle the execution.
-          </p>
-        </div>
-
-        {/* Top Row - Two Items */}
-        <div className="grid md:grid-cols-2 gap-8 lg:gap-12 mb-8 lg:mb-12">
-          {STEPS.filter(s => s.position === 'top').map(({ number, Icon, title, description, Visual }) => (
-            <div key={number} className="flex flex-col">
-              {/* Content Block */}
-              <div className="mb-6 sm:mb-8">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-[#3b82f6]/10 border border-[#3b82f6]/20 flex items-center justify-center text-[#3b82f6]">
-                    <Icon size={20} strokeWidth={1.8} />
-                  </div>
-                  <span className="text-sm font-bold tracking-[0.14em] text-[#1e293b] font-mono">
-                    {number}
-                  </span>
-                </div>
-                <h3 className="text-lg sm:text-xl font-bold text-white mb-3 leading-snug">{title}</h3>
-                <p className="text-[13px] sm:text-sm text-[#6b7280] leading-relaxed">{description}</p>
-              </div>
-
-              {/* Image Block - No Card Styling */}
-              <div className="flex-1 w-full rounded-xl overflow-hidden">
-                <div className="w-full h-full min-h-[240px] sm:min-h-[280px] flex items-center justify-center">
-                  <Visual />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Bottom Row - Full Width Item */}
-        <div className="flex flex-col">
-          {STEPS.filter(s => s.position === 'bottom').map(({ number, Icon, title, description, Visual }) => (
-            <div key={number}>
-              {/* Content Block */}
-              <div className="mb-6 sm:mb-8 max-w-2xl">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-[#3b82f6]/10 border border-[#3b82f6]/20 flex items-center justify-center text-[#3b82f6]">
-                    <Icon size={20} strokeWidth={1.8} />
-                  </div>
-                  <span className="text-sm font-bold tracking-[0.14em] text-[#1e293b] font-mono">
-                    {number}
-                  </span>
-                </div>
-                <h3 className="text-lg sm:text-xl font-bold text-white mb-3 leading-snug">{title}</h3>
-                <p className="text-[13px] sm:text-sm text-[#6b7280] leading-relaxed">{description}</p>
-              </div>
-
-              {/* Image Block - Larger, Full Width, No Card */}
-              <div className="w-full rounded-xl overflow-hidden">
-                <div className="w-full min-h-[320px] sm:min-h-[420px] lg:min-h-[480px] flex items-center justify-center">
-                  <Visual />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+    <section id="how-it-works" className="relative py-24 sm:py-32 px-4 sm:px-6 overflow-hidden select-none font-sans">
+      {/* ── Ambient Background Canvas ───────────────────────────────────────── */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-[0.14]"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(255,255,255,0.2) 1px, transparent 1px)',
+            backgroundSize: '36px 36px',
+          }}
+        />
+        <div className="absolute top-1/2 left-1/3 -translate-y-1/2 w-[700px] h-[400px] bg-gradient-to-r from-[#34D399]/10 to-transparent blur-3xl rounded-full" />
       </div>
-      </ScrollReveal>
+
+      <div className="relative max-w-7xl mx-auto space-y-14">
+        {/* Section Header: Clean typography, NO badge container! */}
+        <div className="space-y-3">
+          <p className="text-[12px] font-semibold tracking-wider text-[#A1A1AA] uppercase">
+            Architectural Workflow
+          </p>
+          <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-[#FAFAFA]">
+            How TRAXO engineers your edge.
+          </h2>
+          <p className="text-[15px] sm:text-[17px] text-[#A1A1AA] max-w-2xl leading-relaxed font-normal">
+            From liquidity detection on institutional timeframes to automated sub-second execution on MT5.
+          </p>
+        </div>
+
+        {/* Phase Selector Stepper Bar - Open Wire directly on canvas */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 border-b border-white/[0.06] pb-6">
+          {STEPS.map((s, idx) => {
+            const isSelected = activeStep === idx
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setActiveStep(idx)}
+                className="text-left group cursor-pointer focus:outline-none"
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className={cn(
+                      'text-[13px] font-bold transition-colors uppercase tracking-wider',
+                      isSelected ? 'text-[#FAFAFA]' : 'text-[#52525B] group-hover:text-[#A1A1AA]'
+                    )}
+                  >
+                    Phase {s.num}
+                  </span>
+                  <div
+                    className={cn(
+                      'h-[2px] flex-1 rounded-full transition-all duration-300',
+                      isSelected ? 'bg-[#FAFAFA]' : 'bg-white/[0.06] group-hover:bg-white/[0.12]'
+                    )}
+                  />
+                </div>
+                <div
+                  className={cn(
+                    'text-[15px] font-semibold mt-2.5 transition-colors',
+                    isSelected ? 'text-[#FAFAFA]' : 'text-[#71717A] group-hover:text-[#A1A1AA]'
+                  )}
+                >
+                  {s.title}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Active Phase Display - Open Canvas Layout */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={current.id}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -14 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className="grid lg:grid-cols-12 gap-10 items-center pt-2"
+          >
+            {/* Left Narrative Column */}
+            <div className="lg:col-span-5 space-y-6">
+              <div className="space-y-3">
+                <span className="text-[12px] text-[#A1A1AA] tracking-wider uppercase font-semibold">
+                  Phase {current.num} Protocol
+                </span>
+                <h3 className="text-2xl sm:text-3xl font-bold text-[#FAFAFA] tracking-tight leading-snug">
+                  {current.tagline}
+                </h3>
+                <p className="text-[14px] sm:text-[15px] text-[#A1A1AA] leading-relaxed font-normal">
+                  {current.detail}
+                </p>
+              </div>
+
+              {/* Telemetry points in clean, subtle neutral typography (NO generic green boxes!) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-white/[0.06]">
+                {current.telemetry.map((t) => (
+                  <div key={t.label}>
+                    <div className="text-[11px] text-[#71717A] uppercase font-medium">{t.label}</div>
+                    <div className="text-[13px] font-semibold text-[#FAFAFA] mt-1">
+                      {t.val}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Right Schematic Visual - Blends directly into canvas */}
+            <div className="lg:col-span-7 relative">
+              <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_32px_90px_rgba(0,0,0,0.8)]">
+                <img
+                  src={current.image}
+                  alt={current.title}
+                  className="w-full aspect-[16/10] object-cover opacity-90"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#09090B] via-transparent to-transparent opacity-60" />
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </section>
   )
 }

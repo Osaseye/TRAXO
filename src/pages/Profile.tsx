@@ -1,27 +1,63 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
+import { sendPasswordResetEmail } from 'firebase/auth'
 import {
-  Activity,
-  BadgeCheck,
-  CalendarClock,
-  Crown,
-  KeyRound,
-  Mail,
-  MapPin,
-  ShieldCheck,
-  SlidersHorizontal,
-  Target,
-  UserRound,
-  User,
-  Save,
-  CheckCircle2,
-} from 'lucide-react'
-import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
-import { ONBOARDING_STRATEGIES, useOnboardingStore } from '@/stores/useOnboardingStore'
+  PiCalendarBlank,
+  PiCheck,
+  PiCheckCircle,
+  PiCopy,
+  PiEnvelopeSimple,
+  PiFloppyDisk,
+  PiKey,
+  PiMapPin,
+  PiGauge,
+  PiSignOut,
+  PiWarningCircle,
+} from 'react-icons/pi'
+import { auth } from '@/lib/firebase'
+import {
+  ONBOARDING_STRATEGIES,
+  useOnboardingStore,
+  type ExperienceLevel,
+  type Instrument,
+} from '@/stores/useOnboardingStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useProfileStore } from '@/stores/useProfileStore'
-import { useTradingContextStore } from '@/stores/useTradingContextStore'
+import {
+  useTradingContextStore,
+  type ChartSymbol,
+  type ChartTimeframe,
+} from '@/stores/useTradingContextStore'
 import { cn } from '@/lib/utils'
+
+const SYMBOL_GROUPS: Array<{ label: string; symbols: ChartSymbol[] }> = [
+  {
+    label: 'Forex',
+    symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'EURJPY', 'GBPJPY', 'EURGBP'],
+  },
+  {
+    label: 'Metals',
+    symbols: ['XAUUSD', 'XAGUSD'],
+  },
+  {
+    label: 'Stocks',
+    symbols: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'],
+  },
+]
+
+const TIMEFRAME_OPTIONS: ChartTimeframe[] = ['1m', '5m', '15m', '1H', '4H', '1D']
+
+const EXPERIENCE_LEVELS: Array<{ id: ExperienceLevel; label: string }> = [
+  { id: 'beginner', label: 'Beginner' },
+  { id: 'intermediate', label: 'Intermediate' },
+  { id: 'pro', label: 'Advanced' },
+]
+
+const MARKET_INSTRUMENTS: Array<{ id: Instrument; label: string }> = [
+  { id: 'forex', label: 'Forex' },
+  { id: 'commodities', label: 'Metals & Commodities' },
+  { id: 'stocks', label: 'US Equities' },
+]
 
 function formatCurrency(value: number) {
   return `$${value.toLocaleString(undefined, {
@@ -30,16 +66,8 @@ function formatCurrency(value: number) {
   })}`
 }
 
-function formatLabel(value: string | null) {
-  if (!value) return 'Not set'
-  return value
-    .split('-')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
-}
-
 function getInitials(fullName: string, displayName: string) {
-  const source = fullName.trim() || displayName || 'TRAXO'
+  const source = fullName.trim() || displayName || 'TX'
   return source
     .split(' ')
     .filter(Boolean)
@@ -49,28 +77,55 @@ function getInitials(fullName: string, displayName: string) {
 }
 
 export default function Profile() {
+  const navigate = useNavigate()
   const authUser = useAuthStore((s) => s.user)
   const updateProfile = useAuthStore((s) => s.updateProfile)
+  const logout = useAuthStore((s) => s.logout)
+  const authLoading = useAuthStore((s) => s.isLoading)
+
   const twoFaEnabled = useProfileStore((s) => s.twoFaEnabled)
   const setTwoFaEnabled = useProfileStore((s) => s.setTwoFaEnabled)
 
-  const plan = useOnboardingStore((s) => s.plan)
   const experienceLevel = useOnboardingStore((s) => s.experienceLevel)
+  const setExperienceLevel = useOnboardingStore((s) => s.setExperienceLevel)
   const instruments = useOnboardingStore((s) => s.instruments)
+  const toggleInstrument = useOnboardingStore((s) => s.toggleInstrument)
   const selectedStrategyId = useOnboardingStore((s) => s.selectedStrategyId)
   const selectedStrategyIds = useOnboardingStore((s) => s.selectedStrategyIds)
 
   const accountBalance = useTradingContextStore((s) => s.accountBalance)
+  const riskMode = useTradingContextStore((s) => s.riskMode)
+  const fixedRiskAmount = useTradingContextStore((s) => s.fixedRiskAmount)
   const riskPerTradePct = useTradingContextStore((s) => s.riskPerTradePct)
   const maxDailyLossPct = useTradingContextStore((s) => s.maxDailyLossPct)
+  const chartSymbol = useTradingContextStore((s) => s.chartSymbol)
+  const setChartSymbol = useTradingContextStore((s) => s.setChartSymbol)
+  const chartTimeframe = useTradingContextStore((s) => s.chartTimeframe)
+  const setChartTimeframe = useTradingContextStore((s) => s.setChartTimeframe)
   const journal = useTradingContextStore((s) => s.journal)
 
-  const fallbackEmail = authUser?.email ?? 'trader@traxo.app'
+  const fallbackEmail = authUser?.email ?? 'operator@traxo.local'
   const effectiveEmail = authUser?.email || fallbackEmail
-  const displayName = authUser?.displayName || authUser?.fullName || 'TRAXO Trader'
-  const dobLabel = authUser?.dob ? new Date(authUser.dob).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not set'
+  const operatorUid = authUser?.id || 'local-session'
+  const displayName = authUser?.displayName || authUser?.fullName || 'TRAXO Operator'
+  const dobLabel = authUser?.dob
+    ? new Date(authUser.dob).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+    : 'DOB not set'
 
   const [savedSuccess, setSavedSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [copiedUid, setCopiedUid] = useState(false)
+  const [resetState, setResetState] = useState<{
+    status: 'idle' | 'sending' | 'sent' | 'error'
+    message?: string
+  }>({
+    status: 'idle',
+  })
+
   const [form, setForm] = useState({
     fullName: authUser?.fullName ?? '',
     displayName: authUser?.displayName ?? '',
@@ -95,298 +150,596 @@ export default function Profile() {
   }, [authUser, fallbackEmail])
 
   const activeStrategies = useMemo(() => {
-    const ids = plan === 'pro' ? selectedStrategyIds : [selectedStrategyId]
+    const ids =
+      selectedStrategyIds && selectedStrategyIds.length > 0
+        ? selectedStrategyIds
+        : [selectedStrategyId]
     return ids
       .map((id) => ONBOARDING_STRATEGIES.find((strategy) => strategy.id === id)?.name)
       .filter((name): name is NonNullable<typeof name> => Boolean(name))
-  }, [plan, selectedStrategyId, selectedStrategyIds])
+  }, [selectedStrategyId, selectedStrategyIds])
 
   const journalStats = useMemo(() => {
-    const settledTaken = journal.filter(
-      (entry) => entry.taken && (entry.outcome === 'win' || entry.outcome === 'loss' || entry.outcome === 'breakeven')
+    const settled = journal.filter(
+      (entry) =>
+        entry.outcome === 'win' || entry.outcome === 'loss' || entry.outcome === 'breakeven',
     )
-    const wins = settledTaken.filter((entry) => entry.outcome === 'win').length
-    const losses = settledTaken.filter((entry) => entry.outcome === 'loss').length
-    const winRate = settledTaken.length > 0 ? Math.round((wins / settledTaken.length) * 100) : 0
-    const latest = [...journal].sort((a, b) => b.createdAt - a.createdAt)[0] ?? null
+    const wins = settled.filter((entry) => entry.outcome === 'win').length
+    const losses = settled.filter((entry) => entry.outcome === 'loss').length
+    const winRate = settled.length > 0 ? Math.round((wins / settled.length) * 100) : 0
 
     return {
       total: journal.length,
       wins,
       losses,
       winRate,
-      latest,
     }
   }, [journal])
 
-  const instrumentsText = instruments.length > 0 ? instruments.map(formatLabel).join(', ') : 'Not set'
   const initials = getInitials(authUser?.fullName ?? '', displayName)
-  const accountStatus = authUser?.subscriptionStatus ?? 'active'
 
   function updateField(field: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
-  function saveProfile() {
-    updateProfile(form)
-    setSavedSuccess(true)
-    setTimeout(() => setSavedSuccess(false), 3000)
+  async function saveProfile() {
+    setSaveError(null)
+    try {
+      await updateProfile({
+        fullName: form.fullName,
+        displayName: form.displayName,
+        dob: form.dob,
+        country: form.country,
+        bio: form.bio,
+      })
+      setSavedSuccess(true)
+      setTimeout(() => setSavedSuccess(false), 3000)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Unable to save profile changes.')
+    }
+  }
+
+  async function handleCopyUid() {
+    try {
+      await navigator.clipboard.writeText(operatorUid)
+      setCopiedUid(true)
+      setTimeout(() => setCopiedUid(false), 1800)
+    } catch {
+      // clipboard unavailable
+    }
+  }
+
+  async function handlePasswordReset() {
+    if (!authUser?.email) {
+      setResetState({ status: 'error', message: 'No verified email attached to current session.' })
+      return
+    }
+    setResetState({ status: 'sending' })
+    try {
+      await sendPasswordResetEmail(auth, authUser.email)
+      setResetState({
+        status: 'sent',
+        message: `Password reset link sent to ${authUser.email}.`,
+      })
+    } catch (err) {
+      setResetState({
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed to send password reset email.',
+      })
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await logout()
+      navigate('/login')
+    } catch {
+      navigate('/')
+    }
   }
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white pb-24 lg:pb-8 selection:bg-blue-500/20">
-      {/* Header Bar */}
-      <header className="h-14 border-b border-white/[0.08] bg-[#070709]/95 backdrop-blur-xl px-3 sm:px-6 flex items-center justify-between gap-3 sticky top-0 z-40">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link to="/dashboard" className="flex items-center gap-2 shrink-0 group">
-            <div className="w-7 h-7 rounded-lg bg-[#0d1117] border border-white/[0.12] flex items-center justify-center group-hover:border-white/[0.25] transition-colors">
-              <img src="/TRAXO-icon.png" alt="TRAXO" className="w-4 h-4 object-contain" />
-            </div>
-            <span className="text-[11px] font-black tracking-[0.22em] uppercase text-white hidden sm:inline">
-              TRAXO
-            </span>
-          </Link>
-
-          <span className="h-4 w-px bg-white/[0.1] hidden sm:block shrink-0" />
-
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#0d1117] border border-white/[0.08]">
-              <User className="w-3.5 h-3.5 text-blue-400" />
-              <span className="text-[11px] font-semibold text-slate-200 truncate">Trader Profile</span>
-            </div>
-          </div>
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] overflow-x-hidden">
+      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-8">
+        {/* Page Header */}
+        <div className="space-y-1.5">
+          <p className="text-[12px] font-medium text-[#71717A]">Operator Profile</p>
+          <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
+            {displayName}
+          </h1>
+          <p className="text-[14px] text-[#A1A1AA]">
+            Personal operator identity, default chart configuration, and session security controls.
+          </p>
         </div>
 
-        <DesktopWorkspaceNav />
-      </header>
-
-      {/* Main Workspace */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* UNIFIED CONTIGUOUS TERMINAL WORKSPACE CONTAINER (NO FLOATING CARDS) */}
-        <div className="rounded-xl border border-white/[0.08] bg-[#090d14]/95 shadow-2xl backdrop-blur-xl overflow-hidden divide-y divide-white/[0.08]">
-          
-          {/* Top User Identity Banner */}
-          <div className="p-5 sm:p-6 bg-[#05080f]/50 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="w-14 h-14 rounded-xl border border-blue-500/30 bg-blue-500/10 flex items-center justify-center text-lg font-black text-blue-400 shrink-0">
+        {/* Operator Identity & Telemetry Card */}
+        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden">
+          <div className="p-6 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+            <div className="flex items-start sm:items-center gap-4 min-w-0">
+              <div className="w-14 h-14 rounded-2xl bg-[#161619] flex items-center justify-center text-[17px] font-semibold text-[#FAFAFA] shrink-0 font-mono">
                 {initials}
               </div>
-              <div className="space-y-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white truncate">{displayName}</h1>
-                  <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    {accountStatus}
+
+              <div className="space-y-1.5 min-w-0">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className="text-[16px] font-semibold text-[#FAFAFA] truncate">
+                    {displayName}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#34D399]/10 text-[#34D399] text-[12px] font-medium">
+                    Session Active
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
+
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-[#A1A1AA]">
                   <span className="inline-flex items-center gap-1.5">
-                    <Mail size={12} className="text-slate-500" />
-                    {effectiveEmail}
+                    <PiEnvelopeSimple className="h-3.5 w-3.5 text-[#71717A]" />
+                    <span>{effectiveEmail}</span>
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <MapPin size={12} className="text-slate-500" />
-                    {authUser?.country || 'Country not set'}
+                    <PiMapPin className="h-3.5 w-3.5 text-[#71717A]" />
+                    <span>{authUser?.country || 'Location unset'}</span>
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <CalendarClock size={12} className="text-slate-500" />
-                    {dobLabel}
+                    <PiCalendarBlank className="h-3.5 w-3.5 text-[#71717A]" />
+                    <span>{dobLabel}</span>
                   </span>
                 </div>
-              </div>
-            </div>
 
-            {/* Quick Account Status Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full lg:w-auto lg:min-w-[30rem]">
-              <div className="p-2.5 rounded-lg bg-[#070b12] border border-white/[0.06] text-center">
-                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Plan</span>
-                <span className="text-sm font-extrabold text-white capitalize">{plan}</span>
-              </div>
-              <div className="p-2.5 rounded-lg bg-[#070b12] border border-white/[0.06] text-center">
-                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">2FA Security</span>
-                <span className={cn("text-sm font-extrabold", twoFaEnabled ? "text-emerald-400" : "text-amber-400")}>
-                  {twoFaEnabled ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
-              <div className="p-2.5 rounded-lg bg-[#070b12] border border-white/[0.06] text-center">
-                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Logged Trades</span>
-                <span className="text-sm font-extrabold text-slate-200 tabular-nums">{journalStats.total}</span>
-              </div>
-              <div className="p-2.5 rounded-lg bg-[#070b12] border border-white/[0.06] text-center">
-                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Win Rate</span>
-                <span className="text-sm font-extrabold text-emerald-400 tabular-nums">{journalStats.winRate}%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Account Metrics Strip */}
-          <div className="p-5 bg-[#070b12]/80 space-y-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trading Operating Context</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3.5 rounded-lg bg-[#090d14] border border-white/[0.06]">
-                <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold tracking-widest text-slate-500">
-                  <Crown size={12} className="text-amber-400" />
-                  <span>Account Balance</span>
+                <div className="flex items-center gap-2 pt-0.5">
+                  <span className="text-[12px] text-[#71717A]">UID</span>
+                  <code className="px-2.5 py-0.5 rounded-lg bg-[#161619] text-[12px] font-mono text-[#A1A1AA] truncate max-w-[240px]">
+                    {operatorUid}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyUid()}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-[#18181B] hover:bg-[#222227] text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                    title="Copy UID"
+                  >
+                    {copiedUid ? (
+                      <PiCheck className="h-3.5 w-3.5 text-[#34D399]" />
+                    ) : (
+                      <PiCopy className="h-3.5 w-3.5" />
+                    )}
+                    <span>{copiedUid ? 'Copied' : 'Copy'}</span>
+                  </button>
                 </div>
-                <p className="mt-2 text-lg font-extrabold text-white tabular-nums">{formatCurrency(accountBalance)}</p>
-              </div>
-
-              <div className="p-3.5 rounded-lg bg-[#090d14] border border-white/[0.06]">
-                <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold tracking-widest text-slate-500">
-                  <Target size={12} className="text-blue-400" />
-                  <span>Risk Per Trade</span>
-                </div>
-                <p className="mt-2 text-lg font-extrabold text-blue-400 tabular-nums">{riskPerTradePct.toFixed(1)}%</p>
-              </div>
-
-              <div className="p-3.5 rounded-lg bg-[#090d14] border border-white/[0.06]">
-                <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold tracking-widest text-slate-500">
-                  <ShieldCheck size={12} className="text-rose-400" />
-                  <span>Daily Loss Cap</span>
-                </div>
-                <p className="mt-2 text-lg font-extrabold text-rose-400 tabular-nums">{maxDailyLossPct.toFixed(1)}%</p>
-              </div>
-
-              <div className="p-3.5 rounded-lg bg-[#090d14] border border-white/[0.06]">
-                <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold tracking-widest text-slate-500">
-                  <Activity size={12} className="text-emerald-400" />
-                  <span>Win Rate</span>
-                </div>
-                <p className="mt-2 text-lg font-extrabold text-emerald-400 tabular-nums">{journalStats.winRate}%</p>
               </div>
             </div>
-          </div>
 
-          {/* Operating Profile & Parameters */}
-          <div className="p-5 sm:p-6 space-y-4">
-            <h3 className="text-[12px] font-bold text-white uppercase tracking-wider">Strategy & Market Profile</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-3.5 rounded-lg bg-[#05080f] border border-white/[0.06]">
-                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Active Strategy Stack</span>
-                <span className="text-[12px] font-bold text-slate-200 mt-1 block">
-                  {activeStrategies.length > 0 ? activeStrategies.join(', ') : 'No strategy selected'}
-                </span>
-              </div>
-
-              <div className="p-3.5 rounded-lg bg-[#05080f] border border-white/[0.06]">
-                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Experience Level</span>
-                <span className="text-[12px] font-bold text-slate-200 mt-1 block">{formatLabel(experienceLevel)}</span>
-              </div>
-
-              <div className="p-3.5 rounded-lg bg-[#05080f] border border-white/[0.06]">
-                <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Traded Markets</span>
-                <span className="text-[12px] font-bold text-slate-200 mt-1 block">{instrumentsText}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Personal Information Form */}
-          <div className="p-5 sm:p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[12px] font-bold text-white uppercase tracking-wider">Personal Information & Identity</h3>
-              {savedSuccess && (
-                <div className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/30">
-                  <CheckCircle2 size={12} />
-                  <span>Profile updated successfully!</span>
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label className="text-[11px] font-bold text-slate-300">
-                Full Name
-                <input
-                  value={form.fullName}
-                  onChange={(event) => updateField('fullName', event.target.value)}
-                  className="mt-1 h-9 w-full rounded-lg border border-white/[0.1] bg-[#05080f] px-3 text-[12px] text-white outline-none focus:border-blue-500/50"
-                />
-              </label>
-
-              <label className="text-[11px] font-bold text-slate-300">
-                Display Name
-                <input
-                  value={form.displayName}
-                  onChange={(event) => updateField('displayName', event.target.value)}
-                  className="mt-1 h-9 w-full rounded-lg border border-white/[0.1] bg-[#05080f] px-3 text-[12px] text-white outline-none focus:border-blue-500/50"
-                />
-              </label>
-
-              <label className="text-[11px] font-bold text-slate-300">
-                Date of Birth
-                <input
-                  type="date"
-                  value={form.dob}
-                  onChange={(event) => updateField('dob', event.target.value)}
-                  className="mt-1 h-9 w-full rounded-lg border border-white/[0.1] bg-[#05080f] px-3 text-[12px] text-white outline-none focus:border-blue-500/50"
-                />
-              </label>
-
-              <label className="text-[11px] font-bold text-slate-300">
-                Country
-                <input
-                  value={form.country}
-                  onChange={(event) => updateField('country', event.target.value)}
-                  className="mt-1 h-9 w-full rounded-lg border border-white/[0.1] bg-[#05080f] px-3 text-[12px] text-white outline-none focus:border-blue-500/50"
-                />
-              </label>
-
-              <label className="text-[11px] font-bold text-slate-300 sm:col-span-2">
-                Email Address
-                <input
-                  type="email"
-                  value={form.email}
-                  readOnly
-                  className="mt-1 h-9 w-full rounded-lg border border-white/[0.08] bg-[#05080f] px-3 text-[12px] text-slate-500 outline-none cursor-not-allowed"
-                />
-              </label>
-
-              <label className="text-[11px] font-bold text-slate-300 sm:col-span-2">
-                Trader Bio & Operating Notes
-                <textarea
-                  value={form.bio}
-                  onChange={(event) => updateField('bio', event.target.value)}
-                  className="mt-1 min-h-20 w-full rounded-lg border border-white/[0.1] bg-[#05080f] px-3 py-2 text-[12px] text-white outline-none focus:border-blue-500/50"
-                />
-              </label>
-            </div>
-
-            <div className="pt-2">
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
               <button
-                onClick={saveProfile}
-                className="h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors shadow-lg"
+                type="button"
+                onClick={() => void handlePasswordReset()}
+                disabled={resetState.status === 'sending'}
+                className="px-3.5 py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center gap-2 transition-colors disabled:opacity-50"
               >
-                <Save size={13} />
-                <span>Save Profile Changes</span>
+                <PiKey className="h-4 w-4 text-[#A1A1AA]" />
+                <span>{resetState.status === 'sending' ? 'Sending...' : 'Reset Password'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                disabled={authLoading}
+                className="px-3.5 py-2 rounded-xl bg-[#F87171]/10 hover:bg-[#F87171]/15 text-[13px] font-medium text-[#F87171] inline-flex items-center gap-2 transition-colors disabled:opacity-50"
+              >
+                <PiSignOut className="h-4 w-4" />
+                <span>Sign Out</span>
               </button>
             </div>
           </div>
 
-          {/* Account Security & 2FA */}
-          <div className="p-5 sm:p-6 space-y-4 bg-[#070b12]/50">
-            <h3 className="text-[12px] font-bold text-white uppercase tracking-wider">Account Security & Two-Factor Auth</h3>
-            
-            <div className="p-4 rounded-lg bg-[#05080f] border border-white/[0.06] flex items-center justify-between gap-4">
-              <div>
-                <span className="text-[12px] font-bold text-white block">Two-Factor Authentication (2FA)</span>
-                <span className="text-[11px] text-slate-400 mt-0.5 block">Requires an authenticator code when signing into TRAXO.</span>
-              </div>
+          {resetState.status !== 'idle' && resetState.message && (
+            <div
+              className={cn(
+                'px-6 py-3 border-b border-white/[0.06] flex items-center gap-2 text-[13px]',
+                resetState.status === 'sent'
+                  ? 'bg-[#34D399]/[0.06] text-[#34D399]'
+                  : 'bg-[#F87171]/[0.06] text-[#F87171]',
+              )}
+            >
+              {resetState.status === 'sent' ? (
+                <PiCheckCircle className="h-4 w-4" />
+              ) : (
+                <PiWarningCircle className="h-4 w-4" />
+              )}
+              <span>{resetState.message}</span>
+            </div>
+          )}
 
+          {/* Unboxed 4-Metric Strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06]">
+            <div className="p-5 space-y-1">
+              <span className="text-[12px] text-[#71717A] block">Account Baseline</span>
+              <span className="text-[18px] font-semibold font-mono tabular-nums text-[#FAFAFA] block">
+                {formatCurrency(accountBalance)}
+              </span>
+            </div>
+
+            <div className="p-5 space-y-1">
+              <span className="text-[12px] text-[#71717A] block">Risk Sizing</span>
+              <span className="text-[18px] font-semibold font-mono tabular-nums text-[#FAFAFA] block">
+                {riskMode === 'fixedAmount'
+                  ? `${formatCurrency(fixedRiskAmount)}`
+                  : `${riskPerTradePct.toFixed(1)}%`}
+              </span>
+            </div>
+
+            <div className="p-5 space-y-1">
+              <span className="text-[12px] text-[#71717A] block">Daily Loss Cap</span>
+              <span className="text-[18px] font-semibold font-mono tabular-nums text-[#F87171] block">
+                {maxDailyLossPct.toFixed(1)}%
+              </span>
+            </div>
+
+            <div className="p-5 space-y-1">
+              <span className="text-[12px] text-[#71717A] block">Journal Record</span>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className={cn(
+                    'text-[18px] font-semibold font-mono tabular-nums',
+                    journalStats.winRate >= 50 ? 'text-[#34D399]' : 'text-[#FAFAFA]',
+                  )}
+                >
+                  {journalStats.winRate}%
+                </span>
+                <span className="text-[12px] font-mono tabular-nums text-[#71717A]">
+                  {journalStats.wins}W/{journalStats.losses}L
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 1. Operator Identity (Linear Preference List) */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+                Operator Identity
+              </h2>
+              <p className="text-[13px] text-[#71717A]">
+                Personal profile metadata synchronized to Firestore operator records.
+              </p>
+            </div>
+            {savedSuccess && (
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#34D399]">
+                <PiCheckCircle className="h-4 w-4" />
+                <span>Saved</span>
+              </span>
+            )}
+          </div>
+
+          {saveError && (
+            <div className="p-4 rounded-2xl border border-[#F87171]/30 bg-[#111113] text-[13px] text-[#F87171] flex items-center gap-2">
+              <PiWarningCircle className="h-4 w-4 shrink-0" />
+              <span>{saveError}</span>
+            </div>
+          )}
+
+          <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">Full Name</div>
+                <div className="text-[13px] text-[#71717A]">
+                  Your legal or primary desk operator name.
+                </div>
+              </div>
+              <input
+                value={form.fullName}
+                onChange={(event) => updateField('fullName', event.target.value)}
+                placeholder="Operator full name"
+                className="w-full sm:w-64 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
+              />
+            </div>
+
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">Display Handle</div>
+                <div className="text-[13px] text-[#71717A]">
+                  Short handle displayed across the header and admin sessions.
+                </div>
+              </div>
+              <input
+                value={form.displayName}
+                onChange={(event) => updateField('displayName', event.target.value)}
+                placeholder="Console handle"
+                className="w-full sm:w-64 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
+              />
+            </div>
+
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">Date of Birth</div>
+                <div className="text-[13px] text-[#71717A]">
+                  Optional account verification date.
+                </div>
+              </div>
+              <input
+                type="date"
+                value={form.dob}
+                onChange={(event) => updateField('dob', event.target.value)}
+                className="w-full sm:w-64 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] outline-none focus:border-white/[0.2]"
+              />
+            </div>
+
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">Country / Desk TZ</div>
+                <div className="text-[13px] text-[#71717A]">
+                  Primary operating region for session alignment.
+                </div>
+              </div>
+              <input
+                value={form.country}
+                onChange={(event) => updateField('country', event.target.value)}
+                placeholder="e.g. Nigeria"
+                className="w-full sm:w-64 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
+              />
+            </div>
+
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">Email Address</div>
+                <div className="text-[13px] text-[#71717A]">
+                  Verified Firebase identity email (read-only).
+                </div>
+              </div>
+              <input
+                type="email"
+                value={form.email}
+                readOnly
+                className="w-full sm:w-64 px-3.5 py-2 rounded-xl bg-[#161619] border border-white/[0.05] text-[13px] text-[#71717A] outline-none cursor-not-allowed"
+              />
+            </div>
+
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div className="space-y-0.5 sm:max-w-xs">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">Operating Desk Notes</div>
+                <div className="text-[13px] text-[#71717A]">
+                  Session focus, personal execution rules, or checklist reminders.
+                </div>
+              </div>
+              <textarea
+                rows={3}
+                value={form.bio}
+                onChange={(event) => updateField('bio', event.target.value)}
+                placeholder="Session focus, execution rules, or desk notes..."
+                className="w-full sm:w-96 px-3.5 py-2.5 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
+              />
+            </div>
+
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+              <span className="text-[13px] text-[#71717A]">
+                All 5 quantitative engines active in personal mode.
+              </span>
               <button
+                type="button"
+                onClick={() => void saveProfile()}
+                disabled={authLoading}
+                className="px-4 py-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-medium inline-flex items-center gap-2 transition-colors disabled:opacity-50"
+              >
+                <PiFloppyDisk className="h-4 w-4" />
+                <span>Save Identity</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* 2. Terminal Defaults */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+                Terminal Defaults
+              </h2>
+              <p className="text-[13px] text-[#71717A]">
+                Startup symbol, chart timeframe, and watched asset classes.
+              </p>
+            </div>
+            <Link
+              to="/settings"
+              className="text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+            >
+              Risk Deck →
+            </Link>
+          </div>
+
+          <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
+            {/* Default Symbol */}
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">Default Terminal Symbol</div>
+                <div className="text-[13px] text-[#71717A]">
+                  Initial instrument loaded when opening Terminal.
+                </div>
+              </div>
+              <select
+                value={chartSymbol}
+                onChange={(e) => setChartSymbol(e.target.value as ChartSymbol)}
+                aria-label="Default Terminal Symbol"
+                className="w-full sm:w-56 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-medium text-[#FAFAFA] outline-none focus:border-white/[0.2]"
+              >
+                {SYMBOL_GROUPS.map((grp) => (
+                  <optgroup key={grp.label} label={grp.label}>
+                    {grp.symbols.map((sym) => (
+                      <option key={sym} value={sym}>
+                        {sym}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            {/* Default Timeframe */}
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">Default Chart Timeframe</div>
+                <div className="text-[13px] text-[#71717A]">
+                  Primary candlestick interval for structure evaluation.
+                </div>
+              </div>
+              <div className="inline-flex max-w-full overflow-x-auto items-center rounded-xl bg-[#18181B] p-1">
+                {TIMEFRAME_OPTIONS.map((tf) => (
+                  <button
+                    key={tf}
+                    type="button"
+                    onClick={() => setChartTimeframe(tf)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors',
+                      chartTimeframe === tf
+                        ? 'bg-[#FAFAFA] text-[#09090B]'
+                        : 'text-[#A1A1AA] hover:text-[#FAFAFA]',
+                    )}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Execution Tier */}
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">Experience Profile</div>
+                <div className="text-[13px] text-[#71717A]">
+                  Tailors setup commentary density in strategy panels.
+                </div>
+              </div>
+              <div className="inline-flex max-w-full overflow-x-auto items-center rounded-xl bg-[#18181B] p-1">
+                {EXPERIENCE_LEVELS.map((lvl) => (
+                  <button
+                    key={lvl.id}
+                    type="button"
+                    onClick={() => setExperienceLevel(lvl.id)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors',
+                      experienceLevel === lvl.id
+                        ? 'bg-[#FAFAFA] text-[#09090B]'
+                        : 'text-[#A1A1AA] hover:text-[#FAFAFA]',
+                    )}
+                  >
+                    {lvl.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Watched Asset Classes */}
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">Watched Asset Classes</div>
+                <div className="text-[13px] text-[#71717A]">
+                  Markets prioritized during workspace scans.
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {MARKET_INSTRUMENTS.map((inst) => {
+                  const active = instruments.includes(inst.id)
+                  return (
+                    <button
+                      key={inst.id}
+                      type="button"
+                      onClick={() => toggleInstrument(inst.id)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-xl text-[13px] font-medium transition-colors',
+                        active
+                          ? 'bg-[#FAFAFA] text-[#09090B]'
+                          : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
+                      )}
+                    >
+                      {inst.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Active Strategy Engines Summary */}
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">
+                  Active Engines ({activeStrategies.length})
+                </div>
+                <div className="text-[13px] text-[#71717A]">
+                  Strategies enabled for live signal scanning.
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {activeStrategies.map((name) => (
+                  <span
+                    key={name}
+                    className="px-2.5 py-1 rounded-lg bg-[#161619] text-[12px] text-[#FAFAFA]"
+                  >
+                    {name}
+                  </span>
+                ))}
+                <Link
+                  to="/strategies"
+                  className="text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] ml-1"
+                >
+                  Manage →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 3. Security & Session */}
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+              Security &amp; Session
+            </h2>
+            <p className="text-[13px] text-[#71717A]">
+              Session verification and authentication provider settings.
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">
+                  Two-Factor Authentication (2FA)
+                </div>
+                <div className="text-[13px] text-[#71717A]">
+                  Require verification challenge on new terminal sessions.
+                </div>
+              </div>
+              <button
+                type="button"
                 onClick={() => setTwoFaEnabled(!twoFaEnabled)}
                 className={cn(
-                  "h-8 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0 border",
+                  'px-3.5 py-1.5 rounded-xl text-[13px] font-medium shrink-0 transition-colors',
                   twoFaEnabled
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                    : "bg-white/[0.06] text-slate-300 border-white/[0.08]"
+                    ? 'bg-[#34D399]/15 text-[#34D399]'
+                    : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
                 )}
               >
-                {twoFaEnabled ? 'Enabled' : 'Enable 2FA'}
+                {twoFaEnabled ? 'Enabled' : 'Enable'}
               </button>
             </div>
-          </div>
-        </div>
-      </main>
 
-      <MobileFloatingWorkspaceNav />
+            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-2.5 text-[14px] font-medium text-[#FAFAFA]">
+                <PiGauge className="h-4 w-4 text-[#71717A]" />
+                <span>Authentication Provider</span>
+              </div>
+              <div className="flex items-center gap-3 text-[13px] text-[#71717A]">
+                <span>Firebase Identity</span>
+                <Link
+                  to="/notifications?tab=telemetry"
+                  className="text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                >
+                  Engine Health →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   )
 }

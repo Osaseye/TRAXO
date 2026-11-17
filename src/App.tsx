@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react'
-import { Routes, Route, useLocation } from 'react-router'
+import { Routes, Route } from 'react-router'
 const Landing = lazy(() => import('@/pages/Landing'))
 const Login = lazy(() => import('@/pages/Login'))
 const Register = lazy(() => import('@/pages/Register'))
@@ -25,19 +25,18 @@ import NotFound from '@/components/ui/NotFound'
 import Loading from '@/components/ui/Loading'
 import ProtectedRoute from '@/components/ui/ProtectedRoute'
 import AdminRoute from '@/components/ui/AdminRoute'
+import { AppLayout } from '@/components/layout/AppLayout'
 import { GlobalSignalMonitor } from '@/components/shared/GlobalSignalMonitor'
 import { SignalToastStack } from '@/components/shared/SignalToastStack'
 
 export default function App() {
-  const location = useLocation()
-
   return (
     <ErrorBoundary>
       <ScrollToTop />
       <GlobalSignalMonitor />
       <SignalToastStack />
       <Suspense fallback={<Loading />}>
-        <PageTransition key={location.key}>
+        <PageTransition>
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<Landing />} />
@@ -49,22 +48,26 @@ export default function App() {
 
             {/* Protected routes */}
             <Route element={<ProtectedRoute />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/journal" element={<TradingJournal />} />
-              <Route path="/journal/:date" element={<JournalDateDetail />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/strategies" element={<StrategyManager />} />
-              <Route path="/strategies/:strategyId" element={<StrategyDetail />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/backtesting" element={<Backtesting />} />
+              <Route element={<AppLayout />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/journal" element={<TradingJournal />} />
+                <Route path="/journal/:date" element={<JournalDateDetail />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/strategies" element={<StrategyManager />} />
+                <Route path="/strategies/:strategyId" element={<StrategyDetail />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/notifications" element={<Notifications />} />
+                <Route path="/backtesting" element={<Backtesting />} />
+              </Route>
             </Route>
 
             {/* Admin routes */}
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route element={<AdminRoute />}>
-              <Route path="/admin" element={<AdminPanel />} />
-              <Route path="/admin/signals" element={<AdminSignals />} />
+              <Route element={<AppLayout />}>
+                <Route path="/admin" element={<AdminPanel />} />
+                <Route path="/admin/signals" element={<AdminSignals />} />
+              </Route>
             </Route>
 
             {/* 404 */}

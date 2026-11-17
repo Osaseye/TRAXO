@@ -1,21 +1,31 @@
-import { useMemo } from 'react'
-import { ShieldAlert, Activity, Cpu, FlaskConical, BarChart2, ExternalLink, CheckCircle2, XCircle, Info, Radio } from 'lucide-react'
-import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  PiArrowsClockwise,
+  PiArrowUpRight,
+  PiCpu,
+  PiDatabase,
+  PiHardDrives,
+  PiPlay,
+  PiGauge,
+  PiShieldCheck,
+  PiSlidersHorizontal,
+  PiTerminalWindow,
+  PiWifiHigh,
+  PiWifiSlash,
+} from 'react-icons/pi'
+import { getScannerStatus } from '@/lib/api'
+import { auth } from '@/lib/firebase'
+import { useMetaApi } from '@/hooks/useMetaApi'
+import { useStrategyOptimizer } from '@/hooks/useStrategyOptimizer'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useOnboardingStore } from '@/stores/useOnboardingStore'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
-import { Link } from 'react-router'
 
-// ---------------------------------------------------------------------------
-// Algorithm configuration values (sourced from wickRejection.ts constants)
-// ---------------------------------------------------------------------------
 const ALG_CONFIG = {
   minScore: { prime: 7, standard: 5, aggressive: 4 },
   minConfidence: { prime: 70, standard: 55, aggressive: 45 },
-  slBuffer: {
-    primeForex: '0.75× ATR',
-    standardForex: '1.0× ATR',
-    crypto: '+50% on top of base',
-  },
+  slBuffer: { primeForex: '0.75x ATR', standardForex: '1.0x ATR', crypto: '+50% on top of base' },
   defaultSlippage: { forex: '0.005%', crypto: '0.1%' },
   rrFallback: { tp1: '1.5R', tp2: '2.5R' },
   obLookback: '20 candles',
@@ -23,239 +33,434 @@ const ALG_CONFIG = {
   i2eMinR: '0.8R (min distance for structure TP)',
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function EnvBadge({ label, envKey }: { label: string; envKey: string }) {
-  const value = import.meta.env[envKey] as string | undefined
-  const present = Boolean(value)
-  return (
-    <div className="flex items-center justify-between gap-3 text-[12px] py-2 border-b border-white/[0.04] last:border-0">
-      <span className="text-[#94a3b8]">{label}</span>
-      <div className="flex items-center gap-1.5">
-        {present ? (
-          <>
-            <CheckCircle2 size={12} className="text-[#86efac]" />
-            <span className="text-[#86efac] font-semibold">Set</span>
-          </>
-        ) : (
-          <>
-            <XCircle size={12} className="text-[#fca5a5]" />
-            <span className="text-[#fca5a5] font-semibold">Missing</span>
-          </>
-        )}
-      </div>
-    </div>
-  )
+const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/$/, '')
+const HEALTH_URL = API_BASE
+  ? `${API_BASE}/health`
+  : `${((import.meta.env.VITE_SERVER_URL as string | undefined) || 'http://localhost:8080').replace(/\/$/, '')}/health`
+
+interface HealthResponse {
+  status: string
+  twelvedata?: {
+    availableKeys: number
+    keys?: Array<{ index?: number; id?: string; usedToday?: number; exhausted?: boolean }>
+  }
 }
 
-function ConfigRow({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div className="flex items-start justify-between gap-3 text-[12px] py-2 border-b border-white/[0.04] last:border-0">
-      <span className="text-[#94a3b8]">{label}</span>
-      <div className="text-right">
-        <span className="font-semibold text-[#e5e7eb]">{value}</span>
-        {note && <p className="text-[10px] text-[#475569] mt-0.5">{note}</p>}
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Main page
-// ---------------------------------------------------------------------------
 export default function AdminPanel() {
-  const email = useAuthStore((s) => s.user?.email)
+  const user = useAuthStore((s) => s.user)
   const journal = useTradingContextStore((s) => s.journal)
+  const activeStrategies = useOnboardingStore((s) => s.selectedStrategyIds)
+
+  const { account: mt5Account, positions: mt5Positions, refreshAccount } = useMetaApi()
+  const { status: optimizerStatus, refreshStatus: refreshOptimizer } = useStrategyOptimizer()
+
+  const [scannerStatus, setScannerStatus] = useState<{
+    status: string
+    message: string
+    redis?: string
+    scanState?: Record<string, unknown>
+  } | null>(null)
+  const [health, setHealth] = useState<HealthResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [triggerBusy, setTriggerBusy] = useState(false)
+  const [triggerMessage, setTriggerMessage] = useState<string | null>(null)
+
+  const fetchSystemDiagnostics = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [scanRes, healthRes] = await Promise.allSettled([
+        getScannerStatus(),
+        fetch(HEALTH_URL).then((r) => (r.ok ? r.json() : null)),
+      ])
+      if (scanRes.status === 'fulfilled') {
+        setScannerStatus(
+          scanRes.value as {
+            status: string
+            message: string
+            redis?: string
+            scanState?: Record<string, unknown>
+          }
+        )
+      }
+      if (healthRes.status === 'fulfilled' && healthRes.value) {
+        setHealth(healthRes.value as HealthResponse)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (!cancelled) void fetchSystemDiagnostics()
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [fetchSystemDiagnostics])
+
+  const handleManualScan = async () => {
+    setTriggerBusy(true)
+    setTriggerMessage(null)
+    try {
+      const token = await auth.currentUser?.getIdToken().catch(() => null)
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+      const url = API_BASE ? `${API_BASE}/api/scanner/trigger` : '/api/scanner/trigger'
+      const res = await fetch(url, { method: 'POST', headers })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json().catch(() => ({}))
+      setTriggerMessage(data?.message || 'Manual scan cycle initiated.')
+      setTimeout(() => {
+        void fetchSystemDiagnostics()
+      }, 800)
+    } catch (err) {
+      setTriggerMessage(
+        `Trigger unavailable (${err instanceof Error ? err.message : 'offline'}).`
+      )
+    } finally {
+      setTriggerBusy(false)
+    }
+  }
 
   const journalStats = useMemo(() => {
-    const taken = journal.filter((j) => j.taken)
-    const settled = taken.filter((j) => j.outcome !== 'pending' && j.outcome !== 'skipped')
-    const wins = settled.filter((j) => j.outcome === 'win').length
-    const losses = settled.filter((j) => j.outcome === 'loss').length
-    const bes = settled.filter((j) => j.outcome === 'breakeven').length
-    const winRate = settled.length > 0 ? ((wins / settled.length) * 100).toFixed(1) : '—'
-    const breakEvenTriggered = taken.filter((j) => j.breakEvenTriggered).length
+    let wins = 0
+    let losses = 0
+    let breakeven = 0
+    let pending = 0
+    let taken = 0
+    let netUsd = 0
 
-    // Max consec losses
-    let maxConsec = 0, cur = 0
-    for (const e of settled) {
-      if (e.outcome === 'loss') { cur++; maxConsec = Math.max(maxConsec, cur) } else cur = 0
+    for (const j of journal) {
+      if (j.taken) taken += 1
+      if (j.outcome === 'win') {
+        wins += 1
+        if (j.taken && j.riskAmount > 0) {
+          const riskDist = Math.abs(j.entry - j.sl)
+          const rewardDist = Math.abs(j.tp - j.entry)
+          const rr = riskDist > 0 ? rewardDist / riskDist : 0
+          netUsd += j.riskAmount * rr
+        }
+      } else if (j.outcome === 'loss') {
+        losses += 1
+        if (j.taken && j.riskAmount > 0) netUsd -= j.riskAmount
+      } else if (j.outcome === 'breakeven') {
+        breakeven += 1
+      } else if (j.outcome === 'pending') {
+        pending += 1
+      }
     }
-
-    return { total: journal.length, taken: taken.length, settled: settled.length, wins, losses, bes, winRate, maxConsec, breakEvenTriggered }
+    return { total: journal.length, wins, losses, breakeven, pending, taken, netUsd }
   }, [journal])
 
-  const serverUrl = import.meta.env.VITE_SERVER_URL as string | undefined
+  const envChecks = useMemo(() => {
+    return [
+      { label: 'Firebase Auth Session', ok: Boolean(user?.id), detail: user?.email || 'Not signed in' },
+      { label: 'Firebase API Key Configured', ok: Boolean(import.meta.env.VITE_FIREBASE_API_KEY), detail: import.meta.env.VITE_FIREBASE_API_KEY ? 'Present' : 'Missing' },
+      { label: 'Express Health Endpoint', ok: health?.status === 'ok', detail: health?.status || 'Offline' },
+      { label: 'Redis Signal Cache', ok: scannerStatus?.redis === 'connected' || scannerStatus?.status === 'ok', detail: scannerStatus?.redis || scannerStatus?.status || 'Unknown' },
+      { label: 'MetaApi Broker Bridge', ok: Boolean(mt5Account?.connected), detail: mt5Account?.connected ? `Connected (${mt5Positions.length} open)` : 'Disconnected' },
+    ]
+  }, [user, health, scannerStatus, mt5Account, mt5Positions])
+
+  const scanState = scannerStatus?.scanState as
+    | { running?: boolean; currentSymbol?: string; current?: string; done?: number; total?: number }
+    | undefined
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white pb-24 lg:pb-8">
-      <header className="h-14 border-b border-white/[0.05] bg-[#070709]/95 backdrop-blur px-3 sm:px-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <img src="/TRAXO-icon.png" alt="TRAXO" className="w-6 h-6 object-contain shrink-0" />
-          <span className="text-[10px] font-black tracking-[0.2em] uppercase text-white hidden sm:inline">TRAXO</span>
-          <span className="hidden sm:block h-4 w-px bg-white/[0.1]" />
-          <ShieldAlert size={14} className="text-[#fca5a5]" />
-          <h1 className="text-[14px] font-semibold text-[#e5e7eb] truncate">Admin Panel</h1>
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA]">
+      <div className="max-w-[1360px] mx-auto px-6 sm:px-8 py-8 space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div className="space-y-1.5">
+            <p className="text-[12px] font-medium text-[#71717A]">System Diagnostics</p>
+            <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
+              Operator Admin Desk
+            </h1>
+            <p className="text-[14px] text-[#A1A1AA]">
+              Live runtime telemetry, engine thresholds, and unified console shortcuts.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <Link
+              to="/notifications?tab=telemetry"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+            >
+              <PiCpu className="h-4 w-4 text-[#A1A1AA]" />
+              <span>Signals &amp; Ops</span>
+            </Link>
+            <button
+              type="button"
+              onClick={handleManualScan}
+              disabled={triggerBusy}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
+            >
+              <PiPlay className="h-4 w-4" />
+              <span>{triggerBusy ? 'Triggering...' : 'Manual Scan'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void fetchSystemDiagnostics()
+                void refreshAccount()
+                void refreshOptimizer()
+              }}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+            >
+              <PiArrowsClockwise className={`h-4 w-4 text-[#A1A1AA] ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+          </div>
         </div>
-        <DesktopWorkspaceNav />
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        {triggerMessage && (
+          <div className="px-4 py-3 rounded-2xl bg-[#111113] border border-white/[0.07] text-[13px] text-[#A1A1AA]">
+            {triggerMessage}
+          </div>
+        )}
 
-        {/* Identity */}
-        <div className="flex items-center gap-2 rounded-xl border border-[#f59e0b]/20 bg-[#f59e0b]/10 px-4 py-3">
-          <Info size={14} className="text-[#fde68a] shrink-0" />
-          <p className="text-[12px] text-[#fde68a]">
-            Authenticated as <strong>{email}</strong> — this page is only accessible to emails listed in <code className="text-[11px] bg-white/10 px-1 rounded">VITE_ADMIN_EMAILS</code>.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* System Health */}
-          <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Activity size={15} className="text-[#6366f1]" />
-              <h2 className="text-[13px] font-semibold text-[#e5e7eb]">System Health</h2>
+        {/* Operator Identity Strip */}
+        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="h-11 w-11 rounded-xl bg-[#161619] flex items-center justify-center shrink-0">
+              <PiShieldCheck className="h-5 w-5 text-[#34D399]" />
             </div>
-            <div className="space-y-0">
-              <EnvBadge label="TwelveData API Key" envKey="VITE_TWELVEDATA_API_KEY" />
-              <EnvBadge label="Finnhub API Key (server)" envKey="VITE_FINNHUB_API_KEY" />
-              <EnvBadge label="Upstash Redis URL (server)" envKey="VITE_UPSTASH_REDIS_REST_URL" />
-              <EnvBadge label="Admin Emails" envKey="VITE_ADMIN_EMAILS" />
-            </div>
-            <div className="mt-4 pt-4 border-t border-white/[0.05]">
-              <p className="text-[11px] text-[#64748b] mb-2">News server</p>
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] text-[#e5e7eb] font-mono break-all">{serverUrl ?? 'http://localhost:8080'}</span>
-                {serverUrl && (
-                  <a href={`${serverUrl}/health`} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                    <ExternalLink size={12} className="text-[#6366f1] hover:text-white transition-colors" />
-                  </a>
-                )}
+            <div>
+              <div className="text-[12px] font-medium text-[#71717A]">Authorized Operator Session</div>
+              <div className="text-[15px] font-medium text-[#FAFAFA] mt-0.5">
+                {user?.displayName || 'Traxo Operator'}{' '}
+                <span className="text-[13px] font-normal text-[#71717A]">
+                  ({user?.email || 'No email'} ·{' '}
+                  <span className="font-mono tabular-nums">{user?.id?.slice(0, 10) || '—'}</span>)
+                </span>
               </div>
             </div>
-          </section>
+          </div>
+          <div className="flex items-center gap-2.5 text-[13px] text-[#A1A1AA]">
+            <span>Active Strategies</span>
+            <span className="px-3 py-1 rounded-full bg-[#161619] text-[#FAFAFA] font-mono tabular-nums font-medium">
+              {activeStrategies.length}
+            </span>
+          </div>
+        </section>
 
-          {/* Signal Performance (own journal) */}
-          <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart2 size={15} className="text-[#6366f1]" />
-              <h2 className="text-[13px] font-semibold text-[#e5e7eb]">Signal Performance (this account)</h2>
+        {/* Unboxed 5-Metric Summary Strip */}
+        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] grid grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+          <div className="p-5 space-y-1">
+            <div className="text-[12px] text-[#71717A]">Journal Entries</div>
+            <div className="text-[22px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+              {journalStats.total}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-              {[
-                { label: 'Total logged', value: journalStats.total },
-                { label: 'Taken trades', value: journalStats.taken },
-                { label: 'Settled', value: journalStats.settled },
-                { label: 'Wins', value: journalStats.wins, tone: 'green' },
-                { label: 'Losses', value: journalStats.losses, tone: 'red' },
-                { label: 'Break-even', value: journalStats.bes, tone: 'yellow' },
-              ].map(({ label, value, tone }) => (
-                <div key={label} className="rounded-lg border border-white/[0.06] bg-[#0b0f17] p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-[#64748b]">{label}</p>
-                  <p className={`mt-1 text-lg font-bold ${tone === 'green' ? 'text-[#86efac]' : tone === 'red' ? 'text-[#fca5a5]' : tone === 'yellow' ? 'text-[#fde68a]' : 'text-[#f8fafc]'}`}>{value}</p>
+            <div className="text-[12px] font-mono tabular-nums text-[#71717A]">
+              {journalStats.taken} taken · {journalStats.pending} pending
+            </div>
+          </div>
+
+          <div className="p-5 space-y-1">
+            <div className="text-[12px] text-[#71717A]">Win / Loss</div>
+            <div className="text-[22px] font-mono font-semibold tabular-nums">
+              <span className="text-[#34D399]">{journalStats.wins}W</span>
+              <span className="text-[#71717A] mx-1">/</span>
+              <span className="text-[#F87171]">{journalStats.losses}L</span>
+            </div>
+            <div className="text-[12px] font-mono tabular-nums text-[#71717A]">
+              {journalStats.breakeven} breakeven
+            </div>
+          </div>
+
+          <div className="p-5 space-y-1">
+            <div className="text-[12px] text-[#71717A]">Taken Net P&amp;L</div>
+            <div
+              className={`text-[22px] font-mono font-semibold tabular-nums ${
+                journalStats.netUsd > 0
+                  ? 'text-[#34D399]'
+                  : journalStats.netUsd < 0
+                    ? 'text-[#F87171]'
+                    : 'text-[#FAFAFA]'
+              }`}
+            >
+              {journalStats.netUsd >= 0 ? '+' : '-'}${Math.abs(journalStats.netUsd).toFixed(2)}
+            </div>
+            <div className="text-[12px] text-[#71717A]">Recorded risk P&amp;L</div>
+          </div>
+
+          <div className="p-5 space-y-1">
+            <div className="text-[12px] text-[#71717A]">TwelveData Keys</div>
+            <div className="text-[22px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+              {health?.twelvedata?.availableKeys ?? '—'}
+            </div>
+            <div className="text-[12px] text-[#71717A]">Active key pool</div>
+          </div>
+
+          <div className="p-5 space-y-1">
+            <div className="text-[12px] text-[#71717A]">Feedback Engine</div>
+            <div
+              className={`text-[18px] font-semibold mt-0.5 ${
+                optimizerStatus?.isFeedbackEngineEnabled ? 'text-[#34D399]' : 'text-[#A1A1AA]'
+              }`}
+            >
+              {optimizerStatus
+                ? optimizerStatus.isFeedbackEngineEnabled
+                  ? 'Active'
+                  : 'Paused'
+                : '—'}
+            </div>
+            <div className="text-[12px] font-mono tabular-nums text-[#71717A]">
+              {optimizerStatus?.totalLossesAnalyzed ?? 0} losses analyzed
+            </div>
+          </div>
+        </section>
+
+        {/* Runtime Matrix + Algorithm Constants */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <PiHardDrives className="h-5 w-5 text-[#FAFAFA]" />
+                <h2 className="text-[15px] font-medium text-[#FAFAFA]">
+                  System &amp; Environment Matrix
+                </h2>
+              </div>
+              <span className="text-[12px] text-[#71717A]">
+                {scanState?.running
+                  ? `Scanning: ${scanState.currentSymbol || scanState.current || 'Active'}`
+                  : 'Scanner Ready'}
+              </span>
+            </div>
+
+            <div className="divide-y divide-white/[0.06]">
+              {envChecks.map((chk) => (
+                <div key={chk.label} className="flex items-center justify-between py-3.5 text-[14px]">
+                  <div className="flex items-center gap-2.5">
+                    {chk.ok ? (
+                      <PiWifiHigh className="h-4 w-4 text-[#34D399]" />
+                    ) : (
+                      <PiWifiSlash className="h-4 w-4 text-[#F87171]" />
+                    )}
+                    <span className="text-[#FAFAFA]">{chk.label}</span>
+                  </div>
+                  <span
+                    className={`text-[13px] ${
+                      chk.ok ? 'text-[#34D399]' : 'text-[#A1A1AA]'
+                    }`}
+                  >
+                    {chk.detail}
+                  </span>
                 </div>
               ))}
             </div>
-            <div className="space-y-0">
-              <ConfigRow label="Win rate" value={`${journalStats.winRate}%`} />
-              <ConfigRow label="Max consec. losses" value={String(journalStats.maxConsec)} />
-              <ConfigRow label="Break-even triggered" value={String(journalStats.breakEvenTriggered)} note="trades moved to entry SL" />
+
+            <div className="text-[12px] text-[#71717A] pt-1">
+              Scanner status: {scannerStatus?.message || '—'}
             </div>
           </section>
 
-          {/* Algorithm Config */}
-          <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Cpu size={15} className="text-[#6366f1]" />
-              <h2 className="text-[13px] font-semibold text-[#e5e7eb]">Algorithm Configuration <span className="text-[11px] text-[#475569] font-normal">(read-only)</span></h2>
+          <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <PiSlidersHorizontal className="h-5 w-5 text-[#FAFAFA]" />
+                <h2 className="text-[15px] font-medium text-[#FAFAFA]">
+                  Algorithm Constants
+                </h2>
+              </div>
+              <span className="text-[12px] text-[#71717A]">Read-only baseline</span>
             </div>
-            <div className="space-y-0">
-              <ConfigRow label="Prime threshold" value={`Score ≥ ${ALG_CONFIG.minScore.prime}, Conf ≥ ${ALG_CONFIG.minConfidence.prime}%`} />
-              <ConfigRow label="Standard threshold" value={`Score ≥ ${ALG_CONFIG.minScore.standard}, Conf ≥ ${ALG_CONFIG.minConfidence.standard}%`} />
-              <ConfigRow label="Aggressive threshold" value={`Score ≥ ${ALG_CONFIG.minScore.aggressive}, Conf ≥ ${ALG_CONFIG.minConfidence.aggressive}%`} />
-              <ConfigRow label="SL buffer (prime FOREX)" value={ALG_CONFIG.slBuffer.primeForex} note="anti-stop-hunt" />
-              <ConfigRow label="SL buffer (standard FOREX)" value={ALG_CONFIG.slBuffer.standardForex} />
-              <ConfigRow label="SL buffer (CRYPTO)" value={ALG_CONFIG.slBuffer.crypto} />
-              <ConfigRow label="Default slippage (FOREX)" value={ALG_CONFIG.defaultSlippage.forex} />
-              <ConfigRow label="Default slippage (CRYPTO)" value={ALG_CONFIG.defaultSlippage.crypto} />
-              <ConfigRow label="TP fallback (R:R)" value={`${ALG_CONFIG.rrFallback.tp1} / ${ALG_CONFIG.rrFallback.tp2}`} />
-              <ConfigRow label="I2E min distance" value={ALG_CONFIG.i2eMinR} />
-              <ConfigRow label="Order block lookback" value={ALG_CONFIG.obLookback} />
-              <ConfigRow label="Swing lookback" value={ALG_CONFIG.swingLookback} />
-            </div>
-          </section>
 
-          {/* Quick Actions */}
-          <section className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <FlaskConical size={15} className="text-[#6366f1]" />
-              <h2 className="text-[13px] font-semibold text-[#e5e7eb]">Quick Actions</h2>
-            </div>
-            <div className="space-y-3">
-              <Link
-                to="/admin/signals"
-                className="flex items-center justify-between gap-3 rounded-xl border border-[#6366f1]/20 bg-[#6366f1]/05 hover:bg-[#6366f1]/10 px-4 py-3 transition-colors group"
-              >
-                <div className="flex items-center gap-3">
-                  <Radio size={15} className="text-[#818cf8]" />
-                  <div>
-                    <p className="text-[12px] font-semibold text-[#e5e7eb]">All System Signals</p>
-                    <p className="text-[11px] text-[#64748b]">Full signal feed across all charts, strategies and timeframes</p>
-                  </div>
-                </div>
-                <ExternalLink size={13} className="text-[#475569] group-hover:text-[#6366f1] transition-colors shrink-0" />
-              </Link>
-
-              <Link
-                to="/backtesting"
-                className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-[#0b0f17] hover:bg-white/[0.03] px-4 py-3 transition-colors group"
-              >
-                <div className="flex items-center gap-3">
-                  <BarChart2 size={15} className="text-[#6366f1]" />
-                  <div>
-                    <p className="text-[12px] font-semibold text-[#e5e7eb]">Run a Backtest</p>
-                    <p className="text-[11px] text-[#64748b]">Walk-forward signal simulation on real historical candles</p>
-                  </div>
-                </div>
-                <ExternalLink size={13} className="text-[#475569] group-hover:text-[#6366f1] transition-colors shrink-0" />
-              </Link>
-
-              <Link
-                to="/journal"
-                className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-[#0b0f17] hover:bg-white/[0.03] px-4 py-3 transition-colors group"
-              >
-                <div className="flex items-center gap-3">
-                  <Activity size={15} className="text-[#6366f1]" />
-                  <div>
-                    <p className="text-[12px] font-semibold text-[#e5e7eb]">View Trade Journal</p>
-                    <p className="text-[11px] text-[#64748b]">Review all logged signals and outcomes</p>
-                  </div>
-                </div>
-                <ExternalLink size={13} className="text-[#475569] group-hover:text-[#6366f1] transition-colors shrink-0" />
-              </Link>
-
-              <Link
-                to="/dashboard"
-                className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-[#0b0f17] hover:bg-white/[0.03] px-4 py-3 transition-colors group"
-              >
-                <div className="flex items-center gap-3">
-                  <Cpu size={15} className="text-[#6366f1]" />
-                  <div>
-                    <p className="text-[12px] font-semibold text-[#e5e7eb]">Live Signal Dashboard</p>
-                    <p className="text-[11px] text-[#64748b]">Real-time wick rejection signals across markets</p>
-                  </div>
-                </div>
-                <ExternalLink size={13} className="text-[#475569] group-hover:text-[#6366f1] transition-colors shrink-0" />
-              </Link>
+            <div className="divide-y divide-white/[0.06] text-[13.5px]">
+              <div className="flex justify-between py-3">
+                <span className="text-[#71717A]">Min Score (Prime / Std / Aggr)</span>
+                <span className="font-mono tabular-nums text-[#FAFAFA]">
+                  {ALG_CONFIG.minScore.prime} / {ALG_CONFIG.minScore.standard} /{' '}
+                  {ALG_CONFIG.minScore.aggressive}
+                </span>
+              </div>
+              <div className="flex justify-between py-3">
+                <span className="text-[#71717A]">Min Confidence (Prime / Std / Aggr)</span>
+                <span className="font-mono tabular-nums text-[#FAFAFA]">
+                  {ALG_CONFIG.minConfidence.prime}% / {ALG_CONFIG.minConfidence.standard}% /{' '}
+                  {ALG_CONFIG.minConfidence.aggressive}%
+                </span>
+              </div>
+              <div className="flex justify-between py-3">
+                <span className="text-[#71717A]">SL Buffer (FX / Crypto)</span>
+                <span className="font-mono tabular-nums text-[#FAFAFA]">
+                  {ALG_CONFIG.slBuffer.primeForex} / {ALG_CONFIG.slBuffer.crypto}
+                </span>
+              </div>
+              <div className="flex justify-between py-3">
+                <span className="text-[#71717A]">Default Slippage (FX / Crypto)</span>
+                <span className="font-mono tabular-nums text-[#FAFAFA]">
+                  {ALG_CONFIG.defaultSlippage.forex} / {ALG_CONFIG.defaultSlippage.crypto}
+                </span>
+              </div>
+              <div className="flex justify-between py-3">
+                <span className="text-[#71717A]">Fallback R:R Targets</span>
+                <span className="font-mono tabular-nums text-[#FAFAFA]">
+                  {ALG_CONFIG.rrFallback.tp1} / {ALG_CONFIG.rrFallback.tp2}
+                </span>
+              </div>
+              <div className="flex justify-between py-3">
+                <span className="text-[#71717A]">OB / Swing Lookback</span>
+                <span className="font-mono tabular-nums text-[#FAFAFA]">
+                  {ALG_CONFIG.obLookback} · {ALG_CONFIG.swingLookback}
+                </span>
+              </div>
+              <div className="flex justify-between py-3">
+                <span className="text-[#71717A]">Impulse-to-Entry Min R</span>
+                <span className="font-mono tabular-nums text-[#FAFAFA]">{ALG_CONFIG.i2eMinR}</span>
+              </div>
             </div>
           </section>
-
         </div>
-      </main>
-      <MobileFloatingWorkspaceNav />
+
+        {/* Quick Route Matrix */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            {
+              to: '/admin/signals',
+              title: 'Signals & Rejects Archive',
+              desc: 'Direct table view of live/historical setups & Redis rejections.',
+              icon: PiGauge,
+            },
+            {
+              to: '/notifications?tab=rejections',
+              title: 'Scanner Rejections Tab',
+              desc: 'Guardrail rejections sorted by symbol, rule, and spread.',
+              icon: PiDatabase,
+            },
+            {
+              to: '/dashboard',
+              title: 'Live Trading Terminal',
+              desc: 'Return to real-time execution desk and price action chart.',
+              icon: PiTerminalWindow,
+            },
+            {
+              to: '/settings',
+              title: 'Risk & MT5 Guardrails',
+              desc: 'Configure risk %, daily loss cap, session filter & MetaApi.',
+              icon: PiSlidersHorizontal,
+            },
+          ].map((card) => {
+            const Icon = card.icon
+            return (
+              <Link
+                key={card.to}
+                to={card.to}
+                className="group rounded-2xl bg-[#111113] border border-white/[0.07] hover:border-white/[0.16] p-5 space-y-2 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <Icon className="h-5 w-5 text-[#A1A1AA] group-hover:text-[#FAFAFA]" />
+                  <PiArrowUpRight className="h-4 w-4 text-[#71717A] group-hover:text-[#FAFAFA]" />
+                </div>
+                <div className="text-[14px] font-medium text-[#FAFAFA]">{card.title}</div>
+                <p className="text-[13px] text-[#71717A]">{card.desc}</p>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

@@ -11,9 +11,10 @@ export function formatPrice(value: number, decimals?: number, symbol?: string): 
   if (targetDecimals === undefined) {
     if (symbol) {
       if (symbol.includes('JPY')) targetDecimals = 3
-      else if (['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT'].includes(symbol)) targetDecimals = 2
-      else if (['XAUUSD', 'XAGUSD', 'SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'WTI', 'BRENT', 'NATGAS'].includes(symbol)) targetDecimals = 2
-      else if (['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'].includes(symbol)) targetDecimals = 2
+      else if (['XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'XRPUSD', 'ADAUSD', 'DOGEUSD'].some(s => symbol.includes(s))) targetDecimals = 4
+      else if (['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'BNBUSDT', 'BTCUSD', 'SOLUSD', 'BNBUSD'].some(s => symbol.includes(s))) targetDecimals = 2
+      else if (['XAUUSD', 'XAGUSD', 'SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'WTI', 'BRENT', 'NATGAS'].some(s => symbol.includes(s))) targetDecimals = 2
+      else if (['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'].some(s => symbol.includes(s))) targetDecimals = 2
       else targetDecimals = 5
     } else {
       const absVal = Math.abs(value)
@@ -37,31 +38,37 @@ export function formatConfidence(value: number): string {
 }
 
 export function calculateLots(symbol: string, entry: number, sl: number, riskAmount: number): number {
-  const riskDist = Math.abs(entry - sl)
-  if (riskDist <= 0 || riskAmount <= 0) return 0.01
+  let riskDist = Math.abs(entry - sl)
+  if (riskAmount <= 0) return 0.01
 
-  const cleanSymbol = symbol.toUpperCase().replace('/', '')
+  // Prevent division by 0 or micro-distances
+  const minDistance = Math.max(0.0001, (entry || 1) * 0.001)
+  if (riskDist < minDistance) {
+    riskDist = minDistance
+  }
+
+  const cleanSymbol = (symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
   let lotSize = 0.01
 
   if (cleanSymbol.includes('JPY')) {
     lotSize = riskAmount / (riskDist * 650)
   } else if (cleanSymbol.includes('XAU') || cleanSymbol.includes('GOLD')) {
     lotSize = riskAmount / (riskDist * 100)
-  } else if (['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BTCUSD'].some(s => cleanSymbol.includes(s.replace(/USDT|USD/, '')))) {
-    // Crypto 1 unit per lot
-    lotSize = riskAmount / riskDist
-  } else if (['US30', 'NAS100', 'SPX500', 'DE40', 'UK100'].some(s => cleanSymbol.includes(s))) {
-    // Indices 1 contract per lot
-    lotSize = riskAmount / riskDist
+  } else if (cleanSymbol.includes('XAG') || cleanSymbol.includes('SILVER')) {
+    lotSize = riskAmount / (riskDist * 5000)
   } else if (['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'].some(s => cleanSymbol.includes(s))) {
-    // Stocks 1 share per lot
-    lotSize = riskAmount / riskDist
+    // US Stocks on MT5 (1 lot = 100 shares)
+    lotSize = riskAmount / (riskDist * 100)
+    lotSize = Math.min(2.0, lotSize)
   } else {
-    // Standard Forex (EURUSD, etc): 1 lot = 100,000 units
+    // Forex standard lot = 100,000 units
     lotSize = riskAmount / (riskDist * 100000)
+    lotSize = Math.min(5.0, lotSize)
   }
 
-  return Math.max(0.01, Number(lotSize.toFixed(2)))
+  // Safe clamping: minimum 0.01 lots
+  const clamped = Math.max(0.01, lotSize)
+  return Number(clamped.toFixed(2))
 }
 
 export function formatMT4OrderClipboardPayload(signal: {

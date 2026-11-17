@@ -1,404 +1,541 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import {
-  ArrowUpRight,
-  BarChart3,
-  CheckCircle2,
-  ChevronRight,
-  Layers3,
-  Lock,
-  Mail,
-  Play,
-  Search,
-  Sparkles,
-  Target,
-  TrendingUp,
-  X,
-  Zap,
-  BookOpenText,
-  SlidersHorizontal,
-} from 'lucide-react'
-import { StrategiesHeader } from '@/components/layout/StrategiesHeader'
-import { MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
-import { ONBOARDING_STRATEGIES, useOnboardingStore } from '@/stores/useOnboardingStore'
-import { AutoTraderWidget } from '@/components/shared/AutoTraderWidget'
-import { cn } from '@/lib/utils'
+  PiArrowRight,
+  PiChartBar,
+} from 'react-icons/pi';
+import { AutoTraderWidget } from '@/components/shared/AutoTraderWidget';
+import { AdaptiveFeedbackWidget } from '@/components/shared/AdaptiveFeedbackWidget';
+import { useStrategyOptimizer } from '@/hooks/useStrategyOptimizer';
+import { useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore';
+import {
+  ONBOARDING_STRATEGIES,
+  type OnboardingStrategyId,
+  useOnboardingStore,
+} from '@/stores/useOnboardingStore';
+import { useTradingContextStore } from '@/stores/useTradingContextStore';
 
-const STRATEGIES = [
+interface StrategyCatalogMeta {
+  id: OnboardingStrategyId;
+  snakeId: string;
+  name: string;
+  category: 'Reversal' | 'Continuation' | 'Imbalance';
+  timeframes: string;
+  imageSrc: string;
+  summary: string;
+  keyRule: string;
+}
+
+const STRATEGY_CATALOG: StrategyCatalogMeta[] = [
   {
     id: 'wick-rejection',
+    snakeId: 'wick_rejection',
     name: 'Wick Rejection',
-    tagline: 'Reversal at key liquidity sweeps & wick tip rejections',
-    timeframe: '1H / 4H',
-    winRate: '74%',
-    signalsPerDay: 4,
-    type: 'reversal',
-    description: 'Detects high-volume wick exhaustion at key structural liquidity levels with ATR tolerance validation.',
+    category: 'Reversal',
+    timeframes: '1H / 4H',
+    imageSrc: '/brand/strategy-wick-rejection.png',
+    summary: 'Liquidity sweep rejection wicks at key swing highs and lows filtered by ATR volatility.',
+    keyRule: 'Wick >= 2.5x body · Close inside zone',
   },
   {
     id: 'breakout',
-    name: 'Breakout Momentum',
-    tagline: 'Consolidation range expansion with institutional momentum',
-    timeframe: '1H / 4H / 1D',
-    winRate: '68%',
-    signalsPerDay: 3,
-    type: 'continuation',
-    description: 'Captures volatility expansion when price breaks out of multi-candle compression zones with volume confluence.',
+    snakeId: 'breakout',
+    name: 'Breakout',
+    category: 'Continuation',
+    timeframes: '1H / 4H / 1D',
+    imageSrc: '/brand/strategy-breakout.png',
+    summary: 'Range compression breakout backed by volume expansion and higher-timeframe alignment.',
+    keyRule: 'Volume >= 1.8x MA · Full body close out',
   },
   {
     id: 'order-block',
-    name: 'Order Block Retest',
-    tagline: 'Institutional footprint zone retest & order flow entry',
-    timeframe: '1H / 4H',
-    winRate: '71%',
-    signalsPerDay: 3,
-    type: 'reversal',
-    description: 'Identifies major institutional order blocks preceding energetic displacements and tracks mitigation retests.',
+    snakeId: 'order_block',
+    name: 'Order Block',
+    category: 'Reversal',
+    timeframes: '1H / 4H',
+    imageSrc: '/brand/strategy-order-block.png',
+    summary: 'First-touch mitigation of institutional candles prior to fair value gap displacement.',
+    keyRule: 'FVG impulse · Proximal or 50% retest',
   },
   {
     id: 'supply-demand',
+    snakeId: 'supply_demand',
     name: 'Supply & Demand',
-    tagline: 'Imbalance zone reaction & structural flip framework',
-    timeframe: '1H / 4H',
-    winRate: '77%',
-    signalsPerDay: 3,
-    type: 'reversal',
-    description: 'Pins unmitigated supply and demand zones, targeting liquidity voids with precision stop-loss placement.',
+    category: 'Imbalance',
+    timeframes: '1H / 4H',
+    imageSrc: '/brand/strategy-supply-demand.png',
+    summary: 'Fresh unmitigated Drop-Base-Rally and Rally-Base-Drop origin zones.',
+    keyRule: 'Fresh zone · Departure >= 2.0x ATR',
   },
   {
     id: 'trend-following',
+    snakeId: 'trend_following',
     name: 'Trend Following',
-    tagline: 'High-probability pullback continuation in dominant trend',
-    timeframe: '4H / 1D',
-    winRate: '69%',
-    signalsPerDay: 2,
-    type: 'continuation',
-    description: 'Filters market structure for higher-high/higher-low sequences and triggers entries on healthy retracements.',
+    category: 'Continuation',
+    timeframes: '4H / 1D',
+    imageSrc: '/brand/strategy-trend-following.png',
+    summary: 'EMA 20/50/200 aligned trend pullbacks into the 38.2%–61.8% Fibonacci corridor.',
+    keyRule: 'BOS + EMA stack · Trigger candle',
   },
-] as const
+];
 
-type FilterType = 'all' | 'reversal' | 'continuation'
+function normalizeToCanonicalId(raw?: string): OnboardingStrategyId | null {
+  if (!raw) return null;
+  const cleaned = raw.trim().toLowerCase().replace(/_/g, '-');
+  if (cleaned.includes('wick')) return 'wick-rejection';
+  if (cleaned.includes('breakout')) return 'breakout';
+  if (cleaned.includes('order')) return 'order-block';
+  if (cleaned.includes('supply') || cleaned.includes('demand')) return 'supply-demand';
+  if (cleaned.includes('trend')) return 'trend-following';
+  return null;
+}
 
-function getStrategyIcon(id: string) {
-  switch (id) {
-    case 'wick-rejection':
-      return TrendingUp
-    case 'breakout':
-      return ArrowUpRight
-    case 'order-block':
-      return Layers3
-    case 'supply-demand':
-      return Target
-    case 'trend-following':
-      return BarChart3
-    default:
-      return Zap
-  }
+function classifySignalOutcome(status?: string): 'win' | 'loss' | 'open' {
+  if (!status) return 'open';
+  const s = status.toLowerCase();
+  if (s === 'win' || s === 'tp_hit' || s === 'tp') return 'win';
+  if (s === 'loss' || s === 'sl_hit' || s === 'sl') return 'loss';
+  return 'open';
 }
 
 export default function StrategyManager() {
-  const [filter, setFilter] = useState<FilterType>('all')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [email, setEmail] = useState('')
-  const [isSubmitted, setIsSubmitted] = useState(false)
+  const {
+    selectedStrategyIds,
+    toggleSelectedStrategy,
+    setSelectedStrategies,
+    setSelectedStrategy,
+  } = useOnboardingStore();
+  const signals = useAnalysisSignalStore((s) => s.signals);
+  const journal = useTradingContextStore((s) => s.journal);
+  const { status: optimizerStatus } = useStrategyOptimizer();
 
-  const plan = useOnboardingStore((s) => s.plan)
-  const selectedStrategyId = useOnboardingStore((s) => s.selectedStrategyId)
-  const selectedStrategyIds = useOnboardingStore((s) => s.selectedStrategyIds)
+  const [categoryFilter, setCategoryFilter] = useState<
+    'ALL' | 'Reversal' | 'Continuation' | 'Imbalance'
+  >('ALL');
 
-  const activeStrategyIds = plan === 'pro' ? selectedStrategyIds : [selectedStrategyId]
+  const activeSet = useMemo(() => new Set(selectedStrategyIds), [selectedStrategyIds]);
 
-  const filteredStrategies = STRATEGIES.filter((strategy) => {
-    const matchesFilter = filter === 'all' || strategy.type === filter
-    const matchesSearch =
-      strategy.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      strategy.tagline.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      strategy.description.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesFilter && matchesSearch
-  })
+  const metricsByStrategy = useMemo(() => {
+    const map = new Map<
+      OnboardingStrategyId,
+      {
+        detected: number;
+        live: number;
+        wins: number;
+        losses: number;
+        resolved: number;
+        winRate: number | null;
+        multiplier: number;
+        modifiedParams: number;
+        totalParams: number;
+      }
+    >();
 
-  const stats = useMemo(() => {
-    const reversal = STRATEGIES.filter((strategy) => strategy.type === 'reversal').length
-    const continuation = STRATEGIES.filter((strategy) => strategy.type === 'continuation').length
-    const avgWinRate = Math.round(
-      STRATEGIES.reduce((sum, strategy) => sum + parseInt(strategy.winRate, 10), 0) / STRATEGIES.length
-    )
-    const signalCapacity = STRATEGIES.reduce((sum, strategy) => sum + strategy.signalsPerDay, 0)
-
-    return { reversal, continuation, avgWinRate, signalCapacity }
-  }, [])
-
-  function handleJoinWaitlist(event: React.FormEvent) {
-    event.preventDefault()
-    if (email.trim()) {
-      setIsSubmitted(true)
+    for (const meta of STRATEGY_CATALOG) {
+      map.set(meta.id, {
+        detected: 0,
+        live: 0,
+        wins: 0,
+        losses: 0,
+        resolved: 0,
+        winRate: null,
+        multiplier: 1,
+        modifiedParams: 0,
+        totalParams: 0,
+      });
     }
-  }
 
-  function openBetaModal() {
-    setIsModalOpen(true)
-    setIsSubmitted(false)
-    setEmail('')
-  }
+    const seenResolvedKeys = new Set<string>();
+
+    for (const sig of signals) {
+      const id = normalizeToCanonicalId(sig.strategyId || sig.strategyLabel);
+      if (!id) continue;
+      const bucket = map.get(id)!;
+      bucket.detected += 1;
+      const outcome = classifySignalOutcome(sig.status);
+      if (outcome === 'win') {
+        bucket.wins += 1;
+        seenResolvedKeys.add(sig.id);
+      } else if (outcome === 'loss') {
+        bucket.losses += 1;
+        seenResolvedKeys.add(sig.id);
+      } else if (sig.status === 'live' || !sig.status) {
+        bucket.live += 1;
+      }
+    }
+
+    for (const entry of journal) {
+      if (entry.outcome !== 'win' && entry.outcome !== 'loss') continue;
+      if (entry.suggestionKey && seenResolvedKeys.has(entry.suggestionKey)) continue;
+      const id = normalizeToCanonicalId(entry.strategy);
+      if (!id) continue;
+      const bucket = map.get(id)!;
+      if (entry.outcome === 'win') bucket.wins += 1;
+      if (entry.outcome === 'loss') bucket.losses += 1;
+    }
+
+    for (const meta of STRATEGY_CATALOG) {
+      const bucket = map.get(meta.id)!;
+      bucket.resolved = bucket.wins + bucket.losses;
+      bucket.winRate = bucket.resolved > 0 ? (bucket.wins / bucket.resolved) * 100 : null;
+
+      const factory = optimizerStatus?.factoryDefaults?.[meta.snakeId];
+      const learned = optimizerStatus?.learnedParameters?.[meta.snakeId];
+      if (factory) {
+        const entries = Object.entries(factory);
+        bucket.totalParams = entries.length;
+        let ratioSum = 0;
+        let count = 0;
+        let modCount = 0;
+        for (const [param, defVal] of entries) {
+          const liveVal = learned && typeof learned[param] === 'number' ? learned[param] : defVal;
+          if (Math.abs(liveVal - defVal) > 0.001) modCount += 1;
+          if (defVal !== 0) {
+            ratioSum += liveVal / defVal;
+            count += 1;
+          }
+        }
+        bucket.modifiedParams = modCount;
+        bucket.multiplier = count > 0 ? ratioSum / count : 1;
+      }
+    }
+
+    return map;
+  }, [signals, journal, optimizerStatus]);
+
+  const aggregateStats = useMemo(() => {
+    let detected = 0;
+    let wins = 0;
+    let losses = 0;
+    let tunedEngines = 0;
+    for (const m of metricsByStrategy.values()) {
+      detected += m.detected;
+      wins += m.wins;
+      losses += m.losses;
+      if (m.modifiedParams > 0) tunedEngines += 1;
+    }
+    const resolved = wins + losses;
+    const winRate = resolved > 0 ? (wins / resolved) * 100 : null;
+    return {
+      activeCount: activeSet.size,
+      totalCount: ONBOARDING_STRATEGIES.length,
+      detected,
+      resolved,
+      wins,
+      losses,
+      winRate,
+      tunedEngines,
+    };
+  }, [metricsByStrategy, activeSet]);
+
+  const visibleStrategies = useMemo(() => {
+    if (categoryFilter === 'ALL') return STRATEGY_CATALOG;
+    return STRATEGY_CATALOG.filter((s) => s.category === categoryFilter);
+  }, [categoryFilter]);
+
+  const handleEnableAll = () => {
+    setSelectedStrategies(STRATEGY_CATALOG.map((s) => s.id));
+  };
+
+  const handlePauseExtras = () => {
+    setSelectedStrategies([]);
+  };
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white pb-24 lg:pb-8 relative selection:bg-blue-500/20">
-      {/* Sleek Top Header */}
-      <StrategiesHeader title="Strategies" subtitle="Institutional Trading Frameworks" />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Live Auto Trader Controls Widget */}
-        <AutoTraderWidget />
-
-        {/* UNIFIED CONTIGUOUS TERMINAL WORKSPACE (NO FLOATING CARDS) */}
-        <div className="rounded-xl border border-white/[0.08] bg-[#090d14]/95 shadow-2xl backdrop-blur-xl overflow-hidden divide-y divide-white/[0.08]">
-          
-          {/* Top Panel Banner */}
-          <div className="p-5 sm:p-6 bg-[#05080f]/50 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-            <div className="space-y-1.5 max-w-2xl">
-              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                Strategy Execution Engine
-              </div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-                Institutional Algorithmic Strategy Blueprints
-              </h1>
-              <p className="text-[12px] sm:text-[13px] text-slate-400 leading-relaxed">
-                Click any framework to inspect its mathematical entry criteria, stop loss placement rules, invalidation conditions, and live algorithm signal stream.
-              </p>
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] overflow-x-hidden">
+      <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-8">
+        {/* Page Header */}
+        <header className="flex flex-wrap items-end justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 text-[12px] font-medium text-[#71717A]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
+              <span>5 of 5 algorithmic engines unlocked</span>
             </div>
-
-            {/* Metrics Bar inside top panel */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full xl:w-auto xl:min-w-[34rem]">
-              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
-                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Frameworks</p>
-                <p className="mt-1 text-lg font-bold text-white tabular-nums">{STRATEGIES.length}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
-                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Active Stack</p>
-                <p className="mt-1 text-lg font-bold text-emerald-400 tabular-nums">{activeStrategyIds.length}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
-                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Avg Win Rate</p>
-                <p className="mt-1 text-lg font-bold text-blue-400 tabular-nums">{stats.avgWinRate}%</p>
-              </div>
-              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
-                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Daily Capacity</p>
-                <p className="mt-1 text-lg font-bold text-slate-200 tabular-nums">{stats.signalCapacity}/day</p>
-              </div>
-            </div>
+            <h1 className="text-[28px] font-semibold tracking-[-0.03em] leading-[1.15] text-[#FAFAFA]">
+              Strategies
+            </h1>
+            <p className="text-[14px] text-[#A1A1AA] max-w-[65ch] leading-relaxed">
+              Configure active detection engines, inspect rule specifications, and monitor live adaptive parameter tuning.
+            </p>
           </div>
 
-          {/* Controls Bar inside container */}
-          <div className="p-3 bg-[#070b12]/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            {/* Filter Tabs */}
-            <div className="flex items-center gap-1 bg-[#090d14] p-1 rounded-lg border border-white/[0.06]">
-              {(['all', 'reversal', 'continuation'] as const).map((type) => (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={
+                aggregateStats.activeCount === aggregateStats.totalCount
+                  ? handlePauseExtras
+                  : handleEnableAll
+              }
+              className="h-9 px-4 rounded-xl bg-[#18181B] border border-white/[0.08] hover:border-white/[0.16] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+            >
+              {aggregateStats.activeCount === aggregateStats.totalCount
+                ? 'Isolate primary'
+                : 'Enable all engines'}
+            </button>
+
+            <Link
+              to="/backtesting"
+              className="h-9 px-4 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-semibold inline-flex items-center gap-2 transition-colors"
+            >
+              <PiChartBar size={15} />
+              Backtesting workbench
+            </Link>
+          </div>
+        </header>
+
+        {/* Unified Portfolio Summary Bar */}
+        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+          <div className="pb-4 lg:pb-0 lg:pr-6">
+            <p className="text-[12px] font-medium text-[#71717A]">Active strategies</p>
+            <p className="text-[26px] leading-tight font-mono font-semibold tabular-nums text-[#FAFAFA] mt-1.5">
+              {aggregateStats.activeCount}
+              <span className="text-[14px] text-[#71717A] font-normal ml-1">
+                / {aggregateStats.totalCount}
+              </span>
+            </p>
+            <p className="text-[12px] text-[#71717A] mt-1">All core engines unlocked</p>
+          </div>
+
+          <div className="pb-4 lg:pb-0 pl-4 sm:pl-6 lg:px-6 !border-t-0">
+            <p className="text-[12px] font-medium text-[#71717A]">Detected setups</p>
+            <p className="text-[26px] leading-tight font-mono font-semibold tabular-nums text-[#FAFAFA] mt-1.5">
+              {aggregateStats.detected}
+            </p>
+            <p className="text-[12px] text-[#71717A] mt-1">
+              {aggregateStats.detected === 0 ? 'Awaiting scanner feed' : 'Live workspace store'}
+            </p>
+          </div>
+
+          <div className="pt-4 lg:pt-0 pr-4 lg:px-6">
+            <p className="text-[12px] font-medium text-[#71717A]">Resolved trades</p>
+            <p className="text-[26px] leading-tight font-mono font-semibold tabular-nums text-[#FAFAFA] mt-1.5">
+              {aggregateStats.resolved}
+            </p>
+            <p className="text-[12px] font-mono tabular-nums text-[#71717A] mt-1">
+              {aggregateStats.resolved > 0 ? (
+                <>
+                  <span className="text-[#34D399]">{aggregateStats.wins}W</span>
+                  {' / '}
+                  <span className="text-[#F87171]">{aggregateStats.losses}L</span>
+                </>
+              ) : (
+                '0 trades resolved yet'
+              )}
+            </p>
+          </div>
+
+          <div className="pt-4 lg:pt-0 pl-4 sm:pl-6">
+            <p className="text-[12px] font-medium text-[#71717A]">Portfolio win rate</p>
+            <p
+              className={`text-[26px] leading-tight font-mono font-semibold tabular-nums mt-1.5 ${
+                aggregateStats.winRate === null
+                  ? 'text-[#71717A]'
+                  : aggregateStats.winRate >= 50
+                  ? 'text-[#34D399]'
+                  : 'text-[#F87171]'
+              }`}
+            >
+              {aggregateStats.winRate !== null ? `${aggregateStats.winRate.toFixed(1)}%` : '—'}
+            </p>
+            <p className="text-[12px] text-[#71717A] mt-1">
+              <span className="font-mono tabular-nums">{aggregateStats.tunedEngines}</span>{' '}
+              {aggregateStats.tunedEngines === 1 ? 'engine calibrated' : 'engines calibrated'}
+            </p>
+          </div>
+        </section>
+
+        {/* Strategy Cards Grid */}
+        <section className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+              Detection engines
+            </h2>
+
+            <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[#111113] border border-white/[0.07]">
+              {(
+                [
+                  { id: 'ALL', label: 'All' },
+                  { id: 'Reversal', label: 'Reversal' },
+                  { id: 'Continuation', label: 'Continuation' },
+                  { id: 'Imbalance', label: 'Imbalance' },
+                ] as const
+              ).map((cat) => (
                 <button
-                  key={type}
+                  key={cat.id}
                   type="button"
-                  onClick={() => setFilter(type)}
-                  className={cn(
-                    "h-7 px-3 rounded text-[10px] font-extrabold uppercase tracking-wider transition-all",
-                    filter === type
-                      ? "bg-white/[0.1] text-white border border-white/[0.15] shadow-sm"
-                      : "text-slate-400 hover:text-white border border-transparent"
-                  )}
+                  onClick={() => setCategoryFilter(cat.id)}
+                  className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-medium transition-colors ${
+                    categoryFilter === cat.id
+                      ? 'bg-[#FAFAFA] text-[#09090B] font-semibold'
+                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                  }`}
                 >
-                  {type === 'all' ? 'All Frameworks' : type}
+                  {cat.label}
                 </button>
               ))}
             </div>
-
-            {/* Search Input */}
-            <div className="relative flex-1 max-w-xs">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-              <input
-                type="text"
-                placeholder="Search framework rules..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 rounded-lg bg-[#090d14] border border-white/[0.08] text-[11px] text-white placeholder:text-slate-500 focus:outline-none focus:border-white/[0.2] transition-colors"
-              />
-            </div>
           </div>
 
-          {/* Strategy Framework List Table (Contiguous, Zero Floating Cards) */}
-          <div className="divide-y divide-white/[0.06]">
-            {filteredStrategies.map((strategy) => {
-              const Icon = getStrategyIcon(strategy.id)
-              const isActive = activeStrategyIds.includes(strategy.id)
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {visibleStrategies.map((meta) => {
+              const isActive = activeSet.has(meta.id);
+              const stats = metricsByStrategy.get(meta.id)!;
 
               return (
-                <Link
-                  key={strategy.id}
-                  to={`/strategies/${strategy.id}`}
-                  className="group p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors"
+                <article
+                  key={meta.id}
+                  className="rounded-2xl bg-[#111113] border border-white/[0.07] hover:border-white/[0.14] overflow-hidden transition-colors flex flex-col justify-between group"
                 >
-                  {/* Left Metadata & Logic */}
-                  <div className="flex items-start gap-4 min-w-0 flex-1">
-                    <div className="w-10 h-10 rounded-lg bg-[#05080f] border border-white/[0.1] flex items-center justify-center text-blue-400 shrink-0 group-hover:border-blue-500/40 transition-colors mt-0.5">
-                      <Icon size={18} />
-                    </div>
+                  <div>
+                    {/* 16:9 Visual Showcase Strip */}
+                    <Link
+                      to={`/strategies/${meta.id}`}
+                      onClick={() => setSelectedStrategy(meta.id)}
+                      className="block relative aspect-video w-full bg-[#111113] overflow-hidden"
+                    >
+                      <img
+                        src={meta.imageSrc}
+                        alt={`${meta.name} schematic`}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                        style={{
+                          maskImage:
+                            'linear-gradient(to bottom, rgba(0,0,0,1) 58%, rgba(0,0,0,0) 100%)',
+                          WebkitMaskImage:
+                            'linear-gradient(to bottom, rgba(0,0,0,1) 58%, rgba(0,0,0,0) 100%)',
+                        }}
+                      />
 
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="text-[14px] font-bold text-white group-hover:text-blue-300 transition-colors">
-                          {strategy.name}
-                        </h2>
-                        <span
-                          className={cn(
-                            "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0",
-                            isActive
-                              ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                              : "bg-white/[0.04] text-slate-400 border-white/[0.08]"
-                          )}
-                        >
-                          {isActive ? 'Active in Plan' : 'Available'}
+                      <div className="absolute top-3.5 left-3.5 right-3.5 flex items-center justify-between gap-2">
+                        <span className="px-2.5 py-1 rounded-full bg-[#09090B]/80 backdrop-blur-sm border border-white/[0.08] text-[12px] font-medium text-[#A1A1AA]">
+                          {meta.category}
                         </span>
-                        <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-white/[0.04] text-slate-400 border border-white/[0.06]">
-                          {strategy.type}
+                        <span className="px-2.5 py-1 rounded-full bg-[#09090B]/80 backdrop-blur-sm border border-white/[0.08] text-[12px] font-mono tabular-nums text-[#A1A1AA]">
+                          {meta.timeframes}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
-                        {strategy.description}
+                    </Link>
+
+                    {/* Card Body */}
+                    <div className="px-6 pb-5 pt-2 space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <Link
+                            to={`/strategies/${meta.id}`}
+                            onClick={() => setSelectedStrategy(meta.id)}
+                            className="text-[18px] font-medium tracking-[-0.015em] text-[#FAFAFA] hover:text-[#34D399] transition-colors"
+                          >
+                            {meta.name}
+                          </Link>
+                          <p className="text-[12px] text-[#71717A] mt-0.5">{meta.keyRule}</p>
+                        </div>
+
+                        {/* Tactile Enable/Disable Switch */}
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={isActive}
+                          aria-label={`Toggle ${meta.name}`}
+                          onClick={() => toggleSelectedStrategy(meta.id)}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center overflow-hidden rounded-full border p-[3px] transition-colors ${
+                            isActive
+                              ? 'bg-[#34D399]/20 border-[#34D399]/40'
+                              : 'bg-[#18181B] border-white/[0.1]'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 rounded-full transition-transform duration-150 ${
+                              isActive
+                                ? 'translate-x-5 bg-[#34D399]'
+                                : 'translate-x-0 bg-[#71717A]'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      <p className="text-[14px] text-[#A1A1AA] leading-relaxed">
+                        {meta.summary}
                       </p>
                     </div>
                   </div>
 
-                  {/* Right Metrics & Action Link */}
-                  <div className="flex items-center justify-between md:justify-end gap-6 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-white/[0.06]">
-                    <div className="flex items-center gap-4 text-center">
+                  {/* Inline Telemetry & Actions */}
+                  <div className="px-6 pb-6 space-y-4">
+                    <div className="pt-4 border-t border-white/[0.06] grid grid-cols-3 gap-3">
                       <div>
-                        <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Timeframe</span>
-                        <span className="text-[11px] font-bold text-slate-200">{strategy.timeframe}</span>
+                        <p className="text-[12px] text-[#71717A]">Signals</p>
+                        <p className="text-[15px] font-mono font-semibold tabular-nums text-[#FAFAFA] mt-0.5">
+                          {stats.detected}
+                          {stats.live > 0 && (
+                            <span className="text-[12px] font-normal text-[#34D399] ml-1.5">
+                              {stats.live} live
+                            </span>
+                          )}
+                        </p>
                       </div>
+
                       <div>
-                        <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Daily Signals</span>
-                        <span className="text-[11px] font-bold text-slate-200">{strategy.signalsPerDay}/day</span>
+                        <p className="text-[12px] text-[#71717A]">Win rate</p>
+                        <p
+                          className={`text-[15px] font-mono font-semibold tabular-nums mt-0.5 ${
+                            stats.winRate === null
+                              ? 'text-[#71717A]'
+                              : stats.winRate >= 50
+                              ? 'text-[#34D399]'
+                              : 'text-[#F87171]'
+                          }`}
+                        >
+                          {stats.winRate !== null ? `${stats.winRate.toFixed(1)}%` : '—'}
+                        </p>
                       </div>
+
                       <div>
-                        <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Win Rate</span>
-                        <span className="text-[11px] font-extrabold text-emerald-400">{strategy.winRate}</span>
+                        <p className="text-[12px] text-[#71717A]">Multiplier</p>
+                        <p
+                          className={`text-[15px] font-mono font-semibold tabular-nums mt-0.5 ${
+                            stats.modifiedParams > 0 ? 'text-[#34D399]' : 'text-[#FAFAFA]'
+                          }`}
+                        >
+                          {stats.multiplier.toFixed(2)}x
+                        </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-400 group-hover:text-blue-300 transition-colors pl-2">
-                      <BookOpenText className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Inspect Framework</span>
-                      <ArrowUpRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    <div className="pt-4 border-t border-white/[0.06] flex items-center justify-between gap-3">
+                      <Link
+                        to={`/strategies/${meta.id}`}
+                        onClick={() => setSelectedStrategy(meta.id)}
+                        className="text-[13px] font-medium text-[#FAFAFA] hover:text-[#34D399] inline-flex items-center gap-1.5 transition-colors"
+                      >
+                        Inspect rules
+                        <PiArrowRight size={14} />
+                      </Link>
+
+                      <Link
+                        to={`/backtesting?strategy=${meta.id}`}
+                        className="h-8 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] hover:border-white/[0.16] text-[12.5px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors"
+                      >
+                        <PiChartBar size={13} />
+                        Backtest
+                      </Link>
                     </div>
                   </div>
-                </Link>
-              )
+                </article>
+              );
             })}
           </div>
+        </section>
 
-          {/* Bottom Phase 2 Custom Strategy Builder Callout */}
-          <div className="p-5 bg-[#05080f]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
-                <Sparkles size={16} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-[13px] font-bold text-white">Custom Strategy Builder Sandbox</h3>
-                  <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-white/[0.06] text-slate-400 border border-white/[0.08]">Phase 2</span>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-0.5">Design custom entry checkpoints, volatility filters, and backtest execution parameters.</p>
-              </div>
-            </div>
-
-            <button
-              onClick={openBetaModal}
-              className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.12] text-[10px] font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-colors shrink-0"
-            >
-              <Lock size={10} />
-              <span>Request Sandbox Access</span>
-            </button>
+        {/* Execution & Adaptive Engine Area */}
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-5">
+            <AutoTraderWidget />
           </div>
-        </div>
-      </main>
-
-      {/* Beta Access Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="relative w-full max-w-md rounded-xl border border-white/[0.14] bg-[#090d14] p-5 shadow-2xl space-y-4">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
-            >
-              <X size={16} />
-            </button>
-
-            {!isSubmitted ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                    <Sparkles size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-[14px] font-bold text-white">Custom Strategy Builder Beta</h3>
-                    <p className="text-[10px] text-slate-400">Request sandbox access</p>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-white/[0.08] bg-[#05080f] p-3 space-y-2 text-[10px]">
-                  <p className="uppercase font-bold tracking-widest text-slate-500">Visual Rule Compiler Preview</p>
-                  <div className="p-2 rounded bg-[#090d14] border border-white/[0.06] flex justify-between">
-                    <span className="text-slate-300 font-semibold">1. Rejection Wick Ratio</span>
-                    <span className="text-blue-400 font-bold">&gt;= 3:1</span>
-                  </div>
-                  <div className="p-2 rounded bg-[#090d14] border border-white/[0.06] flex justify-between">
-                    <span className="text-slate-300 font-semibold">2. Volume Confluence</span>
-                    <span className="text-emerald-400 font-bold">&gt; 1.5x MA20</span>
-                  </div>
-                </div>
-
-                <form onSubmit={handleJoinWaitlist} className="space-y-2.5">
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                    <input
-                      type="email"
-                      required
-                      placeholder="Enter your trading email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      className="w-full h-9 pl-9 pr-3 rounded-lg border border-white/[0.1] bg-[#05080f] text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-lg"
-                  >
-                    <Play size={12} fill="currentColor" />
-                    Join Strategy Sandbox Beta
-                  </button>
-                </form>
-              </div>
-            ) : (
-              <div className="text-center py-4 space-y-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto">
-                  <CheckCircle2 size={20} />
-                </div>
-                <h3 className="text-[14px] font-bold text-white">Beta Access Requested</h3>
-                <p className="text-xs text-slate-400">
-                  We registered your request for <span className="text-white font-bold">{email}</span>.
-                </p>
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="h-8 px-4 rounded-lg bg-white/[0.06] text-xs font-bold text-slate-200 hover:text-white"
-                >
-                  Return to Frameworks
-                </button>
-              </div>
-            )}
+          <div className="lg:col-span-7">
+            <AdaptiveFeedbackWidget />
           </div>
-        </div>
-      )}
-
-      <MobileFloatingWorkspaceNav />
+        </section>
+      </div>
     </div>
-  )
+  );
 }

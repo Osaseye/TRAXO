@@ -1,77 +1,99 @@
-import { Logo } from '@/components/shared/Logo'
 import { Link } from 'react-router'
-import ScrollReveal from '@/components/ui/ScrollReveal'
 
-const LINKS = [
-  { heading: 'Product',  items: ['Dashboard', 'Strategies', 'Journal', 'Pricing', 'Changelog'] },
-  { heading: 'Platform', items: ['Analyst Mode', 'Risk Tools', 'Signal Engine', 'Autopilot (Phase 2)'] },
-  { heading: 'Company',  items: ['About', 'Blog', 'Careers', 'Contact'] },
-  { heading: 'Legal',    items: ['Privacy', 'Terms', 'Security'] },
+interface FooterLink {
+  label: string
+  href?: string
+  to?: string
+}
+
+const FOOTER_COLUMNS: { heading: string; links: FooterLink[] }[] = [
+  {
+    heading: 'Architecture',
+    links: [
+      { label: 'Execution Pipeline', href: '#how-it-works' },
+      { label: '5 Strategy Engines', href: '#engines' },
+      { label: 'Workspace Preview', href: '#terminal' },
+      { label: 'Capabilities', href: '#stack' },
+    ],
+  },
+  {
+    heading: 'Workspace',
+    links: [
+      { label: 'Launch Terminal', to: '/register' },
+      { label: 'Sign In', to: '/login' },
+      { label: 'Reset Access', to: '/forgot-password' },
+    ],
+  },
 ]
 
 export function LandingFooter() {
   return (
-    <footer className="relative border-t border-white/[0.05] bg-[#09090d] px-4 sm:px-6 py-16 sm:py-20 overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_36%),radial-gradient(circle_at_70%_20%,rgba(59,130,246,0.08),transparent_28%)]" />
-      <div className="absolute inset-0 opacity-[0.1] [background-image:linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] [background-size:52px_52px]" />
+    <footer className="relative border-t border-white/[0.08] bg-[#09090B] px-4 sm:px-6 pt-16 pb-20 sm:pb-28 overflow-hidden">
+      <div className="relative z-10 max-w-6xl mx-auto">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-10">
+          <div className="max-w-sm">
+            <Link to="/" className="inline-flex items-center gap-2.5">
+              <img
+                src="/brand/traxo-mark.png"
+                alt="TRAXO"
+                className="w-6 h-6 object-contain"
+              />
+              <span className="text-[14px] font-bold tracking-[0.14em] uppercase text-[#FAFAFA]">
+                TRAXO
+              </span>
+            </Link>
+            <p className="mt-4 text-sm text-[#71717A] leading-relaxed">
+              Personal algorithmic trading desk. Institutional structure detection, 9-point risk
+              guardrails, and direct MT5 execution.
+            </p>
+          </div>
 
-      <div className="relative mx-auto max-w-7xl">
-        <ScrollReveal>
-        <div className="border-t border-white/[0.08] pt-8 sm:pt-10">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-10 lg:gap-16">
-            <div className="max-w-sm">
-              <div className="flex items-center gap-3">
-                <Logo variant="icon" size="sm" className="h-10 w-10 shrink-0" />
-                <div>
-                  <p className="text-[11px] font-semibold tracking-[0.16em] uppercase text-white/80">TRAXO</p>
-                  <p className="text-[12px] text-white/75">The intelligence layer for serious traders.</p>
-                </div>
+          <div className="grid grid-cols-2 gap-10 sm:gap-16">
+            {FOOTER_COLUMNS.map((col) => (
+              <div key={col.heading}>
+                <p className="text-xs font-semibold tracking-[0.14em] uppercase text-[#71717A]">
+                  {col.heading}
+                </p>
+                <ul className="mt-4 space-y-2.5">
+                  {col.links.map((item) => (
+                    <li key={item.label}>
+                      {item.to ? (
+                        <Link
+                          to={item.to}
+                          className="text-sm text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                        >
+                          {item.label}
+                        </Link>
+                      ) : (
+                        <a
+                          href={item.href}
+                          className="text-sm text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                        >
+                          {item.label}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
-
-              <p className="mt-5 text-[13px] leading-relaxed text-white/70 max-w-md">
-                Build conviction from clean signals, structured risk, and context that matters before the market moves.
-              </p>
-
-              <Link
-                to="/register"
-                className="mt-6 inline-flex items-center justify-center rounded-full border border-[#3b82f6]/30 bg-[#3b82f6]/[0.08] px-5 py-2.5 text-[13px] font-semibold text-[#dbeafe] transition-colors duration-150 hover:bg-[#3b82f6]/[0.14]"
-              >
-                Request access
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-2 gap-6 md:grid-cols-4 lg:gap-10 flex-1">
-              {LINKS.map((col) => (
-                <div key={col.heading}>
-                  <p className="text-[11px] font-semibold tracking-[0.16em] uppercase text-white/70 mb-4">
-                    {col.heading}
-                  </p>
-                  <ul className="space-y-2.5">
-                    {col.items.map((item) => (
-                      <li key={item}>
-                        <span className="text-[13px] text-white/78 hover:text-white transition-colors cursor-pointer">
-                          {item}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-10 pt-6 border-t border-white/[0.08] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[12px] text-white/70">
-            <p>Contact us on: info@traxo.app</p>
-            <p>© 2026 TRAXO. All rights reserved.</p>
+            ))}
           </div>
         </div>
-        </ScrollReveal>
 
-        <div className="pointer-events-none absolute inset-x-0 -bottom-8 sm:-bottom-10 flex justify-center overflow-hidden">
-          <span className="select-none text-[clamp(5rem,20vw,12rem)] font-black leading-none tracking-[-0.08em] text-white/10">
-            TRAXO
-          </span>
+        <div className="mt-12 pt-6 border-t border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-[#71717A]">
+          <p>Contact: info@traxo.app</p>
+          <p>© {new Date().getFullYear()} TRAXO. Personal Execution Desk.</p>
         </div>
+      </div>
+
+      {/* Subtle oversized monochrome watermark */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none select-none absolute inset-x-0 -bottom-6 sm:-bottom-10 flex justify-center overflow-hidden"
+      >
+        <span className="text-[clamp(4.5rem,18vw,11rem)] font-black leading-none tracking-[-0.07em] text-white/[0.04]">
+          TRAXO
+        </span>
       </div>
     </footer>
   )

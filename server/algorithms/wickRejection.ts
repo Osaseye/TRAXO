@@ -202,7 +202,7 @@ function volumeMultiplier(candle: WickRejectionCandle, volumeMa20: number) {
   return candle.volume / volumeMa20
 }
 
-function limitEntryPrice(assetType: WickRejectionAssetType, candle: WickRejectionCandle, direction: SignalDirection) {
+function limitEntryPrice(_assetType: WickRejectionAssetType, candle: WickRejectionCandle, direction: SignalDirection) {
   const midpoint = direction === 'BUY'
     ? candle.low + (Math.min(candle.open, candle.close) - candle.low) * 0.5
     : candle.high - (candle.high - Math.max(candle.open, candle.close)) * 0.5

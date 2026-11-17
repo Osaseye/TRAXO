@@ -1,13 +1,12 @@
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { ArrowLeft, ArrowRight } from 'lucide-react'
-
-const ic =
-  'w-full h-11 px-4 rounded-xl bg-[#0d1117] border border-white/[0.08] text-[13px] text-white placeholder:text-[#2d3748] focus:outline-none focus:border-[#3b82f6]/50 focus:ring-1 focus:ring-[#3b82f6]/20 transition-colors'
+import { motion } from 'framer-motion'
+import { PiArrowLeft, PiArrowRight, PiEnvelopeSimple, PiKey, PiShieldCheck } from 'react-icons/pi'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
+  const emailId = useId()
   const navigate = useNavigate()
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -18,115 +17,101 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white flex">
-
-      {/* Left brand panel (lg+) */}
-      <div className="hidden lg:flex w-[440px] shrink-0 flex-col bg-[#09090d] border-r border-white/[0.05] p-10 relative overflow-hidden">
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[380px] h-[380px] bg-[#3b82f6]/5 blur-[110px] rounded-full pointer-events-none" />
-
-        {/* Wordmark */}
-        <div className="flex items-center gap-2.5 relative">
-          <img src="/TRAXO-icon.png" className="w-7 h-7 object-contain" alt="" />
-          <span className="text-[11px] font-black tracking-[0.2em] uppercase text-white">TRAXO</span>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 flex flex-col justify-center gap-8 relative">
-          <div>
-            <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[#3b82f6] mb-3">
-              Account recovery
-            </p>
-            <h2 className="text-[1.55rem] font-extrabold text-white leading-tight mb-2">
-              Happens to<br />everyone.
-            </h2>
-            <p className="text-[13px] text-[#4b5563] leading-relaxed max-w-xs">
-              Enter your email and we will send you a 6-digit code. Your account and all your data stays exactly as you left it.
-            </p>
-          </div>
-
-          {/* Trust points */}
-          <div className="space-y-3.5">
-            {[
-              'Your account stays fully secure during reset',
-              'Reset code expires in 10 minutes',
-              'Only works with your verified email',
-              'No data is ever deleted during recovery',
-            ].map((item, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <div className="mt-0.5 w-4 h-4 rounded-full bg-[#3b82f6]/10 border border-[#3b82f6]/20 flex items-center justify-center shrink-0">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#3b82f6]" />
-                </div>
-                <span className="text-[12px] text-[#6b7280] leading-snug">{item}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Back to login */}
-          <Link
-            to="/login"
-            className="inline-flex items-center gap-2 text-[12px] text-[#374151] hover:text-white transition-colors w-fit"
-          >
-            <ArrowLeft size={13} />
-            Back to sign in
-          </Link>
-        </div>
-
-        <p className="text-[9px] tracking-[0.25em] uppercase text-[#1e293b] font-bold relative">
-          LOOK FIRST. THEN TRADE.
-        </p>
+    <div className="relative min-h-[100dvh] w-full bg-[#09090B] text-[#FAFAFA] flex flex-col justify-between overflow-x-hidden select-none">
+      {/* ── Ambient Background Canvas ───────────────────────────────────────── */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-[0.14]"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(255,255,255,0.25) 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+          }}
+        />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-[#34D399]/10 via-white/[0.03] to-transparent blur-3xl rounded-full" />
       </div>
 
-      {/* Right form panel */}
-      <div className="flex-1 flex flex-col p-7 sm:p-10 lg:p-14">
-        {/* Mobile wordmark */}
-        <div className="flex items-center gap-2 mb-10 lg:hidden">
-          <img src="/TRAXO-icon.png" className="w-6 h-6 object-contain" alt="" />
-          <span className="text-[11px] font-black tracking-[0.2em] uppercase text-white">TRAXO</span>
-        </div>
+      {/* ── Top Wordmark ────────────────────────────────────────────────────── */}
+      <header className="relative z-10 pt-8 sm:pt-12 px-6 flex justify-center">
+        <Link to="/" className="inline-flex items-center gap-2.5 group focus:outline-none">
+          <div className="relative w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.1] flex items-center justify-center group-hover:border-white/25 transition-colors">
+            <img src="/brand/traxo-mark.png" className="w-5 h-5 object-contain" alt="TRAXO" />
+          </div>
+          <span className="text-[12px] font-mono font-bold tracking-[0.24em] uppercase text-[#FAFAFA]">
+            TRAXO
+          </span>
+        </Link>
+      </header>
 
-        <div className="my-auto w-full max-w-sm">
-          <h1 className="text-[1.75rem] font-extrabold text-white tracking-tight mb-1">
-            Reset password
-          </h1>
-          <p className="text-[13px] text-[#4b5563] mb-8">
-            Enter your email and we will send you a reset code
-          </p>
+      {/* ── Center Open Canvas Recovery ─────────────────────────────────────── */}
+      <main className="relative z-10 flex-1 flex flex-col justify-center items-center px-6 py-10 w-full max-w-md mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full space-y-7"
+        >
+          {/* Header Typography */}
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] font-mono text-[#A1A1AA]">
+              <PiKey className="text-[#34D399]" />
+              <span>STATION RECOVERY</span>
+            </div>
+            <h1 className="text-[26px] sm:text-[30px] font-semibold text-[#FAFAFA] tracking-tight">
+              Reset clearance key
+            </h1>
+            <p className="text-[13px] text-[#71717A]">
+              Enter your registered terminal email to dispatch a secure 6-digit recovery code
+            </p>
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="text-[10px] font-semibold text-[#4b5563] uppercase tracking-wider block mb-2">
-                Email address
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor={emailId} className="text-[11px] font-mono uppercase tracking-wider text-[#71717A] flex items-center justify-between">
+                <span>Terminal Email</span>
+                <span className="text-[10px] text-white/30">REQ</span>
               </label>
-              <input
-                type="email"
-                className={ic}
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
+              <div className="relative flex items-center group">
+                <PiEnvelopeSimple className="absolute left-3.5 text-[#71717A] group-focus-within:text-[#34D399] transition-colors" size={17} />
+                <input
+                  id={emailId}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="operator@traxo.io"
+                  required
+                  autoComplete="email"
+                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
+                />
+              </div>
             </div>
 
             <button
               type="submit"
-              disabled={sent}
-              className="w-full h-11 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] disabled:opacity-50 disabled:cursor-not-allowed text-white text-[13px] font-bold tracking-wide flex items-center justify-center gap-2 transition-colors"
+              className="w-full h-11 mt-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] active:scale-[0.99] text-[#09090B] text-[13px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_0_24px_rgba(255,255,255,0.08)] cursor-pointer"
             >
-              Send reset code <ArrowRight size={14} />
+              <span>Transmit Recovery Code</span>
+              <PiArrowRight size={15} />
             </button>
           </form>
 
-          <div className="mt-8">
+          <div className="text-center pt-2">
             <Link
               to="/login"
-              className="inline-flex items-center gap-1.5 text-[12px] text-[#374151] hover:text-white transition-colors"
+              className="inline-flex items-center gap-1.5 text-[12px] text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
             >
-              <ArrowLeft size={13} /> Back to sign in
+              <PiArrowLeft size={14} />
+              Return to terminal sign in
             </Link>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </main>
+
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      <footer className="relative z-10 pb-6 px-6 flex items-center justify-center gap-2 text-[11px] font-mono text-[#52525B]">
+        <PiShieldCheck className="text-[#34D399]" size={14} />
+        <span>RECOVERY TOKENS EXPIRE AFTER 10 MINUTES</span>
+      </footer>
     </div>
   )
 }

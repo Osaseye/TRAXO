@@ -108,7 +108,6 @@ export function evaluateEntryTriggers(
   if (!pullback.valid) return noEntry
 
   const current      = candles[candles.length - 1]
-  const currentPrice = current.close
   const volRatio     = vma20 > 0 ? current.volume / vma20 : 0
 
   const isBull = direction === 'BULLISH'

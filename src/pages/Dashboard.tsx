@@ -1,182 +1,166 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Time, UTCTimestamp } from 'lightweight-charts'
-import { ChevronDown, X, ArrowUpRight, ArrowDownRight, ExternalLink, Copy, Check, Zap } from 'lucide-react'
+import {
+  PiArrowsClockwise,
+  PiBroadcast,
+  PiCaretDown,
+  PiCaretUp,
+  PiCheck,
+  PiCopy,
+  PiCrosshair,
+  PiLightning,
+  PiMagnifyingGlass,
+  PiRows,
+  PiSidebarSimple,
+  PiSpinnerGap,
+  PiX,
+  PiXCircle,
+} from 'react-icons/pi'
 import { useSearchParams } from 'react-router'
-import { useOnboardingStore } from '@/stores/useOnboardingStore'
-import { useAuthStore } from '@/stores/useAuthStore'
-import { useTradingContextStore } from '@/stores/useTradingContextStore'
-import { ChartPanel, type ChartPanelMarker, type ChartPanelActiveSignal, type ChartPanelManualSetup } from '@/components/dashboard/ChartPanel'
-import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
-import { getMarketRiskContext } from '@/lib/marketRisk'
-import { getCandles, type Candle } from '@/lib/marketData'
+import {
+  MARKET_CATEGORIES,
+  TIMEFRAMES,
+  type MarketCategory,
+  type SymbolOption,
+} from '@/components/layout/DashboardHeader'
+import {
+  ChartPanel,
+  type ChartPanelActiveSignal,
+  type ChartPanelManualSetup,
+  type ChartPanelMarker,
+} from '@/components/dashboard/ChartPanel'
+import { SignalFeed } from '@/components/dashboard/SignalFeed'
+import type { DashboardSignalItem } from '@/components/dashboard/SignalCard'
+import { RiskPanel } from '@/components/dashboard/RiskPanel'
+import { StatsRow } from '@/components/dashboard/StatsRow'
+import { StrategyPanel } from '@/components/dashboard/StrategyPanel'
+import { useMetaApi } from '@/hooks/useMetaApi'
 import { useMarketWebSocket } from '@/hooks/useMarketWebSocket'
-import { useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
-import { riskFromConfidence, priceDigits, type RiskLabel } from '@/lib/signalDetection'
-import { formatMT4OrderClipboardPayload } from '@/lib/utils'
-import { DashboardHeader } from '@/components/layout/DashboardHeader'
-import { cn, formatPrice, calculateLots } from '@/lib/utils'
+import { getCandles, type Candle } from '@/lib/marketData'
+import { getMarketRiskContext } from '@/lib/marketRisk'
+import {
+  priceDigits,
+  riskFromConfidence,
+  runSignalsForStrategies,
+  type RiskLabel,
+} from '@/lib/signalDetection'
+import { calculateLots, cn, formatMT4OrderClipboardPayload, formatPrice } from '@/lib/utils'
+import { useAnalysisSignalStore, type StoredSignal } from '@/stores/useAnalysisSignalStore'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { useOnboardingStore, type OnboardingStrategyId } from '@/stores/useOnboardingStore'
+import { useStrategyStore } from '@/stores/useStrategyStore'
 import { showToast } from '@/stores/useToastStore'
-
-type SymbolOption =
-  | 'EURUSD'
-  | 'GBPUSD'
-  | 'USDJPY'
-  | 'XAUUSD'
-  | 'XAGUSD'
-  | 'AUDUSD'
-  | 'USDCAD'
-  | 'USDCHF'
-  | 'NZDUSD'
-  | 'EURJPY'
-  | 'GBPJPY'
-  | 'EURGBP'
-  | 'SPX500'
-  | 'NAS100'
-  | 'US30'
-  | 'DE40'
-  | 'UK100'
-  | 'JP225'
-  | 'FRA40'
-  | 'AUS200'
-  | 'WTI'
-  | 'BRENT'
-  | 'NATGAS'
-  | 'BTCUSDT'
-  | 'ETHUSD'
-  | 'SOLUSDT'
-  | 'XRPUSDT'
-  | 'ADAUSDT'
-  | 'DOGEUSDT'
-  | 'BNBUSDT'
-  | 'AAPL'
-  | 'MSFT'
-  | 'NVDA'
-  | 'TSLA'
-  | 'AMZN'
-  | 'META'
-  | 'GOOGL'
-  | 'NFLX'
-  | 'AMD'
-  | 'COIN'
-  | 'MSTR'
-  | 'SMCI'
-  | 'MNQ'
+import {
+  useTradingContextStore,
+  type ChartSymbol,
+  type ChartTimeframe,
+} from '@/stores/useTradingContextStore'
+import type { DashboardStats, Strategy, StrategyId } from '@/types'
 
 type TradeAction = 'BUY' | 'SELL'
+type InspectorTab = 'setups' | 'planner' | 'risk'
+type DockTab = 'positions' | 'orders'
 
-interface TradeHistoryMarker {
+interface PendingOrder {
   id: string
-  time: UTCTimestamp
-  pnl: 'WIN' | 'LOSS'
+  symbol: string
+  type: string
+  volume: number
+  openPrice: number
+  currentPrice?: number
+  sl?: number
+  tp?: number
+  state?: string
+  comment?: string
+  time?: string
 }
 
-interface ManualSetup {
+interface LiveQuote {
+  bid: number | null
+  ask: number | null
+  spreadPips: number | null
+  source: 'mt5' | 'feed'
+}
+
+interface ManualPlannerState {
   time: UTCTimestamp
   entry: number
   action: TradeAction
-  suggestedAction: TradeAction
-  confidence: number
-  risk: RiskLabel
-  reason: string[]
+  entryType: 'market' | 'limit'
+  sl: number
+  tp: number
   range: number
   digits: number
-  generated: boolean
-  sl: number | null
-  tp: number | null
-  rr: number
+  activeOnChart: boolean
 }
 
-interface MoneyContext {
-  riskBudget: number
-  dailyLossCap: number
-  todayLoss: number
-  remainingDailyLoss: number
-  slDistancePct: number
-  suggestedPosition: number
-  maxLossAtSL: number
-  positionPctOfBalance: number
-  capitalRisk: RiskLabel
+interface EngineDef {
+  storeId: StrategyId
+  kebabId: OnboardingStrategyId
+  name: string
+  description: string
 }
 
-const FX_SYMBOLS: SymbolOption[] = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'EURJPY', 'GBPJPY', 'EURGBP']
-const METAL_SYMBOLS: SymbolOption[] = ['XAUUSD', 'XAGUSD']
-const INDEX_SYMBOLS: SymbolOption[] = ['SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'FRA40', 'AUS200']
-const ENERGY_SYMBOLS: SymbolOption[] = ['WTI', 'BRENT', 'NATGAS']
-const CRYPTO_SYMBOLS: SymbolOption[] = ['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'BNBUSDT']
-const STOCK_SYMBOLS: SymbolOption[] = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI']
-const FUTURES_SYMBOLS: SymbolOption[] = ['MNQ']
+const ENGINE_DEFINITIONS: EngineDef[] = [
+  {
+    storeId: 'wick_rejection',
+    kebabId: 'wick-rejection',
+    name: 'Wick Rejection',
+    description: 'Liquidity sweep and rejection wick reversal engine.',
+  },
+  {
+    storeId: 'breakout',
+    kebabId: 'breakout',
+    name: 'Breakout',
+    description: 'Consolidation range expansion with momentum filter.',
+  },
+  {
+    storeId: 'order_block',
+    kebabId: 'order-block',
+    name: 'Order Block',
+    description: 'Institutional displacement and mitigation zone retest.',
+  },
+  {
+    storeId: 'supply_demand',
+    kebabId: 'supply-demand',
+    name: 'Supply & Demand',
+    description: 'Imbalance zone reaction and structural flip setups.',
+  },
+  {
+    storeId: 'trend_following',
+    kebabId: 'trend-following',
+    name: 'Trend Following',
+    description: 'Pullback continuation aligned with dominant structure.',
+  },
+]
 
-const STRATEGY_LABELS: Record<string, string> = {
-  'wick-rejection': 'Wick Rejection',
-  breakout: 'Breakout',
-  'order-block': 'Order Block',
-  'supply-demand': 'Supply & Demand',
-  'trend-following': 'Trend Following',
+const CANONICAL_KEBAB_MAP: Record<string, OnboardingStrategyId> = {
+  wick_rejection: 'wick-rejection',
+  'wick-rejection': 'wick-rejection',
+  breakout: 'breakout',
+  order_block: 'order-block',
+  'order-block': 'order-block',
+  supply_demand: 'supply-demand',
+  'supply-demand': 'supply-demand',
+  trend_following: 'trend-following',
+  'trend-following': 'trend-following',
 }
 
-function hash(input: string) {
-  let h = 2166136261
-  for (let i = 0; i < input.length; i++) {
-    h ^= input.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return Math.abs(h)
+function getCategoryForSymbol(sym: string): MarketCategory {
+  if ((MARKET_CATEGORIES[0]?.symbols as string[]).includes(sym)) return 'forex'
+  if ((MARKET_CATEGORIES[1]?.symbols as string[]).includes(sym)) return 'metals'
+  return 'stocks'
 }
 
-function buildMoneyContext(
-  balance: number,
-  riskPerTradePct: number,
-  maxDailyLossPct: number,
-  todayLoss: number,
-  consecutiveLosses: number,
-  todayTrades: number,
-  entry: number,
-  sl: number
-): MoneyContext {
-  const safeBalance = Math.max(balance, 0)
-  const riskBudget = safeBalance * (Math.max(riskPerTradePct, 0) / 100)
-  const dailyLossCap = safeBalance * (Math.max(maxDailyLossPct, 0) / 100)
-  const remainingDailyLoss = Math.max(0, dailyLossCap - todayLoss)
-  const slDistancePct = entry > 0 ? Math.abs(entry - sl) / entry : 0
-
-  // No leverage assumption for now: cap suggested position to available balance.
-  let behaviorFactor = 1
-  if (consecutiveLosses >= 2) behaviorFactor *= 0.8
-  if (consecutiveLosses >= 4) behaviorFactor *= 0.65
-  if (todayTrades >= 5) behaviorFactor *= 0.85
-  if (todayTrades >= 7) behaviorFactor *= 0.7
-
-  const adjustedRiskBudget = riskBudget * behaviorFactor
-  const rawPosition = slDistancePct > 0 ? adjustedRiskBudget / slDistancePct : 0
-  const maxDeployPct = 0.25
-  const maxByBalancePolicy = safeBalance * maxDeployPct
-  const suggestedPosition = Math.min(rawPosition, safeBalance, maxByBalancePolicy)
-  const maxLossAtSL = suggestedPosition * slDistancePct
-  const positionPctOfBalance = safeBalance > 0 ? (suggestedPosition / safeBalance) * 100 : 0
-
-  let capitalRisk: RiskLabel = 'Low'
-  if (remainingDailyLoss <= 0 || maxLossAtSL > remainingDailyLoss * 0.9) {
-    capitalRisk = 'High'
-  } else if (maxLossAtSL > remainingDailyLoss * 0.55) {
-    capitalRisk = 'Medium'
-  }
-
-  return {
-    riskBudget: adjustedRiskBudget,
-    dailyLossCap,
-    todayLoss,
-    remainingDailyLoss,
-    slDistancePct,
-    suggestedPosition,
-    maxLossAtSL,
-    positionPctOfBalance,
-    capitalRisk,
-  }
+function formatCategoryLabel(cat: MarketCategory): string {
+  if (cat === 'forex') return 'Forex'
+  if (cat === 'metals') return 'Metals'
+  return 'Stocks'
 }
 
-function generateLevels(entry: number, action: TradeAction, range: number, digits: number) {
-  const slGap = range * 1.15
+function generateManualLevels(entry: number, action: TradeAction, range: number, digits: number) {
+  const safeRange = Math.max(range, entry * 0.0015)
+  const slGap = safeRange * 1.15
   const rr = 2.2
   const tpGap = slGap * rr
   const sl = action === 'BUY' ? entry - slGap : entry + slGap
@@ -184,7 +168,6 @@ function generateLevels(entry: number, action: TradeAction, range: number, digit
   return {
     sl: Number(sl.toFixed(digits)),
     tp: Number(tp.toFixed(digits)),
-    rr,
   }
 }
 
@@ -192,41 +175,365 @@ function signalMarkerKey(signal: { strategyId: string; direction: string; time: 
   return `${signal.strategyId}:${signal.direction}:${signal.time}`
 }
 
+function normalizeStrategyToKebab(id: string): string {
+  return CANONICAL_KEBAB_MAP[id] ?? id.replace(/_/g, '-')
+}
+
+function defaultPlannerLevels(
+  symbol: string,
+  lastCandle: Candle | undefined,
+  action: TradeAction
+): ManualPlannerState {
+  const digits = priceDigits(symbol)
+  const basePrice =
+    lastCandle?.close ?? (symbol.includes('JPY') ? 150.0 : symbol.includes('XAU') ? 2650.0 : 1.085)
+  const range = lastCandle
+    ? Math.max(lastCandle.high - lastCandle.low, basePrice * 0.002)
+    : basePrice * 0.002
+  const levels = generateManualLevels(basePrice, action, range, digits)
+  return {
+    time: lastCandle?.time ?? (Math.floor(Date.now() / 1000) as UTCTimestamp),
+    entry: Number(basePrice.toFixed(digits)),
+    action,
+    entryType: 'market',
+    sl: levels.sl,
+    tp: levels.tp,
+    range,
+    digits,
+    activeOnChart: false,
+  }
+}
+
 export default function Dashboard() {
-  const displayName = useAuthStore((s) => s.user?.displayName || s.user?.fullName || s.user?.email || 'Trader')
+  const displayName = useAuthStore(
+    (s) => s.user?.displayName || s.user?.fullName || s.user?.email || 'Operator'
+  )
   const [searchParams, setSearchParams] = useSearchParams()
-  const { plan, selectedStrategyId, selectedStrategyIds } = useOnboardingStore()
+
+  const { selectedStrategyIds, toggleSelectedStrategy, setSelectedStrategies } =
+    useOnboardingStore()
+  const storeStrategies = useStrategyStore((s) => s.strategies)
+  const setStoreStrategies = useStrategyStore((s) => s.setStrategies)
+  const toggleStoreStrategy = useStrategyStore((s) => s.toggleStrategy)
+
   const {
     accountBalance,
+    riskMode,
+    setRiskMode,
+    fixedRiskAmount,
+    setFixedRiskAmount,
     riskPerTradePct,
+    setRiskPerTradePct,
     maxDailyLossPct,
+    autoTradeMaxPositions,
+    autoTradeSpreadCapPips,
+    autoTradeSessionFilter,
     journal,
     logSuggestionDecision,
     setJournalOutcome,
   } = useTradingContextStore()
-  const activeStrategyIds = useMemo(() => {
-    if (plan === 'pro') {
-      const picked = selectedStrategyIds.filter((id) => Boolean(STRATEGY_LABELS[id]))
-      return picked.length > 0 ? picked.slice(0, 5) : [selectedStrategyId]
-    }
-    return [selectedStrategyId]
-  }, [plan, selectedStrategyId, selectedStrategyIds])
 
-  const strategyLabel =
-    plan === 'pro' && activeStrategyIds.length > 1
-      ? `Multi-Strategy (${activeStrategyIds.length})`
-      : STRATEGY_LABELS[activeStrategyIds[0]] ?? 'Wick Rejection'
   const symbol = useTradingContextStore((s) => s.chartSymbol)
   const setSymbol = useTradingContextStore((s) => s.setChartSymbol)
   const timeframe = useTradingContextStore((s) => s.chartTimeframe)
   const setTimeframe = useTradingContextStore((s) => s.setChartTimeframe)
-  const [loading, setLoading] = useState(true)
-  const [candles, setCandles] = useState<Candle[]>([])
+
   const allSignals = useAnalysisSignalStore((s) => s.signals)
+  const addSignals = useAnalysisSignalStore((s) => s.addSignals)
+
+  const {
+    account,
+    positions: metaPositions,
+    executeManualTrade,
+    closeOpenPosition,
+    refreshPositions,
+    refreshAccount,
+    loading: metaLoading,
+  } = useMetaApi()
+
+  // Terminal UI states
+  const [inspectorOpen, setInspectorOpen] = useState(true)
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('setups')
+  const [dockVisible, setDockVisible] = useState(true)
+  const [dockExpanded, setDockExpanded] = useState(true)
+  const [dockTab, setDockTab] = useState<DockTab>('positions')
+  const [signalScope, setSignalScope] = useState<'chart' | 'all'>('chart')
+
+  // Symbol selector dropdown state
+  const [symbolPickerOpen, setSymbolPickerOpen] = useState(false)
+  const [pickerCategory, setPickerCategory] = useState<MarketCategory>(() =>
+    getCategoryForSymbol(symbol)
+  )
+  const [symbolSearch, setSymbolSearch] = useState('')
+  const symbolPickerRef = useRef<HTMLDivElement>(null)
+
+  // Chart & scan state
+  const [loading, setLoading] = useState(true)
+  const [scanning, setScanning] = useState(false)
+  const [candles, setCandles] = useState<Candle[]>([])
+  const [hoveredSignalId, setHoveredSignalId] = useState<string | null>(null)
+  const [lockedSignalId, setLockedSignalId] = useState<string | null>(null)
+  const [focusTime, setFocusTime] = useState<UTCTimestamp | null>(null)
+  const [focusNonce, setFocusNonce] = useState(0)
+
+  // Live quote & pending orders
+  const [liveQuote, setLiveQuote] = useState<LiveQuote>({
+    bid: null,
+    ask: null,
+    spreadPips: null,
+    source: 'feed',
+  })
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([])
+  const [closingPosId, setClosingPosId] = useState<string | null>(null)
+  const [cancelingOrderId, setCancelingOrderId] = useState<string | null>(null)
+  const [executingTrade, setExecutingTrade] = useState(false)
+  const [executingChartSignal, setExecutingChartSignal] = useState(false)
+  const [orderCopied, setOrderCopied] = useState(false)
+  const [dismissedNoticeKeys, setDismissedNoticeKeys] = useState<string[]>([])
+
+  // Manual planner state
+  const [manualPlanner, setManualPlanner] = useState<ManualPlannerState>(() =>
+    defaultPlannerLevels(symbol, undefined, 'BUY')
+  )
+
+  // Sync URL query params -> store
+  useEffect(() => {
+    const urlSymbol = searchParams.get('symbol')
+    const urlTimeframe = searchParams.get('timeframe')
+    if (urlSymbol && urlSymbol !== symbol) setSymbol(urlSymbol as ChartSymbol)
+    if (urlTimeframe && urlTimeframe !== timeframe) setTimeframe(urlTimeframe as ChartTimeframe)
+  }, [searchParams, symbol, timeframe, setSymbol, setTimeframe])
+
+  // Close symbol dropdown on outside click
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (symbolPickerRef.current && !symbolPickerRef.current.contains(e.target as Node)) {
+        setSymbolPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [])
+
+  // Unlock all 5 engines cleanly if onboarding store only had 1 default or empty
+  const activeEngineKebabs = useMemo<OnboardingStrategyId[]>(() => {
+    const valid = selectedStrategyIds.filter((id) =>
+      ENGINE_DEFINITIONS.some((e) => e.kebabId === id)
+    )
+    return valid.length > 0 ? valid : ENGINE_DEFINITIONS.map((e) => e.kebabId)
+  }, [selectedStrategyIds])
+
+  // Compute live per-engine counts & win rates from real signal store
+  const engineStats = useMemo(() => {
+    const counts: Record<string, number> = {}
+    const wins: Record<string, number> = {}
+    const settled: Record<string, number> = {}
+
+    for (const def of ENGINE_DEFINITIONS) {
+      counts[def.storeId] = 0
+      wins[def.storeId] = 0
+      settled[def.storeId] = 0
+    }
+
+    for (const sig of allSignals) {
+      const kebab = normalizeStrategyToKebab(sig.strategyId)
+      const def = ENGINE_DEFINITIONS.find((d) => d.kebabId === kebab)
+      if (!def) continue
+      counts[def.storeId] = (counts[def.storeId] ?? 0) + 1
+      const st = (sig.status || '').toLowerCase()
+      if (st === 'win' || st === 'tp_hit') {
+        wins[def.storeId] = (wins[def.storeId] ?? 0) + 1
+        settled[def.storeId] = (settled[def.storeId] ?? 0) + 1
+      } else if (st === 'loss' || st === 'sl_hit') {
+        settled[def.storeId] = (settled[def.storeId] ?? 0) + 1
+      }
+    }
+
+    return { counts, wins, settled }
+  }, [allSignals])
+
+  // Keep useStrategyStore synchronized with the 5 engines + live store metrics
+  useEffect(() => {
+    const nextStrategies: Strategy[] = ENGINE_DEFINITIONS.map((def) => {
+      const existing = storeStrategies.find((s) => s.id === def.storeId)
+      const totalSignals = engineStats.counts[def.storeId] ?? 0
+      const settledCount = engineStats.settled[def.storeId] ?? 0
+      const winCount = engineStats.wins[def.storeId] ?? 0
+      const active =
+        existing !== undefined
+          ? activeEngineKebabs.includes(def.kebabId)
+          : activeEngineKebabs.includes(def.kebabId)
+
+      return {
+        id: def.storeId,
+        name: def.name,
+        description: def.description,
+        active,
+        winRate: settledCount > 0 ? winCount / settledCount : 0,
+        totalSignals,
+        avgRR: 2.2,
+      }
+    })
+
+    const unchanged =
+      storeStrategies.length === nextStrategies.length &&
+      nextStrategies.every((s, idx) => {
+        const cur = storeStrategies[idx]
+        return (
+          cur &&
+          cur.id === s.id &&
+          cur.active === s.active &&
+          cur.totalSignals === s.totalSignals &&
+          cur.winRate === s.winRate
+        )
+      })
+
+    if (!unchanged) {
+      setStoreStrategies(nextStrategies)
+    }
+  }, [activeEngineKebabs, engineStats, storeStrategies, setStoreStrategies])
+
+  const handleToggleEngine = useCallback(
+    (id: StrategyId) => {
+      const def = ENGINE_DEFINITIONS.find((d) => d.storeId === id)
+      if (!def) return
+      toggleStoreStrategy(id)
+      const currentlyOn = activeEngineKebabs.includes(def.kebabId)
+      if (currentlyOn && activeEngineKebabs.length === 1) {
+        setSelectedStrategies([def.kebabId])
+        return
+      }
+      toggleSelectedStrategy(def.kebabId)
+    },
+    [activeEngineKebabs, setSelectedStrategies, toggleSelectedStrategy, toggleStoreStrategy]
+  )
+
+  const handleSelectSymbol = useCallback(
+    (nextSym: SymbolOption) => {
+      setSymbol(nextSym)
+      setSearchParams({ symbol: nextSym, timeframe }, { replace: true })
+      setSymbolPickerOpen(false)
+      setSymbolSearch('')
+    },
+    [setSearchParams, setSymbol, timeframe]
+  )
+
+  const handleSelectTimeframe = useCallback(
+    (nextTf: ChartTimeframe) => {
+      setTimeframe(nextTf)
+      setSearchParams({ symbol, timeframe: nextTf }, { replace: true })
+    },
+    [setSearchParams, setTimeframe, symbol]
+  )
+
+  // Fetch candles when symbol or timeframe changes
+  useEffect(() => {
+    let cancelled = false
+    const initTimer = setTimeout(() => {
+      setLoading(true)
+      setHoveredSignalId(null)
+      setLockedSignalId(null)
+      setCandles([])
+    }, 0)
+
+    const loadCandles = async () => {
+      const generatedCandles = await getCandles(symbol, timeframe, 2000)
+      if (cancelled) return
+      setCandles(generatedCandles)
+      setLoading(false)
+      const last = generatedCandles[generatedCandles.length - 1]
+      setManualPlanner((prev) => ({
+        ...defaultPlannerLevels(symbol, last, prev.action),
+        activeOnChart: false,
+      }))
+    }
+
+    void loadCandles()
+
+    return () => {
+      cancelled = true
+      clearTimeout(initTimer)
+    }
+  }, [symbol, timeframe])
+
+  // Real-time WebSocket candle updates
+  useMarketWebSocket({
+    symbol,
+    timeframe,
+    candles,
+    enabled: candles.length > 0,
+    onCandleUpdate: (nextCandles) => {
+      setCandles(nextCandles as Candle[])
+    },
+  })
+
+  // Fetch live broker quote & pending orders
+  const fetchLiveQuote = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/metaapi/quote?symbol=${encodeURIComponent(symbol)}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data && typeof data.bid === 'number' && typeof data.ask === 'number') {
+          setLiveQuote({
+            bid: data.bid,
+            ask: data.ask,
+            spreadPips: typeof data.spreadPips === 'number' ? data.spreadPips : null,
+            source: 'mt5',
+          })
+          return
+        }
+      }
+    } catch {
+      // Fall back to candle feed via effectiveBid/effectiveAsk
+    }
+    setLiveQuote({
+      bid: null,
+      ask: null,
+      spreadPips: null,
+      source: 'feed',
+    })
+  }, [symbol])
+
+  const fetchPendingOrders = useCallback(async () => {
+    try {
+      const res = await fetch('/api/metaapi/orders')
+      if (res.ok) {
+        const data = await res.json()
+        setPendingOrders(Array.isArray(data.orders) ? data.orders : [])
+      }
+    } catch {
+      // Endpoint unavailable when offline
+    }
+  }, [])
+
+  useEffect(() => {
+    const initialTimer = setTimeout(() => {
+      void fetchLiveQuote()
+      void fetchPendingOrders()
+    }, 0)
+    const timer = setInterval(() => {
+      void fetchLiveQuote()
+      void fetchPendingOrders()
+    }, 5000)
+    return () => {
+      clearTimeout(initialTimer)
+      clearInterval(timer)
+    }
+  }, [fetchLiveQuote, fetchPendingOrders])
+
+  // Fallback live bid/ask from latest candle when MT5 quote is offline
+  const effectiveBid = liveQuote.bid ?? candles[candles.length - 1]?.close ?? null
+  const effectiveAsk = liveQuote.ask ?? candles[candles.length - 1]?.close ?? null
+  const effectiveSpreadPips = liveQuote.spreadPips
+
+  // Signals filtered for current chart + active engines
+  const activeEngineSet = useMemo(() => new Set<string>(activeEngineKebabs), [activeEngineKebabs])
+
   const chartSignals = useMemo(() => {
-    const bySetup = new Map<string, typeof allSignals[number]>()
+    const bySetup = new Map<string, StoredSignal>()
     for (const signal of allSignals) {
       if (signal.symbol !== symbol || signal.timeframe !== timeframe) continue
+      if (!activeEngineSet.has(normalizeStrategyToKebab(signal.strategyId))) continue
       const key = signalMarkerKey(signal)
       const existing = bySetup.get(key)
       if (!existing || (existing.status !== 'live' && signal.status === 'live')) {
@@ -234,69 +541,49 @@ export default function Dashboard() {
       }
     }
     return Array.from(bySetup.values()).sort((a, b) => b.time - a.time)
-  }, [allSignals, symbol, timeframe])
-  
-  const signals = chartSignals
-  const [hoveredSignalId, setHoveredSignalId] = useState<string | null>(null)
-  const [lockedSignalId, setLockedSignalId] = useState<string | null>(null)
-  const [mouse, setMouse] = useState({ x: 24, y: 120 })
-  const [manualSetup, setManualSetup] = useState<ManualSetup | null>(null)
-  const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null)
-  const [draggingPopup, setDraggingPopup] = useState(false)
-  const [dismissedNoticeKeys, setDismissedNoticeKeys] = useState<string[]>([])
-  const [orderCopied, setOrderCopied] = useState(false)
-  const dragOffsetRef = useRef({ x: 0, y: 0 })
+  }, [activeEngineSet, allSignals, symbol, timeframe])
 
-  const handleCopyMT4Order = (sig: { symbol: string; direction: string; entry: number; sl: number; tp: number }, riskAmt?: number) => {
-    const payload = formatMT4OrderClipboardPayload({
-      symbol: sig.symbol,
-      direction: sig.direction,
-      entry: sig.entry,
-      sl: sig.sl,
-      tp: sig.tp,
-      riskAmount: riskAmt,
-    })
-    navigator.clipboard.writeText(payload)
-    setOrderCopied(true)
-    setTimeout(() => setOrderCopied(false), 2000)
-  }
-
-
-
-  useEffect(() => {
-    const urlSymbol = searchParams.get('symbol')
-    const urlTimeframe = searchParams.get('timeframe')
-    if (urlSymbol && urlSymbol !== symbol) setSymbol(urlSymbol as typeof symbol)
-    if (urlTimeframe && urlTimeframe !== timeframe) setTimeframe(urlTimeframe as typeof timeframe)
-  }, [searchParams, symbol, timeframe, setSymbol, setTimeframe])
+  const feedSignals = useMemo(() => {
+    if (signalScope === 'chart') return chartSignals
+    return allSignals
+      .filter((s) => activeEngineSet.has(normalizeStrategyToKebab(s.strategyId)))
+      .slice(0, 60)
+  }, [activeEngineSet, allSignals, chartSignals, signalScope])
 
   const hoveredSignal = useMemo(
-    () => signals.find((s) => s.id === hoveredSignalId) ?? null,
-    [signals, hoveredSignalId]
+    () => chartSignals.find((s) => s.id === hoveredSignalId) ?? null,
+    [chartSignals, hoveredSignalId]
   )
 
   const lockedSignal = useMemo(
-    () => signals.find((s) => s.id === lockedSignalId) ?? null,
-    [signals, lockedSignalId]
+    () => chartSignals.find((s) => s.id === lockedSignalId) ?? null,
+    [chartSignals, lockedSignalId]
   )
 
-  const activeSignal = lockedSignal ?? hoveredSignal
-  const activeLiveSignal = activeSignal?.status === 'live' ? activeSignal : null
+  const activeLiveSignal = useMemo(
+    () => chartSignals.find((s) => s.status === 'live') ?? null,
+    [chartSignals]
+  )
+
   const marketRiskContext = useMemo(
-    () => getMarketRiskContext(symbol, timeframe, activeStrategyIds.length),
-    [symbol, timeframe, activeStrategyIds.length]
+    () => getMarketRiskContext(symbol, timeframe, activeEngineKebabs.length),
+    [symbol, timeframe, activeEngineKebabs.length]
   )
 
+  // Account & Journal Analytics
+  const liveEquity = account?.connected
+    ? account.equity ?? account.balance ?? accountBalance
+    : accountBalance
+  const liveBalance = account?.connected
+    ? account.balance ?? accountBalance
+    : accountBalance
 
-  useMarketWebSocket({
-    symbol,
-    timeframe,
-    candles,
-    enabled: candles.length > 0,
-    onCandleUpdate: (nextCandles: any) => {
-      setCandles(nextCandles)
-    },
-  })
+  const activeRiskUsd = useMemo(() => {
+    if (riskMode === 'fixedAmount' && fixedRiskAmount > 0) {
+      return fixedRiskAmount
+    }
+    return Math.max(1, (liveBalance * Math.max(0.1, riskPerTradePct)) / 100)
+  }, [fixedRiskAmount, liveBalance, riskMode, riskPerTradePct])
 
   const todayLoss = useMemo(() => {
     const start = new Date()
@@ -316,437 +603,861 @@ export default function Dashboard() {
     const sorted = [...journal]
       .filter((j) => j.taken && (j.outcome === 'win' || j.outcome === 'loss' || j.outcome === 'breakeven'))
       .sort((a, b) => b.createdAt - a.createdAt)
-
     let count = 0
     for (const j of sorted) {
-      if (j.outcome === 'loss') {
-        count++
-      } else {
-        break
-      }
+      if (j.outcome === 'loss') count++
+      else break
     }
     return count
   }, [journal])
 
+  const totalOpenProfit = useMemo(
+    () => metaPositions.reduce((sum, p) => sum + (p.profit || 0), 0),
+    [metaPositions]
+  )
+
+  const dashboardStats = useMemo<DashboardStats>(() => {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const startSec = Math.floor(start.getTime() / 1000)
+    const signalsToday = allSignals.filter((s) => {
+      const tSec = s.time > 1e12 ? Math.floor(s.time / 1000) : s.time
+      return tSec >= startSec
+    }).length
+
+    const settled = journal.filter((j) => j.taken && (j.outcome === 'win' || j.outcome === 'loss'))
+    const wins = settled.filter((j) => j.outcome === 'win').length
+    const weeklyWinRate = settled.length > 0 ? wins / settled.length : 0
+
+    return {
+      signalsToday,
+      weeklyWinRate,
+      activeTrades: metaPositions.length + pendingOrders.length,
+      pnlToday: totalOpenProfit,
+    }
+  }, [allSignals, journal, metaPositions.length, pendingOrders.length, totalOpenProfit])
+
+  const currentLossPct = liveBalance > 0 ? (todayLoss / liveBalance) * 100 : 0
+
   const journalMarkers = useMemo(() => {
     return journal
-      .filter((j) => j.symbol === symbol && j.timeframe === timeframe && (j.outcome === 'win' || j.outcome === 'loss' || j.outcome === 'breakeven'))
+      .filter(
+        (j) =>
+          j.symbol === symbol &&
+          j.timeframe === timeframe &&
+          j.createdAt > 0 &&
+          (j.outcome === 'win' || j.outcome === 'loss' || j.outcome === 'breakeven')
+      )
       .slice(0, 12)
       .map((j) => ({
         id: `hist-${j.id}`,
-        // eslint-disable-next-line react-hooks/purity
-        time: j.createdAt ? (Math.floor(j.createdAt / 1000) as UTCTimestamp) : (Math.floor(Date.now() / 1000) as UTCTimestamp),
-        pnl: j.outcome === 'loss' ? 'LOSS' : 'WIN',
-      })) satisfies TradeHistoryMarker[]
+        time: Math.floor(j.createdAt / 1000) as UTCTimestamp,
+        pnl: (j.outcome === 'loss' ? 'LOSS' : 'WIN') as 'WIN' | 'LOSS',
+      }))
   }, [journal, symbol, timeframe])
 
-  const lockedSuggestionKey = lockedSignal ? `auto:${symbol}:${timeframe}:${lockedSignal.id}` : null
-  const lockedJournal = useMemo(
-    () => (lockedSuggestionKey ? journal.find((j) => j.suggestionKey === lockedSuggestionKey) ?? null : null),
-    [journal, lockedSuggestionKey]
-  )
-
-  const lockedMoneyContext = useMemo(() => {
-    if (!lockedSignal) return null
-    return buildMoneyContext(accountBalance, riskPerTradePct, maxDailyLossPct, todayLoss, consecutiveLosses, todayTakenCount, lockedSignal.entry, lockedSignal.sl)
-  }, [lockedSignal, accountBalance, riskPerTradePct, maxDailyLossPct, todayLoss, consecutiveLosses, todayTakenCount])
-
-  const hoveredMoneyContext = useMemo(() => {
-    if (!hoveredSignal || lockedSignal) return null
-    return buildMoneyContext(accountBalance, riskPerTradePct, maxDailyLossPct, todayLoss, consecutiveLosses, todayTakenCount, hoveredSignal.entry, hoveredSignal.sl)
-  }, [hoveredSignal, lockedSignal, accountBalance, riskPerTradePct, maxDailyLossPct, todayLoss, consecutiveLosses, todayTakenCount])
-
-  const manualSuggestionKey = manualSetup ? `manual:${symbol}:${timeframe}:${manualSetup.time}:${manualSetup.action}` : null
-  const manualJournal = useMemo(
-    () => (manualSuggestionKey ? journal.find((j) => j.suggestionKey === manualSuggestionKey) ?? null : null),
-    [journal, manualSuggestionKey]
-  )
-
-  const manualMoneyContext = useMemo(() => {
-    if (!manualSetup || !manualSetup.generated || manualSetup.sl == null) return null
-    return buildMoneyContext(accountBalance, riskPerTradePct, maxDailyLossPct, todayLoss, consecutiveLosses, todayTakenCount, manualSetup.entry, manualSetup.sl)
-  }, [manualSetup, accountBalance, riskPerTradePct, maxDailyLossPct, todayLoss, consecutiveLosses, todayTakenCount])
-
-  const warnings = useMemo(() => {
-    const items: string[] = []
-    if (consecutiveLosses >= 4) {
-      items.push(`Hey ${displayName}, this is your ${consecutiveLosses}th consecutive loss. Consider reducing risk or stepping away.`)
-    }
-    if (todayTakenCount >= 5) {
-      items.push(`${displayName}, you've taken ${todayTakenCount} trades today. Make sure you aren't overtrading!`)
-    }
-    if (lockedMoneyContext && lockedMoneyContext.remainingDailyLoss <= 0) {
-      items.push(`Daily loss limit reached, ${displayName}. Step back from the charts for today.`)
-    }
-    return items
-  }, [consecutiveLosses, todayTakenCount, lockedMoneyContext, displayName])
-
-  const alertNotices = useMemo(() => {
-    const notices: Array<{ id: string; title: string; body: string }> = []
-    if (marketRiskContext.riskLevel !== 'Low') {
-      notices.push({
-        id: `market-risk:${symbol}:${timeframe}`,
-        title: marketRiskContext.title,
-        body: marketRiskContext.userFacingWarning,
-      })
-    }
-
-    warnings.forEach((warning) => {
-      notices.push({
-        id: `warning:${symbol}:${timeframe}:${hash(warning)}`,
-        title: 'Trade caution',
-        body: warning,
-      })
-    })
-
-    return notices.filter((notice) => !dismissedNoticeKeys.includes(notice.id))
-  }, [warnings, marketRiskContext, symbol, timeframe, dismissedNoticeKeys])
-
-  const dismissNotice = (noticeId: string) => {
-    setDismissedNoticeKeys((prev) => (prev.includes(noticeId) ? prev : [...prev, noticeId]))
-  }
-
-  const chartMarkers = useMemo(() => {
+  const chartMarkers = useMemo<ChartPanelMarker[]>(() => {
     const markerBySetup = new Map<string, ChartPanelMarker>()
 
-    for (const s of signals) {
+    for (const s of chartSignals) {
       const isLive = s.status === 'live'
+      const shortStrat =
+        s.strategyLabel === 'Supply & Demand'
+          ? 'S&D'
+          : s.strategyLabel === 'Wick Rejection'
+          ? 'WICK'
+          : s.strategyLabel.split(' ')[0].toUpperCase()
       markerBySetup.set(signalMarkerKey(s), {
         time: s.time as UTCTimestamp,
         position: s.direction === 'BUY' ? 'belowBar' : 'aboveBar',
         shape: s.direction === 'BUY' ? 'arrowUp' : 'arrowDown',
-        color: isLive ? (s.direction === 'BUY' ? '#22c55e' : '#ef4444') : '#64748b',
-        text: `${isLive ? '' : 'Prev '}${s.strategyLabel === 'Supply & Demand' ? 'S&D' : s.strategyLabel.split(' ')[0]} ${s.direction} ${s.confidence}%`,
+        color: isLive ? (s.direction === 'BUY' ? '#34D399' : '#F87171') : '#71717A',
+        text: `${shortStrat} ${s.direction} ${s.confidence}%`,
       })
     }
-
-    const suggestionMarkers = Array.from(markerBySetup.values())
 
     const historicalMarkers: ChartPanelMarker[] = journalMarkers.map((m) => ({
       time: m.time,
       position: 'inBar',
       shape: 'circle',
-      color: '#64748b',
+      color: '#71717A',
       text: m.pnl,
     }))
 
-    return [...suggestionMarkers, ...historicalMarkers]
-  }, [signals, journalMarkers])
+    return [...Array.from(markerBySetup.values()), ...historicalMarkers]
+  }, [chartSignals, journalMarkers])
+
+  // Manual planner computations
+  const plannerRiskDist = Math.abs(manualPlanner.entry - manualPlanner.sl)
+  const plannerRewardDist = Math.abs(manualPlanner.tp - manualPlanner.entry)
+  const plannerRR = plannerRiskDist > 0 ? plannerRewardDist / plannerRiskDist : 0
+  const plannerValid =
+    manualPlanner.entry > 0 &&
+    manualPlanner.sl > 0 &&
+    manualPlanner.tp > 0 &&
+    (manualPlanner.action === 'BUY'
+      ? manualPlanner.sl < manualPlanner.entry && manualPlanner.tp > manualPlanner.entry
+      : manualPlanner.sl > manualPlanner.entry && manualPlanner.tp < manualPlanner.entry)
+  const plannerLots = plannerValid
+    ? calculateLots(symbol, manualPlanner.entry, manualPlanner.sl, activeRiskUsd)
+    : 0.01
+  const plannerPotentialProfit = plannerValid ? activeRiskUsd * plannerRR : 0
 
   const activeSignalForChart = lockedSignal || hoveredSignal || activeLiveSignal
 
-  const chartActiveSignal: ChartPanelActiveSignal | null = activeSignalForChart
-    ? {
-      entry: activeSignalForChart.entry,
-      sl: activeSignalForChart.sl,
-      tp: activeSignalForChart.tp,
-      action: activeSignalForChart.direction,
-      entryTime: activeSignalForChart.time as UTCTimestamp,
-      confidence: activeSignalForChart.confidence,
-      rr: activeSignalForChart.rr,
-      locked: Boolean(lockedSignal),
-    }
-    : null
+  const chartActiveSignal: ChartPanelActiveSignal | null =
+    manualPlanner.activeOnChart && inspectorTab === 'planner'
+      ? null
+      : activeSignalForChart
+      ? {
+          id: activeSignalForChart.id,
+          entry: activeSignalForChart.entry,
+          sl: activeSignalForChart.sl,
+          tp: activeSignalForChart.tp,
+          action: activeSignalForChart.direction,
+          entryTime: activeSignalForChart.time as UTCTimestamp,
+          confidence:
+            activeSignalForChart.confidence <= 1
+              ? Math.round(activeSignalForChart.confidence * 100)
+              : Math.round(activeSignalForChart.confidence),
+          rr: activeSignalForChart.rr,
+          locked: Boolean(lockedSignal),
+          strategyLabel: activeSignalForChart.strategyLabel,
+          risk: activeSignalForChart.risk,
+          reason: activeSignalForChart.reason,
+          lotSize: calculateLots(
+            symbol,
+            activeSignalForChart.entry,
+            activeSignalForChart.sl,
+            activeRiskUsd
+          ),
+          riskAmountUsd: activeRiskUsd,
+        }
+      : null
 
-  const chartManualSetup: ChartPanelManualSetup | null = manualSetup
-    ? {
-      entry: manualSetup.entry,
-      action: manualSetup.action,
-      sl: manualSetup.sl,
-      tp: manualSetup.tp,
-      generated: manualSetup.generated,
-    }
-    : null
+  const chartManualSetup: ChartPanelManualSetup | null =
+    manualPlanner.activeOnChart && inspectorTab === 'planner'
+      ? {
+          entry: manualPlanner.entry,
+          action: manualPlanner.action,
+          sl: manualPlanner.sl,
+          tp: manualPlanner.tp,
+          generated: true,
+          entryTime: manualPlanner.time,
+          rr: plannerRR,
+          entryType: manualPlanner.entryType,
+          lotSize: plannerLots,
+          riskAmountUsd: activeRiskUsd,
+          valid: plannerValid,
+          reason: [
+            `${manualPlanner.entryType === 'limit' ? 'Limit' : 'Market'} ${manualPlanner.action} order anchored to ${formatPrice(manualPlanner.entry, undefined, symbol)}`,
+            plannerValid
+              ? `Sized for ${plannerLots.toFixed(2)} lots with $${activeRiskUsd.toFixed(2)} max risk (${plannerRR.toFixed(2)}R target)`
+              : manualPlanner.action === 'BUY'
+              ? 'Invalid geometry: ensure SL < Entry < TP'
+              : 'Invalid geometry: ensure TP < Entry < SL',
+          ],
+        }
+      : null
 
-  const handleCrosshairMove = (time: UTCTimestamp | null) => {
-    if (signals.length === 0 || time == null) {
-      if (!lockedSignalId) setHoveredSignalId(null)
-      return
-    }
+  // Chart interactions
+  const handleCrosshairMove = useCallback(
+    (time: UTCTimestamp | null) => {
+      if (chartSignals.length === 0 || time == null) {
+        if (!lockedSignalId) setHoveredSignalId(null)
+        return
+      }
 
-    const tfMap: Record<string, number> = {
-      '1m': 60,
-      '5m': 300,
-      '15m': 900,
-      '1H': 3600,
-      '4H': 14400,
-      '1D': 86400,
-    }
-    const tolerance = (tfMap[timeframe] || 900) * 0.9
+      const tfMap: Record<string, number> = {
+        '1m': 60,
+        '5m': 300,
+        '15m': 900,
+        '1H': 3600,
+        '4H': 14400,
+        '1D': 86400,
+      }
+      const tolerance = (tfMap[timeframe] || 900) * 0.9
+      const closest = chartSignals.find((s) => Math.abs(s.time - time) <= tolerance) ?? null
 
-    const closest = signals.find((s) => Math.abs(s.time - time) <= tolerance) ?? null
+      if (closest) {
+        setHoveredSignalId(closest.id)
+      } else if (!lockedSignalId) {
+        setHoveredSignalId(null)
+      }
+    },
+    [chartSignals, lockedSignalId, timeframe]
+  )
 
-    if (closest) {
-      setHoveredSignalId(closest.id)
-    } else if (!lockedSignalId) {
+  const handleChartClick = useCallback(
+    ({ point, time, price }: { point?: { x: number; y: number }; time?: Time; price?: number | null }) => {
+      if (!point) return
+      const clickedTime = typeof time === 'number' ? (time as UTCTimestamp) : null
+
+      if (clickedTime != null) {
+        const nearestSignal = chartSignals.find((s) => s.time === clickedTime) ?? null
+        if (nearestSignal) {
+          setLockedSignalId(nearestSignal.id)
+          setHoveredSignalId(nearestSignal.id)
+          setFocusTime(nearestSignal.time as UTCTimestamp)
+          setFocusNonce((n) => n + 1)
+          setInspectorOpen(true)
+          setInspectorTab('setups')
+          return
+        }
+      }
+
+      if (price == null) return
+
+      const digits = priceDigits(symbol)
+      const entry = Number(price.toFixed(digits))
+      const fallbackTime =
+        candles[candles.length - 1]?.time ?? (Math.floor(Date.now() / 1000) as UTCTimestamp)
+      const anchorTime = clickedTime ?? fallbackTime
+
+      let nearest = candles[0]
+      for (const c of candles) {
+        if (!nearest || Math.abs(c.time - anchorTime) < Math.abs(nearest.time - anchorTime)) {
+          nearest = c
+        }
+      }
+
+      const liveRef = effectiveBid ?? nearest?.close ?? entry
+      const action: TradeAction = entry <= liveRef ? 'BUY' : 'SELL'
+      const range = Math.max((nearest?.high ?? entry) - (nearest?.low ?? entry), entry * 0.0015)
+      const levels = generateManualLevels(entry, action, range, digits)
+
+      setLockedSignalId(null)
       setHoveredSignalId(null)
+      setManualPlanner({
+        time: anchorTime,
+        entry,
+        action,
+        entryType: Math.abs(entry - liveRef) > entry * 0.0005 ? 'limit' : 'market',
+        sl: levels.sl,
+        tp: levels.tp,
+        range,
+        digits,
+        activeOnChart: true,
+      })
+      setInspectorOpen(true)
+      setInspectorTab('planner')
+    },
+    [candles, chartSignals, effectiveBid, symbol]
+  )
+
+  // Focus chart on any SignalCard click (cross-symbol capable)
+  const handleFocusSignal = useCallback(
+    (raw: DashboardSignalItem) => {
+      const targetTime = (
+        'time' in raw
+          ? raw.time > 1e12
+            ? Math.floor(raw.time / 1000)
+            : raw.time
+          : Math.floor(new Date(raw.timestamp).getTime() / 1000)
+      ) as UTCTimestamp
+
+      if (raw.symbol !== symbol || raw.timeframe !== timeframe) {
+        setSymbol(raw.symbol as ChartSymbol)
+        setTimeframe(raw.timeframe as ChartTimeframe)
+        setSearchParams({ symbol: raw.symbol, timeframe: raw.timeframe }, { replace: true })
+      }
+
+      setManualPlanner((prev) => ({ ...prev, activeOnChart: false }))
+      setLockedSignalId(raw.id)
+      setHoveredSignalId(raw.id)
+      setFocusTime(targetTime)
+      setFocusNonce((n) => n + 1)
+    },
+    [setSearchParams, setSymbol, setTimeframe, symbol, timeframe]
+  )
+
+  // Manual Scan action
+  const handleManualScan = async () => {
+    if (scanning) return
+    setScanning(true)
+    try {
+      void fetch('/api/scanner/trigger', { method: 'POST' }).catch(() => {})
+
+      const [freshCandles, backendGlobal] = await Promise.all([
+        getCandles(symbol, timeframe, 2000),
+        fetch(
+          `/api/global-signals?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`
+        )
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+        refreshAccount(),
+        refreshPositions(),
+        fetchPendingOrders(),
+        fetchLiveQuote(),
+      ])
+
+      if (freshCandles.length > 0) {
+        setCandles(freshCandles)
+      }
+
+      const detected = runSignalsForStrategies(freshCandles, symbol, timeframe, activeEngineKebabs)
+      const storedDetected: StoredSignal[] = detected.map((s) => ({
+        ...s,
+        symbol,
+        timeframe,
+        status: 'live',
+      }))
+
+      const backendSignals: StoredSignal[] = Array.isArray(backendGlobal?.signals)
+        ? backendGlobal.signals
+        : []
+
+      const merged = [...storedDetected, ...backendSignals]
+      if (merged.length > 0) {
+        addSignals(merged)
+      }
+
+      if (storedDetected.length > 0) {
+        showToast(
+          'Scan Complete',
+          `${storedDetected.length} live setup(s) detected on ${symbol} ${timeframe}`,
+          'success'
+        )
+      } else {
+        showToast(
+          'Scan Complete',
+          `Candles & MT5 synced — no new active setup on ${symbol} ${timeframe}`,
+          'info'
+        )
+      }
+    } catch {
+      showToast('Scan Notice', 'Unable to complete manual scan on current feed', 'error')
+    } finally {
+      setScanning(false)
     }
   }
 
-  const handleChartClick = ({ point, time, price }: { point?: { x: number; y: number }; time?: Time; price?: number | null }) => {
-    if (!point) return
-
-    const clickedTime = typeof time === 'number' ? (time as UTCTimestamp) : null
-
-    if (clickedTime != null) {
-      const nearestSignal = signals.find((s) => s.time === clickedTime) ?? null
-
-      if (nearestSignal) {
-        setLockedSignalId(nearestSignal.id)
-        setHoveredSignalId(nearestSignal.id)
-        setManualSetup(null)
-        return
-      }
-
-      const nearestHistory = journalMarkers.find((h) => h.time === clickedTime) ?? null
-      if (nearestHistory) {
-        return
-      }
+  // Execute trade helper for SignalCard & Obsidian Briefing Card
+  const handleExecuteSignal = async (raw: DashboardSignalItem, lotSize: number) => {
+    const direction = 'signal' in raw ? raw.signal : raw.direction
+    if (direction === 'NO_TRADE') return
+    const result = await executeManualTrade({
+      symbol: raw.symbol,
+      action: direction,
+      volume: lotSize,
+      sl: raw.sl,
+      tp: raw.tp,
+    })
+    if (result?.success) {
+      showToast(
+        'Trade Executed',
+        `${direction} ${lotSize}L ${raw.symbol} placed on Exness MT5`,
+        'success'
+      )
+      await fetchPendingOrders()
+    } else {
+      showToast(
+        'MT5 Notice',
+        result?.error || `Calculated ${lotSize}L — MetaApi terminal standby`,
+        'info'
+      )
     }
+  }
 
-    if (price == null) return
-
-    const digits = priceDigits(symbol)
-    const entry = Number(price.toFixed(digits))
-    const fallbackTime = candles[candles.length - 1]?.time ?? (Math.floor(Date.now() / 1000) as UTCTimestamp)
-    const anchorTime = clickedTime ?? fallbackTime
-
-    let nearest = candles[0]
-    for (const c of candles) {
-      if (!nearest || Math.abs(c.time - anchorTime) < Math.abs(nearest.time - anchorTime)) {
-        nearest = c
-      }
+  const handleExecuteChartSignal = async () => {
+    if (!activeSignalForChart || executingChartSignal) return
+    const lotSize = calculateLots(
+      symbol,
+      activeSignalForChart.entry,
+      activeSignalForChart.sl,
+      activeRiskUsd
+    )
+    try {
+      setExecutingChartSignal(true)
+      await handleExecuteSignal(activeSignalForChart, lotSize)
+    } finally {
+      setExecutingChartSignal(false)
     }
+  }
 
-    const suggestedAction: TradeAction = nearest && nearest.close >= nearest.open ? 'BUY' : 'SELL'
-    const confidenceSeed = 72 + (hash(`${symbol}:${timeframe}:${anchorTime}`) % 21)
-    const confidence = Number(confidenceSeed.toFixed(0))
-    const risk = riskFromConfidence(confidence)
-    const range = Math.max((nearest?.high ?? entry) - (nearest?.low ?? entry), entry * 0.001)
+  // Log decision helper
+  const handleLogSignalDecision = (raw: DashboardSignalItem, taken: boolean) => {
+    const direction = 'signal' in raw ? raw.signal : raw.direction
+    if (direction === 'NO_TRADE') return
+    const confidence =
+      'strategyLabel' in raw ? Math.round(raw.confidence) : Math.round(raw.confidence * 100)
+    const strategyLabel =
+      'strategyLabel' in raw ? raw.strategyLabel : raw.strategy_id.replace(/[_-]/g, ' ')
+    const risk: RiskLabel = 'risk' in raw ? raw.risk : riskFromConfidence(confidence)
+    const key = `auto:${raw.symbol}:${raw.timeframe}:${raw.id}`
+    const lots = calculateLots(raw.symbol, raw.entry, raw.sl, activeRiskUsd)
 
-    const reason = [
-      `${strategyLabel} sees structure interest around the selected entry`,
-      `Market context suggests ${suggestedAction} bias with ${confidence}% confidence`,
-      marketRiskContext.summary,
-      'Confirm direction, then generate SL/TP based on this exact point',
-    ]
-
-    setHoveredSignalId(null)
-    setLockedSignalId(null)
-    setManualSetup({
-      time: anchorTime,
-      entry,
-      action: suggestedAction,
-      suggestedAction,
+    logSuggestionDecision({
+      suggestionKey: key,
+      symbol: raw.symbol,
+      timeframe: raw.timeframe,
+      strategy: strategyLabel,
+      action: direction,
+      entry: raw.entry,
+      sl: raw.sl,
+      tp: raw.tp,
       confidence,
       risk,
-      reason,
+      suggestedPosition: lots,
+      riskAmount: activeRiskUsd,
+      taken,
+      outcome: taken ? 'pending' : 'skipped',
+    })
+    showToast(
+      taken ? 'Trade Logged' : 'Setup Skipped',
+      `${direction} ${raw.symbol} saved to journal`,
+      'info'
+    )
+  }
+
+  const handlePlannerFieldChange = (field: 'entry' | 'sl' | 'tp', raw: string) => {
+    const val = parseFloat(raw)
+    if (Number.isNaN(val)) return
+    setManualPlanner((prev) => ({
+      ...prev,
+      [field]: val,
+      activeOnChart: true,
+    }))
+  }
+
+  const handlePlannerAutoLevels = () => {
+    const last = candles[candles.length - 1]
+    const range = last
+      ? Math.max(last.high - last.low, manualPlanner.entry * 0.002)
+      : manualPlanner.range
+    const levels = generateManualLevels(
+      manualPlanner.entry,
+      manualPlanner.action,
       range,
-      digits,
-      generated: false,
-      sl: null,
-      tp: null,
-      rr: 0,
-    })
+      manualPlanner.digits
+    )
+    setManualPlanner((prev) => ({
+      ...prev,
+      sl: levels.sl,
+      tp: levels.tp,
+      range,
+      activeOnChart: true,
+    }))
   }
 
-  useEffect(() => {
-    let cancelled = false
-    const initTimer = setTimeout(() => {
-      setLoading(true)
-      setHoveredSignalId(null)
-      setLockedSignalId(null)
-      setManualSetup(null)
-      setCandles([])
-    }, 0)
+  const handlePlannerSnapLive = () => {
+    const live = manualPlanner.action === 'BUY' ? effectiveAsk : effectiveBid
+    if (!live) return
+    const rounded = Number(live.toFixed(manualPlanner.digits))
+    const levels = generateManualLevels(
+      rounded,
+      manualPlanner.action,
+      manualPlanner.range,
+      manualPlanner.digits
+    )
+    setManualPlanner((prev) => ({
+      ...prev,
+      entry: rounded,
+      sl: levels.sl,
+      tp: levels.tp,
+      entryType: 'market',
+      activeOnChart: true,
+    }))
+  }
 
-    const loadCandles = async () => {
-      // Fetch 2000 candles to provide much more chart history than the default 200
-      const generatedCandles = await getCandles(symbol, timeframe, 2000)
-      if (cancelled) return
-      setCandles(generatedCandles)
-      setLoading(false)
-    }
-
-    void loadCandles()
-
-    return () => {
-      cancelled = true
-      clearTimeout(initTimer)
-    }
-  }, [symbol, timeframe, activeStrategyIds, marketRiskContext.confidencePenalty])
-
-  const generateManualSLTP = () => {
-    setManualSetup((prev) => {
-      if (!prev) return prev
-      const generated = generateLevels(prev.entry, prev.action, prev.range, prev.digits)
-      return {
-        ...prev,
-        generated: true,
-        sl: generated.sl,
-        tp: generated.tp,
-        rr: generated.rr,
+  const handleExecutePlanner = async () => {
+    if (!plannerValid || executingTrade) return
+    try {
+      setExecutingTrade(true)
+      const res = await fetch('/api/metaapi/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol,
+          action: manualPlanner.action,
+          volume: plannerLots,
+          sl: manualPlanner.sl,
+          tp: manualPlanner.tp,
+          entryType: manualPlanner.entryType,
+          price: manualPlanner.entryType === 'limit' ? manualPlanner.entry : undefined,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        showToast(
+          'Order Placed',
+          `${manualPlanner.entryType.toUpperCase()} ${manualPlanner.action} ${plannerLots}L ${symbol} sent to MT5`,
+          'success'
+        )
+        await Promise.all([refreshPositions(), refreshAccount(), fetchPendingOrders()])
+      } else {
+        showToast(
+          'Exness MT5 Notice',
+          data.error || `Lot Size ${plannerLots}L — broker bridge standby`,
+          'info'
+        )
       }
-    })
+    } catch {
+      showToast('Execution Error', 'Unable to connect to MT5 execution endpoint', 'error')
+    } finally {
+      setExecutingTrade(false)
+    }
   }
 
-  const updateManualValue = (field: 'entry' | 'sl' | 'tp', raw: string) => {
-    const parsed = Number(raw)
-    if (Number.isNaN(parsed)) return
-    setManualSetup((prev) => {
-      if (!prev) return prev
-      const next: ManualSetup = { ...prev, [field]: Number(parsed.toFixed(prev.digits)) } as ManualSetup
-      if (next.generated && next.sl != null && next.tp != null) {
-        const riskDist = Math.abs(next.entry - next.sl)
-        const rewardDist = Math.abs(next.tp - next.entry)
-        next.rr = riskDist > 0 ? Number((rewardDist / riskDist).toFixed(2)) : 0
+  const handleCancelPendingOrder = async (orderId: string) => {
+    try {
+      setCancelingOrderId(orderId)
+      const res = await fetch('/api/metaapi/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      })
+      const data = await res.json()
+      if (data.success || data.ok) {
+        showToast('Order Cancelled', `Pending order ${orderId} cancelled`, 'success')
+        await fetchPendingOrders()
+      } else {
+        showToast('Cancel Notice', data.error || 'Unable to cancel order', 'info')
       }
-      return next
-    })
-  }
-
-  const actionBadgeTone = (risk: RiskLabel) => {
-    if (risk === 'Low') return { color: '#22c55e', bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.25)' }
-    if (risk === 'Medium') return { color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.25)' }
-    return { color: '#ef4444', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.25)' }
-  }
-
-  const fmtUSD = (n: number) =>
-    `$${n.toLocaleString(undefined, {
-      maximumFractionDigits: 2,
-      minimumFractionDigits: 2,
-    })}`
-
-  const saveLockedFeedback = (taken: boolean) => {
-    if (!lockedSignal || !lockedSuggestionKey || !lockedMoneyContext) return
-    logSuggestionDecision({
-      suggestionKey: lockedSuggestionKey,
-      symbol,
-      timeframe,
-      strategy: lockedSignal.strategyLabel,
-      action: lockedSignal.direction,
-      entry: lockedSignal.entry,
-      sl: lockedSignal.sl,
-      tp: lockedSignal.tp,
-      confidence: lockedSignal.confidence,
-      risk: lockedMoneyContext.capitalRisk,
-      suggestedPosition: lockedMoneyContext.suggestedPosition,
-      riskAmount: lockedMoneyContext.maxLossAtSL,
-      taken,
-      outcome: taken ? 'pending' : 'skipped',
-    })
-  }
-
-  const saveManualFeedback = (taken: boolean) => {
-    if (!manualSetup || !manualSuggestionKey || !manualMoneyContext || manualSetup.sl == null || manualSetup.tp == null) return
-    logSuggestionDecision({
-      suggestionKey: manualSuggestionKey,
-      symbol,
-      timeframe,
-      strategy: strategyLabel,
-      action: manualSetup.action,
-      entry: manualSetup.entry,
-      sl: manualSetup.sl,
-      tp: manualSetup.tp,
-      confidence: manualSetup.confidence,
-      risk: manualMoneyContext.capitalRisk,
-      suggestedPosition: manualMoneyContext.suggestedPosition,
-      riskAmount: manualMoneyContext.maxLossAtSL,
-      taken,
-      outcome: taken ? 'pending' : 'skipped',
-    })
-  }
-
-  const getPopupWidth = () => Math.min(480, Math.max(320, window.innerWidth * 0.92))
-  const clampPopupPosition = (x: number, y: number) => {
-    const width = getPopupWidth()
-    const maxX = Math.max(8, window.innerWidth - width - 8)
-    const maxY = Math.max(88, window.innerHeight - 110)
-    return {
-      x: Math.max(8, Math.min(x, maxX)),
-      y: Math.max(62, Math.min(y, maxY)),
+    } catch {
+      showToast('Server Error', 'Failed to reach pending order endpoint', 'error')
+    } finally {
+      setCancelingOrderId(null)
     }
   }
 
-  useEffect(() => {
-    if (!manualSetup) {
-      const t = setTimeout(() => {
-        setPopupPosition(null)
-        setDraggingPopup(false)
-      }, 0)
-      return () => clearTimeout(t)
+  // Risk & Behavior alerts (rendered inside Tab 3 Risk, zero chart clutter)
+  const riskNotices = useMemo(() => {
+    const items: Array<{ id: string; title: string; body: string; critical?: boolean }> = []
+    if (consecutiveLosses >= 4) {
+      items.push({
+        id: `streak-${consecutiveLosses}`,
+        title: 'Consecutive loss cooldown',
+        body: `${displayName}, ${consecutiveLosses} consecutive losses recorded. Guardrail reduces risk exposure.`,
+        critical: true,
+      })
     }
-    if (popupPosition) return
-    const width = getPopupWidth()
-    const x = window.innerWidth - width - (window.innerWidth < 640 ? 8 : 16)
-    const y = window.innerWidth < 640 ? 70 : 84
-    const t2 = setTimeout(() => {
-       
-      setPopupPosition(clampPopupPosition(x, y))
-    }, 0)
-    return () => clearTimeout(t2)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manualSetup, popupPosition])
-
-  useEffect(() => {
-    if (!draggingPopup) return
-
-    const move = (e: PointerEvent) => {
-      e.preventDefault()
-      const next = clampPopupPosition(e.clientX - dragOffsetRef.current.x, e.clientY - dragOffsetRef.current.y)
-      setPopupPosition(next)
+    if (todayTakenCount >= autoTradeMaxPositions) {
+      items.push({
+        id: `overtrade-${todayTakenCount}`,
+        title: 'Daily frequency warning',
+        body: `${todayTakenCount} trades logged today (cap ${autoTradeMaxPositions}). Guard against overtrading.`,
+      })
     }
-
-    const stop = () => setDraggingPopup(false)
-
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', stop)
-    return () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', stop)
+    if (currentLossPct >= maxDailyLossPct) {
+      items.push({
+        id: `daily-cap-${symbol}`,
+        title: 'Daily loss cap reached',
+        body: `Loss threshold ${maxDailyLossPct}% exceeded. Stand down for remaining session.`,
+        critical: true,
+      })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draggingPopup])
+    if (marketRiskContext.riskLevel !== 'Low') {
+      items.push({
+        id: `market-${symbol}-${timeframe}`,
+        title: marketRiskContext.title,
+        body: marketRiskContext.userFacingWarning,
+      })
+    }
+    return items.filter((n) => !dismissedNoticeKeys.includes(n.id))
+  }, [
+    autoTradeMaxPositions,
+    consecutiveLosses,
+    currentLossPct,
+    dismissedNoticeKeys,
+    displayName,
+    marketRiskContext,
+    maxDailyLossPct,
+    symbol,
+    timeframe,
+    todayTakenCount,
+  ])
+
+  const lockedSuggestionKey = lockedSignal
+    ? `auto:${symbol}:${timeframe}:${lockedSignal.id}`
+    : null
+  const lockedJournal = useMemo(
+    () =>
+      lockedSuggestionKey
+        ? journal.find((j) => j.suggestionKey === lockedSuggestionKey) ?? null
+        : null,
+    [journal, lockedSuggestionKey]
+  )
+
+  const currentCatObj =
+    MARKET_CATEGORIES.find((c) => c.id === pickerCategory) ?? MARKET_CATEGORIES[0]
+  const displayedSymbols: SymbolOption[] = symbolSearch.trim()
+    ? MARKET_CATEGORIES.flatMap((c) => c.symbols).filter((s) =>
+        s.toLowerCase().includes(symbolSearch.trim().toLowerCase())
+      )
+    : currentCatObj.symbols
+
+  const spreadAlert =
+    effectiveSpreadPips != null && effectiveSpreadPips > autoTradeSpreadCapPips
+  const activePositionsTotal = metaPositions.length + pendingOrders.length
 
   return (
-    <div className="min-h-screen h-screen bg-[#070709] text-white flex flex-col overflow-hidden pb-20 lg:pb-0">
-      <DashboardHeader
-        symbol={symbol as any}
-        timeframe={timeframe as any}
-        onSymbolChange={(s) => setSearchParams({ symbol: s, timeframe }, { replace: true })}
-        onTimeframeChange={(t) => setSearchParams({ symbol, timeframe: t }, { replace: true })}
-        accountBalance={accountBalance}
-        riskPerTradePct={riskPerTradePct}
-        maxDailyLossPct={maxDailyLossPct}
-        todayLoss={todayLoss}
-        consecutiveLosses={consecutiveLosses}
-        todayTakenCount={todayTakenCount}
-        strategyLabel={strategyLabel}
-        displayName={displayName}
-      />
+    <div className="h-full min-h-0 bg-[#09090B] text-[#FAFAFA] flex flex-col overflow-y-auto overflow-x-hidden lg:overflow-hidden">
+      {/* 1. SLEEK CONTROL HEADER */}
+      <div className="min-h-[52px] px-3 sm:px-4 py-2 sm:py-1.5 bg-[#09090B] border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shrink-0 z-30">
+        {/* Left: Pill Symbol Picker + Segmented Timeframe Pill */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="relative" ref={symbolPickerRef}>
+            <button
+              type="button"
+              onClick={() => {
+                if (!symbolPickerOpen) {
+                  setPickerCategory(getCategoryForSymbol(symbol))
+                }
+                setSymbolPickerOpen((v) => !v)
+              }}
+              className={cn(
+                'rounded-full bg-[#141417] border px-3.5 py-1.5 text-[13px] font-medium flex items-center gap-2 transition-colors',
+                symbolPickerOpen
+                  ? 'border-white/[0.24] text-[#FAFAFA]'
+                  : 'border-white/[0.08] text-[#FAFAFA] hover:border-white/[0.16]'
+              )}
+            >
+              <span className="text-[12px] text-[#71717A]">
+                {formatCategoryLabel(getCategoryForSymbol(symbol))}
+              </span>
+              <span className="font-semibold text-[#FAFAFA]">{symbol}</span>
+              <PiCaretDown
+                size={15}
+                className={cn(
+                  'text-[#71717A] transition-transform',
+                  symbolPickerOpen && 'rotate-180'
+                )}
+              />
+            </button>
 
-      <div
-        className="relative flex-1 min-h-0"
-        onMouseMove={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect()
-          setMouse({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-        }}
-      >
-        <div className="relative h-full">
-          {candles.length === 0 ? (
-            <div className="absolute inset-0 flex items-center justify-center p-6">
-              <div className="w-full max-w-6xl">
-                <div className="h-[420px] w-full rounded-lg bg-gradient-to-r from-[#071018] via-[#0b1118] to-[#071018] animate-pulse border border-white/[0.04]" />
-                <div className="mt-4 flex items-center justify-center">
-                  <svg className="h-6 w-6 text-[#60a5fa] animate-spin" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                  </svg>
+            {symbolPickerOpen && (
+              <div className="absolute top-11 left-0 w-[min(320px,calc(100vw-1.5rem))] sm:w-[360px] rounded-2xl bg-[#111113] border border-white/[0.08] p-3.5 z-50 space-y-3">
+                <div className="relative">
+                  <PiMagnifyingGlass
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#71717A]"
+                  />
+                  <input
+                    type="text"
+                    value={symbolSearch}
+                    onChange={(e) => setSymbolSearch(e.target.value)}
+                    placeholder="Search EURUSD, XAUUSD, NVDA..."
+                    className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#161619] border border-white/[0.06] text-[13px] text-[#FAFAFA] placeholder-[#71717A] focus:outline-none focus:border-white/[0.18]"
+                    autoFocus
+                  />
+                </div>
+
+                {!symbolSearch.trim() && (
+                  <div className="grid grid-cols-3 rounded-full bg-[#161619] p-1">
+                    {MARKET_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setPickerCategory(cat.id)}
+                        className={cn(
+                          'py-1 rounded-full text-[12px] font-medium transition-colors',
+                          pickerCategory === cat.id
+                            ? 'bg-white/[0.1] text-[#FAFAFA]'
+                            : 'text-[#71717A] hover:text-[#A1A1AA]'
+                        )}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="max-h-56 overflow-y-auto grid grid-cols-3 gap-1.5">
+                  {displayedSymbols.map((sym) => {
+                    const active = sym === symbol
+                    return (
+                      <button
+                        key={sym}
+                        type="button"
+                        onClick={() => handleSelectSymbol(sym)}
+                        className={cn(
+                          'h-8 px-2.5 rounded-xl text-[13px] font-medium flex items-center justify-between transition-colors',
+                          active
+                            ? 'bg-white/[0.1] text-[#FAFAFA]'
+                            : 'text-[#A1A1AA] hover:bg-white/[0.05] hover:text-[#FAFAFA]'
+                        )}
+                      >
+                        <span>{sym}</span>
+                        {active && <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* Segmented Timeframe Pill */}
+          <div className="flex items-center gap-0.5 max-w-full overflow-x-auto rounded-full bg-[#141417] border border-white/[0.06] p-1">
+            {TIMEFRAMES.map((tf) => (
+              <button
+                key={tf}
+                type="button"
+                onClick={() => handleSelectTimeframe(tf)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors',
+                  timeframe === tf
+                    ? 'bg-white/[0.12] text-[#FAFAFA]'
+                    : 'text-[#71717A] hover:text-[#A1A1AA]'
+                )}
+              >
+                {tf}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Center: Bare Inline Bid / Ask / Spread & Equity Telemetry (zero boxes) */}
+        <div className="hidden md:flex items-center gap-5 flex-wrap">
+          <div className="flex items-center gap-4 text-[13px]">
+            <span
+              className="flex items-center gap-1.5"
+              title={liveQuote.source === 'mt5' ? 'Live MT5 Quote' : 'Market Feed Quote'}
+            >
+              <span
+                className={cn(
+                  'w-1.5 h-1.5 rounded-full',
+                  liveQuote.source === 'mt5' ? 'bg-[#34D399]' : 'bg-[#71717A]'
+                )}
+              />
+              <span className="text-[12px] text-[#71717A]">Bid</span>
+              <span className="font-mono tabular-nums text-[#FAFAFA]">
+                {effectiveBid != null ? formatPrice(effectiveBid, undefined, symbol) : '—'}
+              </span>
+            </span>
+
+            <span className="flex items-center gap-1.5">
+              <span className="text-[12px] text-[#71717A]">Ask</span>
+              <span className="font-mono tabular-nums text-[#FAFAFA]">
+                {effectiveAsk != null ? formatPrice(effectiveAsk, undefined, symbol) : '—'}
+              </span>
+            </span>
+
+            <span className="flex items-center gap-1.5">
+              <span className="text-[12px] text-[#71717A]">Spread</span>
+              <span
+                className={cn(
+                  'font-mono tabular-nums',
+                  spreadAlert ? 'text-[#F87171]' : 'text-[#A1A1AA]'
+                )}
+              >
+                {effectiveSpreadPips != null ? `${effectiveSpreadPips.toFixed(1)}p` : '—'}
+              </span>
+            </span>
+          </div>
+
+          <span className="hidden xl:block w-px h-4 bg-white/[0.07]" aria-hidden="true" />
+
+          <div className="hidden xl:flex items-center gap-2 text-[13px]">
+            <span
+              className={cn(
+                'w-1.5 h-1.5 rounded-full',
+                account?.connected ? 'bg-[#34D399]' : 'bg-[#71717A]'
+              )}
+              title={account?.connected ? 'Exness MT5 Connected' : 'Local Account Balance'}
+            />
+            <span className="text-[12px] text-[#71717A]">Equity</span>
+            <span
+              className={cn(
+                'font-mono tabular-nums font-medium',
+                liveEquity < liveBalance ? 'text-[#F87171]' : 'text-[#FAFAFA]'
+              )}
+            >
+              ${liveEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        </div>
+
+        {/* Right: Clean Pill Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={scanning}
+            onClick={() => void handleManualScan()}
+            className="rounded-full bg-[#141417] border border-white/[0.08] hover:border-white/[0.18] px-3.5 py-1.5 text-[13px] font-medium text-[#FAFAFA] flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            title="Run multi-strategy scan & refresh MT5"
+          >
+            {scanning ? (
+              <PiSpinnerGap size={15} className="animate-spin text-[#FAFAFA]" />
+            ) : (
+              <PiBroadcast size={15} className="text-[#A1A1AA]" />
+            )}
+            <span>{scanning ? 'Scanning...' : 'Scan'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDockVisible((v) => !v)}
+            className={cn(
+              'rounded-full border px-3.5 py-1.5 text-[13px] font-medium flex items-center gap-2 transition-colors',
+              dockVisible
+                ? 'bg-white/[0.08] border-white/[0.14] text-[#FAFAFA]'
+                : 'bg-[#141417] border-white/[0.08] text-[#A1A1AA] hover:text-[#FAFAFA]'
+            )}
+            title="Toggle Positions & Orders drawer"
+          >
+            <PiRows size={15} />
+            <span className="hidden sm:inline">Positions</span>
+            <span className="rounded-full bg-white/[0.08] px-1.5 py-0.5 text-[12px] font-mono tabular-nums leading-none text-[#FAFAFA]">
+              {activePositionsTotal}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setInspectorOpen((v) => !v)}
+            className={cn(
+              'rounded-full border px-3.5 py-1.5 text-[13px] font-medium flex items-center gap-1.5 transition-colors',
+              inspectorOpen
+                ? 'bg-white/[0.08] border-white/[0.14] text-[#FAFAFA]'
+                : 'bg-[#141417] border-white/[0.08] text-[#A1A1AA] hover:text-[#FAFAFA]'
+            )}
+            title="Toggle right inspector drawer"
+          >
+            <PiSidebarSimple size={15} />
+            <span className="hidden sm:inline">Inspector</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. CHART-FIRST CANVAS + CALM 340px INSPECTOR DRAWER */}
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:overflow-hidden">
+        {/* LEFT: Chart Canvas */}
+        <div className="flex-1 min-w-0 min-h-[380px] lg:min-h-0 relative bg-[#09090B] flex flex-col">
+          {candles.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center p-6">
+              {loading ? (
+                <div className="w-full max-w-2xl rounded-2xl bg-[#111113] border border-white/[0.07] h-[340px] flex items-center justify-center">
+                  <div className="flex items-center gap-2.5 text-[13px] text-[#A1A1AA]">
+                    <PiSpinnerGap size={16} className="animate-spin text-[#FAFAFA]" />
+                    <span>
+                      Loading {symbol} {timeframe} market data...
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center space-y-3 rounded-2xl bg-[#111113] border border-white/[0.07] px-8 py-7 max-w-md">
+                  <p className="text-[14px] font-medium text-[#FAFAFA]">
+                    No candle data available for {symbol} ({timeframe})
+                  </p>
+                  <p className="text-[13px] text-[#71717A]">
+                    Reconnect or run a manual scan to refresh the feed.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void handleManualScan()}
+                    className="h-9 px-4 rounded-full bg-[#161619] border border-white/[0.08] hover:border-white/[0.18] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center gap-2 transition-colors"
+                  >
+                    <PiArrowsClockwise size={15} />
+                    <span>Retry feed</span>
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <ChartPanel
+              hideHeader
               symbol={symbol}
               timeframe={timeframe}
               candles={candles}
@@ -755,521 +1466,873 @@ export default function Dashboard() {
               manualSetup={chartManualSetup}
               onCrosshairMove={handleCrosshairMove}
               onChartClick={handleChartClick}
-              onTimeframeChange={(tf) => setSearchParams({ symbol, timeframe: tf }, { replace: true })}
+              onTimeframeChange={handleSelectTimeframe}
+              onExecuteActiveSignal={handleExecuteChartSignal}
+              onExecuteManualSetup={handleExecutePlanner}
+              onClearSelection={() => {
+                setLockedSignalId(null)
+                setHoveredSignalId(null)
+                setManualPlanner((prev) => ({ ...prev, activeOnChart: false }))
+              }}
+              executingSetup={executingChartSignal || executingTrade}
+              livePrice={effectiveBid}
+              focusTime={focusTime}
+              focusNonce={focusNonce}
+              loading={loading || scanning}
             />
           )}
         </div>
 
-        <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4 px-3 py-2 rounded-lg bg-[#0d1117]/90 border border-white/[0.08] text-[11px] text-[#94a3b8] pointer-events-none">
-          Hover TRAXO suggestions to preview. Click one to lock it. Previous trades (gray dots) are reference-only.
-        </div>
-
-        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center gap-2 pointer-events-none">
-          <span className="px-2.5 py-1 rounded-md bg-[#0d1117]/95 border border-white/[0.08] text-[11px] text-[#e5e7eb] font-semibold">
-            {symbol} • {timeframe}
-          </span>
-          {loading && (
-            <span className="px-2.5 py-1 rounded-md bg-[#3b82f6]/10 border border-[#3b82f6]/25 text-[11px] text-[#93c5fd] font-medium animate-pulse">
-              Analyzing market...
-            </span>
-          )}
-        </div>
-
-        {alertNotices.length > 0 && (
-          <div className="absolute top-14 right-3 sm:top-16 sm:right-4 z-20 flex flex-wrap justify-end gap-2 max-w-[calc(100vw-1.5rem)]">
-            {alertNotices.map((notice) => (
-              <div
-                key={notice.id}
-                className="w-[min(92vw,18rem)] rounded-lg border border-white/[0.08] bg-[#0b1118]/95 p-3 shadow-2xl backdrop-blur"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-[#93c5fd] font-semibold truncate">{notice.title}</p>
-                    <p className="mt-1 text-[11px] text-[#cbd5e1] leading-relaxed">{notice.body}</p>
-                  </div>
+        {/* RIGHT: Calm 340px Collapsible Inspector Drawer */}
+        {inspectorOpen && (
+          <aside className="w-full lg:w-[340px] shrink-0 border-t lg:border-t-0 lg:border-l border-white/[0.07] bg-[#111113] flex flex-col min-h-0">
+            {/* Clean Pill Tab Switcher */}
+            <div className="p-3 border-b border-white/[0.06] shrink-0">
+              <div className="grid grid-cols-3 rounded-full bg-[#161619] p-1">
+                {(
+                  [
+                    { id: 'setups', label: 'Setups' },
+                    { id: 'planner', label: 'Order' },
+                    { id: 'risk', label: 'Risk' },
+                  ] as const
+                ).map((tab) => (
                   <button
+                    key={tab.id}
                     type="button"
-                    aria-label="Dismiss notice"
-                    onClick={() => dismissNotice(notice.id)}
-                    className="shrink-0 mt-0.5 text-[#64748b] hover:text-white transition-colors"
+                    onClick={() => setInspectorTab(tab.id)}
+                    className={cn(
+                      'h-8 rounded-full text-[13px] font-medium transition-colors truncate px-2',
+                      inspectorTab === tab.id
+                        ? 'bg-white/[0.1] text-[#FAFAFA]'
+                        : 'text-[#71717A] hover:text-[#A1A1AA]'
+                    )}
                   >
-                    <X size={14} />
+                    {tab.label}
                   </button>
+                ))}
+              </div>
+            </div>
+
+            {/* TAB 1: SETUPS */}
+            {inspectorTab === 'setups' && (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                {/* Scope Switch & Clear Lock */}
+                <div className="px-4 py-2.5 border-b border-white/[0.06] flex items-center justify-between gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSignalScope('chart')}
+                      className={cn(
+                        'px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors',
+                        signalScope === 'chart'
+                          ? 'bg-white/[0.1] text-[#FAFAFA]'
+                          : 'text-[#71717A] hover:text-[#A1A1AA]'
+                      )}
+                    >
+                      {symbol} {timeframe}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSignalScope('all')}
+                      className={cn(
+                        'px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors',
+                        signalScope === 'all'
+                          ? 'bg-white/[0.1] text-[#FAFAFA]'
+                          : 'text-[#71717A] hover:text-[#A1A1AA]'
+                      )}
+                    >
+                      All markets
+                    </button>
+                  </div>
+
+                  {lockedSignal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLockedSignalId(null)
+                        setHoveredSignalId(null)
+                      }}
+                      className="text-[12px] font-medium text-[#71717A] hover:text-[#FAFAFA] inline-flex items-center gap-1 transition-colors"
+                    >
+                      <PiX size={15} />
+                      <span>Clear</span>
+                    </button>
+                  )}
                 </div>
-                {notice.id.startsWith('market-risk:') && (
-                  <div className="mt-2">
-                    <div className="flex items-center justify-between gap-2 text-[10px] text-[#94a3b8]">
-                      <span>{marketRiskContext.marketType.toUpperCase()}</span>
-                      <span className="font-semibold text-white">-{marketRiskContext.confidencePenalty}</span>
+
+                {/* Locked Journal Quick Outcome Strip (when logged as taken) */}
+                {lockedSignal && lockedJournal?.taken && lockedSuggestionKey && (
+                  <div className="px-4 py-3 border-b border-white/[0.06] bg-[#161619]/60 space-y-2 shrink-0">
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span className="text-[#A1A1AA] font-medium truncate">
+                        Record outcome · {lockedSignal.strategyLabel}
+                      </span>
+                      <span className="font-mono tabular-nums text-[#71717A]">
+                        {calculateLots(symbol, lockedSignal.entry, lockedSignal.sl, activeRiskUsd)}L
+                      </span>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {marketRiskContext.drivers.slice(0, 3).map((driver) => (
-                        <span key={driver} className="text-[10px] px-2 py-0.5 rounded-full border border-white/[0.08] bg-white/[0.03] text-[#94a3b8]">
-                          {driver}
-                        </span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(['win', 'loss', 'breakeven'] as const).map((outcome) => (
+                        <button
+                          key={outcome}
+                          type="button"
+                          onClick={() => setJournalOutcome(lockedSuggestionKey, outcome)}
+                          className={cn(
+                            'h-7 rounded-lg text-[12px] font-medium transition-colors',
+                            lockedJournal.outcome === outcome
+                              ? outcome === 'win'
+                                ? 'bg-[#34D399]/15 text-[#34D399]'
+                                : outcome === 'loss'
+                                ? 'bg-[#F87171]/15 text-[#F87171]'
+                                : 'bg-white/[0.1] text-[#FAFAFA]'
+                              : 'bg-[#111113] text-[#71717A] hover:text-[#FAFAFA]'
+                          )}
+                        >
+                          {outcome === 'win' ? 'Win' : outcome === 'loss' ? 'Loss' : 'Breakeven'}
+                        </button>
                       ))}
                     </div>
                   </div>
                 )}
-              </div>
-            ))}
-          </div>
-        )}
-        {hoveredSignal && !lockedSignal && !loading && (
-          <div
-            className="absolute z-20 w-[350px] max-w-[calc(100vw-0.9rem)] bg-[#090d14]/90 backdrop-blur-xl border border-white/[0.14] rounded-2xl shadow-[0_16px_36px_rgba(0,0,0,0.6)] p-3.5 pointer-events-none"
-            style={{
-              left: Math.max(6, Math.min(mouse.x + 16, window.innerWidth - 370)),
-              top: Math.max(66, Math.min(mouse.y - 10, window.innerHeight - 250)),
-            }}
-          >
-            {/* Top Row: Action, Symbol, Strategy */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className={cn(
-                    'px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider border shrink-0',
-                    hoveredSignal.direction === 'BUY'
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                  )}
-                >
-                  {hoveredSignal.direction}
-                </span>
-                <span className="text-[14px] font-extrabold text-white tracking-wide shrink-0">{symbol}</span>
-                <span className="text-[10px] font-semibold text-slate-300 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.08] whitespace-nowrap shrink-0">
-                  {hoveredSignal.strategyLabel}
-                </span>
-              </div>
-            </div>
 
-            {/* Second Row: Outcome & Confidence */}
-            <div className="flex items-center justify-between mb-2.5">
-              {hoveredSignal.status !== 'live' ? (
-                <span className={cn(
-                  "text-[9px] font-extrabold px-2 py-0.5 rounded-md border uppercase whitespace-nowrap",
-                  hoveredSignal.status === 'WIN' || hoveredSignal.status === 'tp_hit'
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                    : hoveredSignal.status === 'LOSS' || hoveredSignal.status === 'sl_hit'
-                    ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                    : 'bg-slate-500/20 text-slate-300 border-slate-500/30'
-                )}>
-                  {hoveredSignal.status === 'WIN' || hoveredSignal.status === 'tp_hit'
-                    ? `HIT TP (+${(hoveredSignal.rr ?? 1.5).toFixed(1)}x)`
-                    : hoveredSignal.status === 'LOSS' || hoveredSignal.status === 'sl_hit'
-                    ? 'HIT SL (-1.0x)'
-                    : 'EXPIRED'}
-                </span>
-              ) : (
-                <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md border uppercase bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                  Active Signal
-                </span>
-              )}
-              <span className="text-[10px] font-bold text-blue-400 px-2 py-0.5 bg-blue-500/10 rounded-md border border-blue-500/20 whitespace-nowrap">
-                {hoveredSignal.confidence}% Conf.
-              </span>
-            </div>
-
-            {/* Spacious Metrics Grid */}
-            <div className="grid grid-cols-4 gap-2 mb-2 bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.05]">
-              {[
-                ['ENTRY', hoveredSignal.entry, 'text-white'],
-                ['SL', hoveredSignal.sl, 'text-rose-400'],
-                ['TP', hoveredSignal.tp, 'text-emerald-400'],
-                ['R:R', hoveredSignal.rr, 'text-blue-400'],
-              ].map(([k, v, color]) => (
-                <div key={String(k)} className="min-w-0">
-                  <span className="block text-[9px] font-semibold text-slate-500 uppercase mb-0.5">{k}</span>
-                  <span className={cn('text-[11px] font-bold tabular-nums whitespace-nowrap block truncate', color)}>
-                    {typeof v === 'number' && String(k) !== 'R:R' ? formatPrice(v, undefined, symbol) : typeof v === 'number' ? v.toFixed(1) + 'x' : String(v)}
-                  </span>
+                {/* SignalFeed */}
+                <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                  <SignalFeed
+                    signals={feedSignals}
+                    selectedSignalId={lockedSignalId}
+                    riskAmountUsd={activeRiskUsd}
+                    onFocusSignal={handleFocusSignal}
+                    onExecuteSignal={handleExecuteSignal}
+                    onLogDecision={handleLogSignalDecision}
+                    className="flex-1 min-h-0"
+                  />
                 </div>
-              ))}
-            </div>
 
-            {hoveredMoneyContext && (
-              <div className="flex items-center justify-between text-[11px] font-medium pt-0.5 mb-1.5 px-0.5">
-                <span className="text-slate-400">Pos: <span className="text-white font-semibold">{fmtUSD(hoveredMoneyContext.suggestedPosition)}</span></span>
-                <span className="text-slate-400">Risk: <span className="text-rose-400 font-semibold">{fmtUSD(hoveredMoneyContext.maxLossAtSL)}</span></span>
-              </div>
-            )}
-
-            {/* Brief Concise Signal Selection Reason */}
-            {hoveredSignal.reason && hoveredSignal.reason.length > 0 && (
-              <p className="text-[10px] text-slate-300 bg-white/[0.03] px-2.5 py-1.5 rounded-lg border border-white/[0.05] font-medium leading-tight truncate">
-                • {hoveredSignal.reason[0]}
-              </p>
-            )}
-          </div>
-        )}
-
-        {lockedSignal && !loading && (
-          <div className="absolute z-30 left-3 top-14 sm:left-4 sm:top-16 w-[350px] sm:w-[360px] max-w-[calc(100vw-0.9rem)] rounded-2xl bg-[#090d14]/95 backdrop-blur-xl border border-white/[0.14] shadow-[0_16px_36px_rgba(0,0,0,0.6)] p-3.5">
-            {/* Top Row: Action, Symbol, Strategy & Close */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className={cn(
-                    'px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider border shrink-0',
-                    lockedSignal.direction === 'BUY'
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                  )}
-                >
-                  {lockedSignal.direction}
-                </span>
-                <span className="text-[14px] font-extrabold text-white tracking-wide shrink-0">{symbol}</span>
-                <span className="text-[10px] font-semibold text-slate-300 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.08] whitespace-nowrap shrink-0">
-                  {lockedSignal.strategyLabel}
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  setLockedSignalId(null)
-                  setHoveredSignalId(null)
-                }}
-                className="px-2 py-0.5 rounded-md border border-white/[0.1] text-[10px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors"
-              >
-                Close
-              </button>
-            </div>
-
-            {/* Second Row: Outcome & Confidence */}
-            <div className="flex items-center justify-between mb-2.5">
-              {lockedSignal.status !== 'live' ? (
-                <span className={cn(
-                  "text-[9px] font-extrabold px-2 py-0.5 rounded-md border uppercase whitespace-nowrap",
-                  lockedSignal.status === 'WIN' || lockedSignal.status === 'tp_hit'
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                    : lockedSignal.status === 'LOSS' || lockedSignal.status === 'sl_hit'
-                    ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                    : 'bg-slate-500/20 text-slate-300 border-slate-500/30'
-                )}>
-                  {lockedSignal.status === 'WIN' || lockedSignal.status === 'tp_hit'
-                    ? `HIT TP (+${(lockedSignal.rr ?? 1.5).toFixed(1)}x)`
-                    : lockedSignal.status === 'LOSS' || lockedSignal.status === 'sl_hit'
-                    ? 'HIT SL (-1.0x)'
-                    : 'EXPIRED'}
-                </span>
-              ) : (
-                <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md border uppercase bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                  Active Signal
-                </span>
-              )}
-              <span className="text-[10px] font-bold text-blue-400 px-2 py-0.5 bg-blue-500/10 rounded-md border border-blue-500/20 whitespace-nowrap">
-                {lockedSignal.confidence}% Conf.
-              </span>
-            </div>
-
-            {/* Spacious Metrics Grid */}
-            <div className="grid grid-cols-4 gap-2 mb-2 bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.05]">
-              {[
-                ['ENTRY', lockedSignal.entry, 'text-white'],
-                ['SL', lockedSignal.sl, 'text-rose-400'],
-                ['TP', lockedSignal.tp, 'text-emerald-400'],
-                ['R:R', lockedSignal.rr, 'text-blue-400'],
-              ].map(([k, v, color]) => (
-                <div key={String(k)} className="min-w-0">
-                  <span className="block text-[9px] font-semibold text-slate-500 uppercase mb-0.5">{k}</span>
-                  <span className={cn('text-[11px] font-bold tabular-nums whitespace-nowrap block truncate', color)}>
-                    {typeof v === 'number' && String(k) !== 'R:R' ? formatPrice(v, undefined, symbol) : typeof v === 'number' ? v.toFixed(1) + 'x' : String(v)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {lockedMoneyContext && (
-              <div className="flex items-center justify-between text-[11px] font-medium mb-2 pb-2 border-b border-white/[0.06] px-0.5">
-                <div className="flex gap-3">
-                  <span className="text-slate-400">Pos: <span className="text-white font-semibold">{fmtUSD(lockedMoneyContext.suggestedPosition)}</span></span>
-                  <span className="text-slate-400">Risk: <span className="text-rose-400 font-semibold">{fmtUSD(lockedMoneyContext.maxLossAtSL)}</span></span>
+                {/* Strategy Engines Matrix */}
+                <div className="shrink-0">
+                  <StrategyPanel
+                    compact
+                    strategies={storeStrategies}
+                    onToggle={handleToggleEngine}
+                    signalCounts={engineStats.counts}
+                  />
                 </div>
               </div>
             )}
 
-            {/* Brief Concise Signal Selection Reason */}
-            {lockedSignal.reason && lockedSignal.reason.length > 0 && (
-              <p className="text-[10px] text-slate-300 bg-white/[0.03] px-2.5 py-1.5 rounded-lg border border-white/[0.05] font-medium leading-tight truncate mb-2">
-                • {lockedSignal.reason[0]}
-              </p>
-            )}
-
-            {/* Hybrid Broker Execution & Order Assistant Actions (Live Signals Only) */}
-            {lockedSignal.status === 'live' && (
-              <div className="grid grid-cols-2 gap-1.5 mb-2.5 pt-1">
-                <button
-                  onClick={() => handleCopyMT4Order({ symbol, direction: lockedSignal.direction, entry: lockedSignal.entry, sl: lockedSignal.sl, tp: lockedSignal.tp }, lockedMoneyContext?.maxLossAtSL)}
-                  className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-slate-200 text-[10px] font-semibold transition-colors"
-                  title="Copy Entry, SL, TP & Lot Sizing to clipboard"
-                >
-                  {orderCopied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} className="text-blue-400" />}
-                  <span>{orderCopied ? 'Copied Order!' : 'Copy Order Details'}</span>
-                </button>
-                <button
-                  onClick={async () => {
-                    const riskAmt = lockedMoneyContext?.maxLossAtSL || 10
-                    const lotSize = calculateLots(symbol, lockedSignal.entry, lockedSignal.sl, riskAmt)
-                    try {
-                      const res = await fetch('/api/metaapi/execute', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          symbol: symbol,
-                          action: lockedSignal.direction,
-                          volume: lotSize,
-                          sl: lockedSignal.sl,
-                          tp: lockedSignal.tp,
-                        }),
-                      })
-                      const data = await res.json()
-                      if (data.success) {
-                        showToast(`Trade Executed!`, `Successfully executed ${lockedSignal.direction} ${symbol} on Exness MT5.\nPosition Lot Size: ${lotSize}`, 'success')
-                      } else {
-                        showToast(`Exness MT5 Notice`, `${data.error || 'MetaApi terminal standby'}\nCalculated Lot Size: ${lotSize}`, 'info')
-                      }
-                    } catch {
-                      showToast(`Execution Error`, `Calculated Lot Size: ${lotSize}\nError connecting to trading server backend.`, 'error')
-                    }
-                  }}
-                  className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-[10px] font-bold shadow-md transition-all border border-emerald-400/30"
-                  title="1-Click execution on your connected Exness / FxPro account"
-                >
-                  <Zap size={11} className="fill-current text-yellow-300" />
-                  <span>Execute Exness / FxPro</span>
-                </button>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
-              <span className="text-[11px] text-slate-300 font-medium">Log Decision</span>
-              <div className="flex gap-1.5">
-                <button
-                  onClick={() => saveLockedFeedback(true)}
-                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-medium shadow-sm transition-colors"
-                >
-                  Took It
-                </button>
-                <button
-                  onClick={() => saveLockedFeedback(false)}
-                  className="px-2.5 py-1 rounded-lg border border-white/[0.12] text-slate-400 hover:text-white text-[10px] font-medium transition-colors"
-                >
-                  Skipped
-                </button>
-              </div>
-            </div>
-
-            {lockedJournal?.taken && lockedSuggestionKey && (
-              <div className="pt-2 mt-2 border-t border-white/[0.06]">
-                <div className="flex items-center gap-1.5">
-                  <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'win')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", lockedJournal.outcome === 'win' ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>Win</button>
-                  <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'loss')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", lockedJournal.outcome === 'loss' ? 'border-rose-500/50 bg-rose-500/20 text-rose-400' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>Loss</button>
-                  <button onClick={() => setJournalOutcome(lockedSuggestionKey, 'breakeven')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", lockedJournal.outcome === 'breakeven' ? 'border-slate-400/50 bg-slate-500/20 text-slate-300' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>BE</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {manualSetup && !loading && (
-          <div
-            data-entry-popup="true"
-            className="absolute z-30 w-[340px] max-w-[calc(100vw-0.9rem)] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-2xl bg-[#090d14]/95 border border-white/[0.14] shadow-[0_16px_36px_rgba(0,0,0,0.6)] backdrop-blur-xl p-3.5 space-y-3 touch-pan-y"
-            style={{ left: popupPosition?.x ?? 8, top: popupPosition?.y ?? 70 }}
-          >
-            {/* Header with Drag Handle */}
-            <div
-              className="flex items-center justify-between cursor-move select-none"
-              onPointerDown={(e) => {
-                const card = (e.currentTarget.parentElement as HTMLDivElement | null)
-                if (!card) return
-                const rect = card.getBoundingClientRect()
-                dragOffsetRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top }
-                setDraggingPopup(true)
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    'h-5 px-2 rounded-md text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 border',
-                    manualSetup.action === 'BUY'
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                  )}
-                >
-                  {manualSetup.action}
-                </span>
-                <span className="text-[13px] font-extrabold text-white tracking-wide">{symbol}</span>
-                <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 rounded bg-white/[0.06] border border-white/[0.06]">
-                  {strategyLabel}
-                </span>
-              </div>
-              <button
-                onClick={() => setManualSetup(null)}
-                className="h-5 px-2 rounded-md border border-white/[0.1] text-[10px] font-medium text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors"
-              >
-                Close
-              </button>
-            </div>
-
-            {/* Action Toggle (BUY / SELL) */}
-            <div className="grid grid-cols-2 gap-1.5 bg-white/[0.03] p-1 rounded-xl border border-white/[0.06]">
-              {(['BUY', 'SELL'] as const).map((action) => (
-                <button
-                  key={action}
-                  onClick={() =>
-                    setManualSetup((prev) =>
-                      prev
-                        ? {
+            {/* TAB 2: ORDER (Manual Planner) */}
+            {inspectorTab === 'planner' && (
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
+                {/* Active Symbol + Order Type */}
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[14px] font-semibold text-[#FAFAFA]">Order builder</p>
+                    <p className="text-[12px] text-[#71717A]">
+                      {symbol} · {timeframe}
+                    </p>
+                  </div>
+                  <div className="flex items-center rounded-full bg-[#161619] p-1">
+                    {(['market', 'limit'] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() =>
+                          setManualPlanner((prev) => ({
                             ...prev,
-                            action,
-                            generated: false,
-                            sl: null,
-                            tp: null,
-                            rr: 0,
-                          }
-                        : prev
+                            entryType: type,
+                            activeOnChart: true,
+                          }))
+                        }
+                        className={cn(
+                          'px-3 py-1 rounded-full text-[12px] font-medium transition-colors',
+                          manualPlanner.entryType === type
+                            ? 'bg-white/[0.12] text-[#FAFAFA]'
+                            : 'text-[#71717A] hover:text-[#A1A1AA]'
+                        )}
+                      >
+                        {type === 'market' ? 'Market' : 'Limit'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Buy / Sell Selector */}
+                <div className="grid grid-cols-2 gap-2">
+                  {(['BUY', 'SELL'] as const).map((side) => {
+                    const active = manualPlanner.action === side
+                    return (
+                      <button
+                        key={side}
+                        type="button"
+                        onClick={() => {
+                          const levels = generateManualLevels(
+                            manualPlanner.entry,
+                            side,
+                            manualPlanner.range,
+                            manualPlanner.digits
+                          )
+                          setManualPlanner((prev) => ({
+                            ...prev,
+                            action: side,
+                            sl: levels.sl,
+                            tp: levels.tp,
+                            activeOnChart: true,
+                          }))
+                        }}
+                        className={cn(
+                          'h-9 rounded-xl border text-[13px] font-semibold transition-colors',
+                          active
+                            ? side === 'BUY'
+                              ? 'bg-[#34D399]/15 border-[#34D399]/40 text-[#34D399]'
+                              : 'bg-[#F87171]/15 border-[#F87171]/40 text-[#F87171]'
+                            : 'bg-[#161619] border-white/[0.06] text-[#71717A] hover:text-[#FAFAFA]'
+                        )}
+                      >
+                        {side === 'BUY' ? 'Buy' : 'Sell'}
+                      </button>
                     )
-                  }
-                  className={cn(
-                    'h-7 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all',
-                    manualSetup.action === action
-                      ? action === 'BUY'
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm'
-                        : 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                  })}
+                </div>
+
+                {/* Risk Allocation */}
+                <div className="pt-4 border-t border-white/[0.06] space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-medium text-[#A1A1AA]">Risk allocation</span>
+                    <div className="flex items-center rounded-full bg-[#161619] p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setRiskMode('percentage')}
+                        className={cn(
+                          'px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors',
+                          riskMode === 'percentage'
+                            ? 'bg-white/[0.1] text-[#FAFAFA]'
+                            : 'text-[#71717A] hover:text-[#A1A1AA]'
+                        )}
+                      >
+                        % equity
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRiskMode('fixedAmount')}
+                        className={cn(
+                          'px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors',
+                          riskMode === 'fixedAmount'
+                            ? 'bg-white/[0.1] text-[#FAFAFA]'
+                            : 'text-[#71717A] hover:text-[#A1A1AA]'
+                        )}
+                      >
+                        $ USD
+                      </button>
+                    </div>
+                  </div>
+
+                  {riskMode === 'percentage' ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="number"
+                          min={0.1}
+                          max={10}
+                          step={0.1}
+                          value={riskPerTradePct}
+                          onChange={(e) => setRiskPerTradePct(parseFloat(e.target.value) || 0.5)}
+                          className="h-9 flex-1 px-3 rounded-xl bg-[#161619] border border-white/[0.06] focus:border-white/[0.2] text-[13px] font-mono tabular-nums text-[#FAFAFA] focus:outline-none"
+                        />
+                        <span className="text-[13px] font-mono tabular-nums text-[#A1A1AA]">
+                          ${activeRiskUsd.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[0.5, 1.0, 2.0, 3.0].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setRiskPerTradePct(pct)}
+                            className={cn(
+                              'h-7 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
+                              riskPerTradePct === pct
+                                ? 'bg-white/[0.12] text-[#FAFAFA]'
+                                : 'bg-[#161619] text-[#71717A] hover:text-[#FAFAFA]'
+                            )}
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="number"
+                          min={1}
+                          step={5}
+                          value={fixedRiskAmount || ''}
+                          onChange={(e) => setFixedRiskAmount(parseFloat(e.target.value) || 0)}
+                          className="h-9 flex-1 px-3 rounded-xl bg-[#161619] border border-white/[0.06] focus:border-white/[0.2] text-[13px] font-mono tabular-nums text-[#FAFAFA] focus:outline-none"
+                        />
+                        <span className="text-[12px] text-[#71717A]">USD</span>
+                      </div>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {[10, 25, 50, 100, 250].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            onClick={() => setFixedRiskAmount(amt)}
+                            className={cn(
+                              'h-7 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
+                              fixedRiskAmount === amt
+                                ? 'bg-white/[0.12] text-[#FAFAFA]'
+                                : 'bg-[#161619] text-[#71717A] hover:text-[#FAFAFA]'
+                            )}
+                          >
+                            ${amt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                >
-                  {action}
-                </button>
-              ))}
-            </div>
-
-            {/* Compact System Opinion & Money Context */}
-            <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.05] space-y-2">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 font-medium">Confidence & Risk</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold text-blue-400 px-1.5 py-0.5 bg-blue-500/10 rounded border border-blue-500/20">
-                    {manualSetup.confidence}% Conf.
-                  </span>
-                  <span
-                    className="text-[10px] font-bold px-1.5 py-0.5 rounded border"
-                    style={actionBadgeTone(manualSetup.risk)}
-                  >
-                    {manualSetup.risk} Risk
-                  </span>
                 </div>
-              </div>
 
-              {manualMoneyContext && (
-                <div className="pt-2 border-t border-white/[0.05] flex items-center justify-between text-[11px]">
-                  <span className="text-slate-400">Position: <span className="text-white font-semibold">{fmtUSD(manualMoneyContext.suggestedPosition)}</span></span>
-                  <span className="text-slate-400">Max Loss: <span className="text-rose-400 font-semibold">{fmtUSD(manualMoneyContext.maxLossAtSL)}</span></span>
+                {/* Price Levels */}
+                <div className="pt-4 border-t border-white/[0.06] space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-medium text-[#A1A1AA]">Price levels</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handlePlannerSnapLive}
+                        className="text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                      >
+                        Snap live
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handlePlannerAutoLevels}
+                        className="text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                      >
+                        Auto 2.2R
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <label className="w-16 text-[12px] text-[#71717A]">Entry</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={manualPlanner.entry}
+                        onChange={(e) => handlePlannerFieldChange('entry', e.target.value)}
+                        className="h-9 flex-1 px-3 rounded-xl bg-[#161619] border border-white/[0.06] focus:border-white/[0.2] text-[13px] font-mono tabular-nums text-[#FAFAFA] focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="w-16 text-[12px] text-[#F87171]">Stop loss</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={manualPlanner.sl}
+                        onChange={(e) => handlePlannerFieldChange('sl', e.target.value)}
+                        className="h-9 flex-1 px-3 rounded-xl bg-[#161619] border border-[#F87171]/25 focus:border-[#F87171]/60 text-[13px] font-mono tabular-nums text-[#F87171] focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="w-16 text-[12px] text-[#34D399]">Target</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={manualPlanner.tp}
+                        onChange={(e) => handlePlannerFieldChange('tp', e.target.value)}
+                        className="h-9 flex-1 px-3 rounded-xl bg-[#161619] border border-[#34D399]/25 focus:border-[#34D399]/60 text-[13px] font-mono tabular-nums text-[#34D399] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {!plannerValid && (
+                    <p className="text-[12px] text-[#F87171]">
+                      {manualPlanner.action === 'BUY'
+                        ? 'Invalid Buy levels: require SL < Entry < TP'
+                        : 'Invalid Sell levels: require TP < Entry < SL'}
+                    </p>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* SL / TP Generation Section */}
-            {!manualSetup.generated && (
-              <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.05] text-center space-y-2">
-                <p className="text-[11px] text-slate-300">
-                  Generate SL & TP levels for <span className="text-white font-bold">{manualSetup.entry.toFixed(manualSetup.digits)}</span>?
-                </p>
-                <div className="flex items-center justify-center gap-2">
+                {/* Unboxed Output Summary */}
+                <div className="pt-4 border-t border-white/[0.06] grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div>
+                    <span className="block text-[12px] text-[#71717A]">Position size</span>
+                    <span className="block text-[15px] font-mono font-semibold tabular-nums text-[#FAFAFA] mt-0.5">
+                      {plannerValid ? `${plannerLots.toFixed(2)} lots` : '—'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[12px] text-[#71717A]">Risk / reward</span>
+                    <span className="block text-[15px] font-mono font-semibold tabular-nums text-[#FAFAFA] mt-0.5">
+                      {plannerValid ? `${plannerRR.toFixed(2)}R` : '—'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[12px] text-[#71717A]">Max loss</span>
+                    <span className="block text-[13px] font-mono tabular-nums text-[#F87171] mt-0.5">
+                      -${activeRiskUsd.toFixed(2)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[12px] text-[#71717A]">Target profit</span>
+                    <span className="block text-[13px] font-mono tabular-nums text-[#34D399] mt-0.5">
+                      +${plannerPotentialProfit.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Execution & Chart Preview Controls */}
+                <div className="space-y-2 pt-1">
                   <button
-                    onClick={generateManualSLTP}
-                    className="h-7 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium shadow-sm transition-colors"
+                    type="button"
+                    disabled={!plannerValid || executingTrade}
+                    onClick={() => void handleExecutePlanner()}
+                    className={cn(
+                      'w-full h-10 rounded-xl border text-[13px] font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50',
+                      manualPlanner.action === 'BUY'
+                        ? 'bg-[#34D399]/15 border-[#34D399]/30 text-[#34D399] hover:bg-[#34D399]/25'
+                        : 'bg-[#F87171]/15 border-[#F87171]/30 text-[#F87171] hover:bg-[#F87171]/25'
+                    )}
                   >
-                    Generate SL / TP
+                    {executingTrade ? (
+                      <PiSpinnerGap size={16} className="animate-spin" />
+                    ) : (
+                      <PiLightning size={16} />
+                    )}
+                    <span>
+                      {executingTrade
+                        ? 'Submitting to MT5...'
+                        : `Execute ${manualPlanner.entryType === 'limit' ? 'Limit' : 'Market'} ${
+                            manualPlanner.action === 'BUY' ? 'Buy' : 'Sell'
+                          }`}
+                    </span>
+                    {!executingTrade && (
+                      <span className="font-mono tabular-nums text-[12px] opacity-85">
+                        ({plannerLots}L)
+                      </span>
+                    )}
                   </button>
-                  <button
-                    onClick={() => setManualSetup((prev) => (prev ? { ...prev, generated: false, sl: null, tp: null, rr: 0 } : prev))}
-                    className="h-7 px-3 rounded-lg border border-white/[0.12] text-slate-400 hover:text-white text-[11px] font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const payload = formatMT4OrderClipboardPayload({
+                          symbol,
+                          direction: manualPlanner.action,
+                          entry: manualPlanner.entry,
+                          sl: manualPlanner.sl,
+                          tp: manualPlanner.tp,
+                          riskAmount: activeRiskUsd,
+                        })
+                        void navigator.clipboard.writeText(payload)
+                        setOrderCopied(true)
+                        setTimeout(() => setOrderCopied(false), 1800)
+                      }}
+                      className="h-9 rounded-xl bg-[#161619] hover:bg-white/[0.08] border border-white/[0.06] text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      {orderCopied ? (
+                        <PiCheck size={15} className="text-[#34D399]" />
+                      ) : (
+                        <PiCopy size={15} />
+                      )}
+                      <span>{orderCopied ? 'Copied' : 'Copy plan'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setManualPlanner((prev) => ({
+                          ...prev,
+                          activeOnChart: !prev.activeOnChart,
+                        }))
+                      }
+                      className={cn(
+                        'h-9 rounded-xl border text-[13px] font-medium flex items-center justify-center gap-1.5 transition-colors',
+                        manualPlanner.activeOnChart
+                          ? 'bg-[#FAFAFA] text-[#09090B] border-[#FAFAFA]'
+                          : 'bg-[#161619] border-white/[0.06] text-[#A1A1AA] hover:text-[#FAFAFA]'
+                      )}
+                    >
+                      <PiCrosshair size={15} />
+                      <span>{manualPlanner.activeOnChart ? 'On chart' : 'Preview'}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Generated Levels Inputs */}
-            {manualSetup.generated && manualSetup.sl != null && manualSetup.tp != null && (
-              <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.05] space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-white">Trade Plan Levels</span>
-                  <span className="text-[11px] font-bold text-blue-400">R:R {manualSetup.rr.toFixed(2)}x</span>
-                </div>
+            {/* TAB 3: RISK */}
+            {inspectorTab === 'risk' && (
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+                <StatsRow compact stats={dashboardStats} />
 
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase w-14">Entry</span>
-                    <input
-                      value={manualSetup.entry}
-                      onChange={(e) => updateManualValue('entry', e.target.value)}
-                      className="h-7 px-2 flex-1 rounded-md bg-[#070709] border border-white/[0.12] text-[11px] text-white tabular-nums focus:outline-none focus:border-blue-500/50"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold text-rose-400 uppercase w-14">SL</span>
-                    <input
-                      value={manualSetup.sl}
-                      onChange={(e) => updateManualValue('sl', e.target.value)}
-                      className="h-7 px-2 flex-1 rounded-md bg-[#070709] border border-rose-500/30 text-[11px] text-rose-400 tabular-nums focus:outline-none focus:border-rose-500/60"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold text-emerald-400 uppercase w-14">TP</span>
-                    <input
-                      value={manualSetup.tp}
-                      onChange={(e) => updateManualValue('tp', e.target.value)}
-                      className="h-7 px-2 flex-1 rounded-md bg-[#070709] border border-emerald-500/30 text-[11px] text-emerald-400 tabular-nums focus:outline-none focus:border-emerald-500/60"
-                    />
-                  </div>
-                </div>
+                <RiskPanel
+                  maxDailyLoss={maxDailyLossPct}
+                  currentLoss={currentLossPct}
+                  riskPerTrade={riskPerTradePct}
+                  maxTrades={autoTradeMaxPositions}
+                  tradesUsed={todayTakenCount}
+                  accountBalance={liveBalance}
+                  equity={liveEquity}
+                  marginUsed={account?.margin}
+                  freeMargin={account?.freeMargin}
+                  openPositionsCount={metaPositions.length}
+                  maxPositions={autoTradeMaxPositions}
+                  consecutiveLosses={consecutiveLosses}
+                  spreadPips={effectiveSpreadPips}
+                  maxSpreadPips={autoTradeSpreadCapPips}
+                  sessionFilter={autoTradeSessionFilter}
+                  marketRiskTitle={marketRiskContext.title}
+                  marketRiskLevel={marketRiskContext.riskLevel}
+                  marketRiskSummary={marketRiskContext.summary}
+                  riskMode={riskMode}
+                  fixedRiskAmount={fixedRiskAmount}
+                />
 
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    onClick={generateManualSLTP}
-                    className="text-[10px] text-slate-400 hover:text-white underline transition-colors"
-                  >
-                    Regenerate levels
-                  </button>
-                </div>
-
-                {/* Did you take this trade */}
-                <div className="pt-2.5 border-t border-white/[0.06] space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-slate-300 font-medium">Log Decision</span>
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => saveManualFeedback(true)}
-                        className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-medium transition-colors"
+                {riskNotices.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+                    {riskNotices.map((notice) => (
+                      <div
+                        key={notice.id}
+                        className={cn(
+                          'p-3.5 rounded-xl border bg-[#161619] flex items-start justify-between gap-2.5',
+                          notice.critical ? 'border-[#F87171]/30' : 'border-white/[0.06]'
+                        )}
                       >
-                        Took It
-                      </button>
-                      <button
-                        onClick={() => saveManualFeedback(false)}
-                        className="px-2.5 py-1 rounded-lg border border-white/[0.12] text-slate-400 hover:text-white text-[10px] font-medium transition-colors"
-                      >
-                        Skipped
-                      </button>
-                    </div>
+                        <div className="min-w-0">
+                          <p
+                            className={cn(
+                              'text-[13px] font-medium',
+                              notice.critical ? 'text-[#F87171]' : 'text-[#FAFAFA]'
+                            )}
+                          >
+                            {notice.title}
+                          </p>
+                          <p className="text-[12px] text-[#A1A1AA] mt-1 leading-relaxed">
+                            {notice.body}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setDismissedNoticeKeys((prev) => [...prev, notice.id])}
+                          className="text-[#71717A] hover:text-[#FAFAFA] shrink-0 p-0.5"
+                          aria-label="Dismiss notice"
+                        >
+                          <PiX size={15} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  {manualJournal?.taken && manualSuggestionKey && (
-                    <div className="flex items-center gap-1.5 pt-1">
-                      <button onClick={() => setJournalOutcome(manualSuggestionKey, 'win')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", manualJournal.outcome === 'win' ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>Win</button>
-                      <button onClick={() => setJournalOutcome(manualSuggestionKey, 'loss')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", manualJournal.outcome === 'loss' ? 'border-rose-500/50 bg-rose-500/20 text-rose-400' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>Loss</button>
-                      <button onClick={() => setJournalOutcome(manualSuggestionKey, 'breakeven')} className={cn("flex-1 h-6 rounded-md border text-[9px] font-semibold transition-colors", manualJournal.outcome === 'breakeven' ? 'border-slate-400/50 bg-slate-500/20 text-slate-300' : 'border-white/[0.1] text-slate-400 hover:bg-white/[0.05]')}>BE</button>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
             )}
-          </div>
+          </aside>
         )}
       </div>
 
-      <MobileFloatingWorkspaceNav />
+      {/* 3. COLLAPSIBLE BOTTOM POSITIONS & PENDING ORDERS SHEET */}
+      {dockVisible && (
+        <section className="border-t border-white/[0.07] bg-[#111113] shrink-0 z-20">
+          {/* Sheet Header */}
+          <div className="h-11 px-4 flex items-center justify-between gap-3 border-b border-white/[0.06]">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="hidden sm:flex items-center gap-2">
+                <span
+                  className={cn(
+                    'w-1.5 h-1.5 rounded-full',
+                    account?.connected ? 'bg-[#34D399]' : 'bg-[#71717A]'
+                  )}
+                />
+                <span className="text-[13px] font-medium text-[#A1A1AA]">Exness MT5</span>
+              </div>
+
+              <div className="flex items-center gap-1 rounded-full bg-[#161619] p-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDockTab('positions')
+                    setDockExpanded(true)
+                  }}
+                  className={cn(
+                    'h-7 px-3 rounded-full text-[12px] font-medium transition-colors flex items-center gap-1.5',
+                    dockTab === 'positions'
+                      ? 'bg-white/[0.1] text-[#FAFAFA]'
+                      : 'text-[#71717A] hover:text-[#A1A1AA]'
+                  )}
+                >
+                  <span>Open positions</span>
+                  <span className="font-mono tabular-nums text-[#A1A1AA]">
+                    {metaPositions.length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDockTab('orders')
+                    setDockExpanded(true)
+                  }}
+                  className={cn(
+                    'h-7 px-3 rounded-full text-[12px] font-medium transition-colors flex items-center gap-1.5',
+                    dockTab === 'orders'
+                      ? 'bg-white/[0.1] text-[#FAFAFA]'
+                      : 'text-[#71717A] hover:text-[#A1A1AA]'
+                  )}
+                >
+                  <span>Pending orders</span>
+                  <span className="font-mono tabular-nums text-[#A1A1AA]">
+                    {pendingOrders.length}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2 text-[13px]">
+                <span className="text-[12px] text-[#71717A] hidden sm:inline">Net P&L</span>
+                <span
+                  className={cn(
+                    'font-mono font-semibold tabular-nums',
+                    totalOpenProfit >= 0 ? 'text-[#34D399]' : 'text-[#F87171]'
+                  )}
+                >
+                  {totalOpenProfit >= 0 ? '+' : '-'}${Math.abs(totalOpenProfit).toFixed(2)}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  void refreshPositions()
+                  void refreshAccount()
+                  void fetchPendingOrders()
+                }}
+                className="p-1.5 rounded-lg text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.05] transition-colors"
+                title="Refresh MT5 positions & orders"
+              >
+                <PiArrowsClockwise size={15} className={cn(metaLoading && 'animate-spin')} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDockExpanded((v) => !v)}
+                className="p-1.5 rounded-lg text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.05] transition-colors"
+                title={dockExpanded ? 'Collapse sheet' : 'Expand sheet'}
+              >
+                {dockExpanded ? <PiCaretDown size={16} /> : <PiCaretUp size={16} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Sheet Table Body */}
+          {dockExpanded && (
+            <div className="max-h-48 overflow-auto">
+              {dockTab === 'positions' ? (
+                metaPositions.length === 0 ? (
+                  <div className="py-6 text-center text-[13px] text-[#71717A]">
+                    No open positions on MT5
+                  </div>
+                ) : (
+                  <table className="w-full text-left border-collapse text-[13px]">
+                    <thead className="bg-[#111113] border-b border-white/[0.06] text-[12px] font-medium text-[#71717A] sticky top-0">
+                      <tr>
+                        <th className="py-2.5 px-4 font-medium">Symbol</th>
+                        <th className="py-2.5 px-3 font-medium">Side</th>
+                        <th className="py-2.5 px-3 text-right font-medium">Lots</th>
+                        <th className="py-2.5 px-3 text-right font-medium">Entry</th>
+                        <th className="py-2.5 px-3 text-right font-medium">Current</th>
+                        <th className="py-2.5 px-3 text-right hidden md:table-cell font-medium">
+                          SL / TP
+                        </th>
+                        <th className="py-2.5 px-3 text-right font-medium">Live P&L</th>
+                        <th className="py-2.5 px-4 text-right font-medium">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.05]">
+                      {metaPositions.map((pos) => {
+                        const isBuy = pos.type.toUpperCase().includes('BUY')
+                        const isCurrent = pos.symbol === symbol
+                        return (
+                          <tr
+                            key={pos.id}
+                            onClick={() => {
+                              setSymbol(pos.symbol as ChartSymbol)
+                              setSearchParams({ symbol: pos.symbol, timeframe }, { replace: true })
+                            }}
+                            className={cn(
+                              'cursor-pointer transition-colors',
+                              isCurrent ? 'bg-white/[0.04]' : 'hover:bg-white/[0.03]'
+                            )}
+                          >
+                            <td className="py-2.5 px-4 font-semibold text-[#FAFAFA] whitespace-nowrap">
+                              {pos.symbol}
+                            </td>
+                            <td className="py-2.5 px-3 whitespace-nowrap">
+                              <span
+                                className={cn(
+                                  'text-[12px] font-semibold',
+                                  isBuy ? 'text-[#34D399]' : 'text-[#F87171]'
+                                )}
+                              >
+                                {isBuy ? 'BUY' : 'SELL'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[#A1A1AA]">
+                              {pos.volume.toFixed(2)}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[#FAFAFA]">
+                              {formatPrice(pos.openPrice, undefined, pos.symbol)}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[#FAFAFA]">
+                              {formatPrice(pos.currentPrice, undefined, pos.symbol)}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[#71717A] hidden md:table-cell">
+                              {pos.sl ? formatPrice(pos.sl, undefined, pos.symbol) : '—'} /{' '}
+                              {pos.tp ? formatPrice(pos.tp, undefined, pos.symbol) : '—'}
+                            </td>
+                            <td
+                              className={cn(
+                                'py-2.5 px-3 text-right font-mono font-semibold tabular-nums whitespace-nowrap',
+                                pos.profit >= 0 ? 'text-[#34D399]' : 'text-[#F87171]'
+                              )}
+                            >
+                              {pos.profit >= 0 ? '+' : '-'}${Math.abs(pos.profit).toFixed(2)}
+                            </td>
+                            <td className="py-2.5 px-4 text-right">
+                              <button
+                                type="button"
+                                disabled={closingPosId === pos.id}
+                                onClick={async (e) => {
+                                  e.stopPropagation()
+                                  try {
+                                    setClosingPosId(pos.id)
+                                    const res = await closeOpenPosition(pos.id)
+                                    if (res?.success) {
+                                      showToast(
+                                        'Position Closed',
+                                        `Closed ${pos.symbol} on Exness MT5`,
+                                        'success'
+                                      )
+                                      await refreshPositions()
+                                    } else {
+                                      showToast('Notice', res?.error || 'Failed to close position', 'info')
+                                    }
+                                  } finally {
+                                    setClosingPosId(null)
+                                  }
+                                }}
+                                className="h-7 px-2.5 rounded-lg bg-[#161619] hover:bg-[#F87171]/15 border border-white/[0.08] hover:border-[#F87171]/40 text-[12px] font-medium text-[#F87171] inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                              >
+                                {closingPosId === pos.id ? (
+                                  <PiSpinnerGap size={15} className="animate-spin" />
+                                ) : (
+                                  <PiXCircle size={15} />
+                                )}
+                                <span>Close</span>
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )
+              ) : pendingOrders.length === 0 ? (
+                <div className="py-6 text-center text-[13px] text-[#71717A]">
+                  No pending MT5 limit or stop orders
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-[13px]">
+                  <thead className="bg-[#111113] border-b border-white/[0.06] text-[12px] font-medium text-[#71717A] sticky top-0">
+                    <tr>
+                      <th className="py-2.5 px-4 font-medium">Symbol</th>
+                      <th className="py-2.5 px-3 font-medium">Type</th>
+                      <th className="py-2.5 px-3 text-right font-medium">Lots</th>
+                      <th className="py-2.5 px-3 text-right font-medium">Limit price</th>
+                      <th className="py-2.5 px-3 text-right font-medium">Current</th>
+                      <th className="py-2.5 px-3 text-right hidden md:table-cell font-medium">
+                        SL / TP
+                      </th>
+                      <th className="py-2.5 px-3 text-right font-medium">State</th>
+                      <th className="py-2.5 px-4 text-right font-medium">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.05]">
+                    {pendingOrders.map((order) => {
+                      const isBuy = order.type.toUpperCase().includes('BUY')
+                      return (
+                        <tr
+                          key={order.id}
+                          onClick={() => {
+                            setSymbol(order.symbol as ChartSymbol)
+                            setSearchParams({ symbol: order.symbol, timeframe }, { replace: true })
+                          }}
+                          className="cursor-pointer hover:bg-white/[0.03] transition-colors"
+                        >
+                          <td className="py-2.5 px-4 font-semibold text-[#FAFAFA] whitespace-nowrap">
+                            {order.symbol}
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span
+                              className={cn(
+                                'text-[12px] font-semibold',
+                                isBuy ? 'text-[#34D399]' : 'text-[#F87171]'
+                              )}
+                            >
+                              {order.type.replace('ORDER_TYPE_', '').replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[#A1A1AA]">
+                            {order.volume.toFixed(2)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[#FAFAFA]">
+                            {formatPrice(order.openPrice, undefined, order.symbol)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[#A1A1AA]">
+                            {order.currentPrice != null
+                              ? formatPrice(order.currentPrice, undefined, order.symbol)
+                              : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[#71717A] hidden md:table-cell">
+                            {order.sl ? formatPrice(order.sl, undefined, order.symbol) : '—'} /{' '}
+                            {order.tp ? formatPrice(order.tp, undefined, order.symbol) : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-[12px] text-[#A1A1AA]">
+                            {order.state ?? 'Placed'}
+                          </td>
+                          <td className="py-2.5 px-4 text-right">
+                            <button
+                              type="button"
+                              disabled={cancelingOrderId === order.id}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void handleCancelPendingOrder(order.id)
+                              }}
+                              className="h-7 px-2.5 rounded-lg bg-[#161619] hover:bg-[#F87171]/15 border border-white/[0.08] hover:border-[#F87171]/40 text-[12px] font-medium text-[#F87171] inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                            >
+                              {cancelingOrderId === order.id ? (
+                                <PiSpinnerGap size={15} className="animate-spin" />
+                              ) : (
+                                <PiXCircle size={15} />
+                              )}
+                              <span>Cancel</span>
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTradingContextStore } from '@/stores/useTradingContextStore';
 
 export interface MetaApiAccountInfo {
   connected: boolean;
@@ -40,6 +41,12 @@ export function useMetaApi() {
       if (res.ok) {
         const data = await res.json();
         setAccount(data);
+        if (data.connected && typeof data.balance === 'number' && data.balance > 0) {
+          const { autoSyncBrokerBalance, setAccountBalance, accountBalance } = useTradingContextStore.getState();
+          if (autoSyncBrokerBalance && Math.abs(accountBalance - data.balance) > 0.01) {
+            setAccountBalance(Number(data.balance.toFixed(2)));
+          }
+        }
       }
     } catch {
       // silently handle offline or dev server reload

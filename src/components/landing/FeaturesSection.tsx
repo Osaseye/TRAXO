@@ -1,151 +1,343 @@
-// Icons removed — not used in this component
-import entryAnalysisImg from '../../assets/entry.png'
-import riskPlanImg from '../../assets/choose-strategy.png'
-import strategiesLibraryImg from '../../assets/risk-plan.png'
-import signalChartImg from '../../assets/explanation.png'
-import NewsImg from '../../assets/NEWs.png'
-import journalDayImg from '../../assets/journal-day.png'
-import ScrollReveal from '@/components/ui/ScrollReveal'
+import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { PiCheck } from 'react-icons/pi'
+import { cn } from '@/lib/utils'
 
-// Mini visual previews used inside feature cards
-
-function SignalPreview() {
-  return (
-    <div className="w-full h-full rounded-lg border border-white/[0.07] bg-[#0b0f17] overflow-hidden">
-      <img src={entryAnalysisImg} alt="Signal and Entry Analysis" className="w-full h-full object-cover" />
-    </div>
-  )
+interface StrategyEngine {
+  id: string
+  name: string
+  shortName: string
+  image: string
+  session: string
+  rrTarget: string
+  winRate: string
+  rules: string[]
 }
 
-function RiskPreview() {
-  return (
-    <div className="w-full h-full rounded-lg border border-white/[0.07] bg-[#0b0f17] overflow-hidden">
-      <img src={riskPlanImg} alt="Risk management profile" className="w-full h-full object-cover" />
-    </div>
-  )
-}
-
-function StrategyPreview() {
-  return (
-    <div className="w-full h-full rounded-lg border border-white/[0.07] bg-[#0b0f17] overflow-hidden">
-      <img src={strategiesLibraryImg} alt="Strategy control library" className="w-full h-full object-cover" />
-    </div>
-  )
-}
-
-function ReasoningPreview() {
-  return (
-    <div className="w-full h-full rounded-lg border border-white/[0.07] bg-[#0b0f17] overflow-hidden">
-      <img src={signalChartImg} alt="Reasoning and signal chart" className="w-full h-full object-cover" />
-    </div>
-  )
-}
-
-function MarketAwarenessPreview() {
-  return (
-    <div className="w-full h-full rounded-lg border border-white/[0.07] bg-[#0b0f17] overflow-hidden">
-      <img src={NewsImg} alt="Market awareness" className="w-full h-full object-cover" />
-    </div>
-  )
-}
-
-function JournalPreview() {
-  return (
-    <div className="w-full h-full rounded-lg border border-white/[0.07] bg-[#0b0f17] overflow-hidden">
-      <img src={journalDayImg} alt="Trading journal" className="w-full h-full object-cover" />
-    </div>
-  )
-}
-
-const FEATURES = [
+const ENGINES: StrategyEngine[] = [
   {
-    tag: 'Signal Engine',
-    title: 'Every setup.\nEvery timeframe.',
-    body: 'Five strategies run simultaneously across all major pairs. When conditions align, you get a signal with entry, stop-loss, take-profit, and reasoning — before the move happens.',
-    visual: <SignalPreview />,
+    id: 'wick-rejection',
+    name: 'Wick Rejection',
+    shortName: 'Wick Rejection',
+    image: '/brand/strategy-wick-rejection.png',
+    session: 'London · NY Open',
+    rrTarget: '1 : 2.8',
+    winRate: '73%',
+    rules: [
+      'Liquidity sweep beyond prior session high or low',
+      'Rejection wick >= 62% of total candle range',
+      'Immediate displacement close back inside key support/resistance structure',
+    ],
   },
   {
-    tag: 'Risk Management',
-    title: 'Your risk,\nalways in check.',
-    body: 'Set your daily loss limit, per-trade risk cap, and max trade count. Traxo tracks every exposure in real time and warns you before you cross a line.',
-    visual: <RiskPreview />,
+    id: 'breakout',
+    name: 'Breakout Retest',
+    shortName: 'Breakout Retest',
+    image: '/brand/strategy-breakout.png',
+    session: 'London / NY Breakout',
+    rrTarget: '1 : 3.0',
+    winRate: '68%',
+    rules: [
+      'Compression range >= 6 consecutive candles below boundary level',
+      'High-momentum impulse candle close outside consolidation boundary',
+      'Clean limit order retest of broken structure with tight SL invalidation',
+    ],
   },
   {
-    tag: 'Strategy Control',
-    title: 'Trade only what\nyou trust.',
-    body: 'Enable or disable each strategy with one click. Track win rates, average RR, and total signals per strategy so you know exactly which edge is performing.',
-    visual: <StrategyPreview />,
+    id: 'order-block',
+    name: 'Order Block & FVG',
+    shortName: 'Order Block',
+    image: '/brand/strategy-order-block.png',
+    session: 'London & NY Sessions',
+    rrTarget: '1 : 3.2',
+    winRate: '71%',
+    rules: [
+      'Unmitigated last opposing candle before displacement break of structure',
+      'Fair value gap imbalance confirming institutional sponsorship',
+      'M15 zone mitigation aligned with dominant H4 structural trend',
+    ],
   },
   {
-    tag: 'Signal Intelligence',
-    title: 'TRAXO tells you\nexactly why.',
-    body: 'Every signal comes with a plain-language breakdown — which pattern fired, what confluence conditions were met, and why the confidence score sits where it does.',
-    visual: <ReasoningPreview />,
+    id: 'supply-demand',
+    name: 'Supply & Demand',
+    shortName: 'Supply & Demand',
+    image: '/brand/strategy-supply-demand.png',
+    session: 'All Trading Sessions',
+    rrTarget: '1 : 2.6',
+    winRate: '69%',
+    rules: [
+      'Fresh rally-base-drop or drop-base-rally origin zone',
+      'Aggressive departure leaving unfulfilled institutional resting orders',
+      'First return limit tap with strict R:R buffer calculation',
+    ],
   },
   {
-    tag: 'Market Awareness',
-    title: 'Context-aware\ntrading decisions.',
-    body: 'TRAXO integrates live news, economic events, and market sentiment data into your decision-making process. Know what\'s moving the market and how it impacts your signals—trading with full market awareness, not blind assumptions.',
-    visual: <MarketAwarenessPreview />,
-  },
-  {
-    tag: 'Trading Journal',
-    title: 'Log trades.\nLearn faster.',
-    body: 'Capture trade entries, outcomes, and reasoning in one place so you can measure edge, iterate on setups, and improve with evidence.',
-    visual: <JournalPreview />,
+    id: 'trend-following',
+    name: 'Trend Following',
+    shortName: 'Trend Following',
+    image: '/brand/strategy-trend-following.png',
+    session: 'Trending Sessions',
+    rrTarget: '1 : 3.5',
+    winRate: '64%',
+    rules: [
+      'EMA 20/50 dynamic ribbon alignment with clear directional slope',
+      'Pullback to value zone accompanied by momentum deceleration',
+      'Continuation trigger firing only in direction of dominant daily bias',
+    ],
   },
 ]
 
 export function FeaturesSection() {
+  const [activeEngineId, setActiveEngineId] = useState('wick-rejection')
+  const [equity, setEquity] = useState(25000)
+  const [riskPct, setRiskPct] = useState(1.0)
+  const [stopPips, setStopPips] = useState(15)
+
+  const activeEngine = ENGINES.find((e) => e.id === activeEngineId) ?? ENGINES[0]
+
+  // Lot sizing computation: ($risk / (stopPips * $10 per lot))
+  const riskAmount = (equity * riskPct) / 100
+  const computedLots = Math.max(0.01, Number((riskAmount / (stopPips * 10)).toFixed(2)))
+
   return (
-    <section className="py-16 sm:py-32 px-4 sm:px-6 max-w-6xl mx-auto">
-      <ScrollReveal>
-      {/* Section label */}
-      <div className="mb-10 sm:mb-16">
-        <p className="text-[11px] font-semibold tracking-[0.15em] uppercase text-[#3b82f6] mb-3">
-          Why Traxo
-        </p>
-        <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-extrabold text-white tracking-tight leading-tight max-w-lg">
-          Built for traders who
-          <br />
-          know what they want.
-        </h2>
+    <section id="engines" className="relative py-24 sm:py-32 px-4 sm:px-6 overflow-hidden select-none font-sans">
+      {/* ── Background Grid & Vignette ──────────────────────────────────────── */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-[0.14]"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(255,255,255,0.2) 1px, transparent 1px)',
+            backgroundSize: '36px 36px',
+          }}
+        />
+        <div className="absolute top-1/3 right-1/4 w-[650px] h-[380px] bg-gradient-to-tr from-[#34D399]/10 via-white/[0.02] to-transparent blur-3xl rounded-full" />
       </div>
 
-      {/* Feature rows — alternating layout */}
-      <div className="space-y-6">
-        {FEATURES.map((f, i) => (
-          <div
-            key={f.tag}
-            className={`grid md:grid-cols-2 gap-px rounded-2xl overflow-hidden border border-white/[0.06] bg-white/[0.03] ${
-              i % 2 === 1 ? 'md:[direction:rtl]' : ''
-            }`}
-          >
-            {/* Text side */}
-            <div className={`bg-[#09090d] p-8 flex flex-col justify-center ${i % 2 === 1 ? 'md:[direction:ltr]' : ''}`}>
-              <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-[#3b82f6] mb-3">
-                {f.tag}
-              </p>
-              <h3 className="text-[1.4rem] font-extrabold text-white tracking-tight leading-tight mb-4 whitespace-pre-line">
-                {f.title}
-              </h3>
-              <p className="text-[13px] text-[#4b5563] leading-relaxed max-w-sm">
-                {f.body}
-              </p>
+      <div className="relative max-w-7xl mx-auto space-y-14">
+        {/* Section Header: NO BADGE CONTAINER! Pure Plus Jakarta Sans typography */}
+        <div className="space-y-3">
+          <p className="text-[12px] font-semibold tracking-wider text-[#A1A1AA] uppercase">
+            Algorithmic Execution Models
+          </p>
+          <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-[#FAFAFA]">
+            Five execution models. Zero guesswork.
+          </h2>
+          <p className="text-[15px] sm:text-[17px] text-[#A1A1AA] max-w-2xl leading-relaxed font-normal">
+            Every engine is mathematically formulated with structural rules, automated lot sizing, and multi-session telemetry.
+          </p>
+        </div>
+
+        {/* Engine Switcher Tabs directly on canvas */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-white/[0.06] no-scrollbar">
+          {ENGINES.map((engine) => {
+            const isSelected = activeEngineId === engine.id
+            return (
+              <button
+                key={engine.id}
+                type="button"
+                onClick={() => setActiveEngineId(engine.id)}
+                className={cn(
+                  'relative px-5 py-2.5 rounded-full text-[13px] font-medium transition-all shrink-0 cursor-pointer',
+                  isSelected
+                    ? 'text-[#09090B]'
+                    : 'text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-white/[0.04]'
+                )}
+              >
+                {isSelected && (
+                  <motion.span
+                    layoutId="engine-pill-active"
+                    transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                    className="absolute inset-0 bg-[#FAFAFA] rounded-full"
+                  />
+                )}
+                <span className="relative z-10">{engine.shortName}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Engine Showcase & Interactive Playground */}
+        <div className="grid lg:grid-cols-12 gap-12 items-start">
+          {/* Left Column: Active Engine Schematic & Rules */}
+          <div className="lg:col-span-7 space-y-6">
+            <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_32px_90px_rgba(0,0,0,0.85)]">
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={activeEngine.id}
+                  src={activeEngine.image}
+                  alt={activeEngine.name}
+                  initial={{ opacity: 0, scale: 1.02 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                  className="w-full aspect-[16/9] object-cover"
+                />
+              </AnimatePresence>
+              <div className="absolute inset-0 bg-gradient-to-t from-[#09090B] via-transparent to-transparent opacity-80" />
+
+              {/* Text overlay - NO RAINBOW/GREEN CONTAINERS! */}
+              <div className="absolute bottom-4 inset-x-6 flex items-center justify-between">
+                <div>
+                  <h3 className="text-[18px] font-semibold text-[#FAFAFA]">{activeEngine.name}</h3>
+                  <p className="text-[12px] text-[#A1A1AA] mt-0.5">{activeEngine.session}</p>
+                </div>
+                <div className="flex items-center gap-4 text-[13px] font-medium">
+                  <span className="text-[#34D399]">
+                    {activeEngine.winRate} Win Rate
+                  </span>
+                  <span className="text-[#FAFAFA]">
+                    {activeEngine.rrTarget} Target
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {/* Visual side - Bolder, Bigger - FILLS CONTAINER */}
-            <div className={`bg-[#0b0f17] p-0 flex items-stretch ${i % 2 === 1 ? 'md:[direction:ltr]' : ''}`}>
-              <div className="w-full h-full">
-                {f.visual}
+            {/* Rule Verification List */}
+            <div className="space-y-3 pt-2">
+              <div className="text-[12px] uppercase text-[#71717A] tracking-wider font-semibold">
+                Execution Prerequisite Rules
+              </div>
+              <div className="space-y-2.5">
+                {activeEngine.rules.map((rule, idx) => (
+                  <div key={idx} className="flex items-start gap-3 text-[13.5px] text-[#A1A1AA] leading-relaxed">
+                    <div className="w-5 h-5 rounded-full bg-white/[0.05] border border-white/[0.1] flex items-center justify-center text-[#FAFAFA] shrink-0 mt-0.5">
+                      <PiCheck size={12} />
+                    </div>
+                    <span>{rule}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-        ))}
+
+          {/* Right Column: Risk Guard Simulator (Clean Plus Jakarta Sans Typography) */}
+          <div className="lg:col-span-5 space-y-6 pt-2">
+            <div>
+              <p className="text-[12px] uppercase text-[#A1A1AA] tracking-wider font-semibold">
+                Risk Guard Simulator
+              </p>
+              <h3 className="text-2xl font-bold text-[#FAFAFA] tracking-tight mt-1.5">
+                Exact sizing before execution.
+              </h3>
+              <p className="text-[13.5px] text-[#71717A] mt-1 leading-relaxed font-normal">
+                MetaTrader 5 orders calculate exact lot sizing dynamically from your balance and stop distance.
+              </p>
+            </div>
+
+            {/* Clean Sliders */}
+            <div className="space-y-6 pt-3">
+              {/* Account Equity Slider */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[13px]">
+                  <span className="text-[#A1A1AA]">Account Equity</span>
+                  <span className="font-bold text-[#FAFAFA] tabular-nums">
+                    ${equity.toLocaleString()}
+                  </span>
+                </div>
+                <div className="relative h-6 flex items-center">
+                  <div className="w-full h-1.5 rounded-full bg-[#18181B] relative overflow-hidden">
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full bg-[#FAFAFA]"
+                      style={{ width: `${((equity - 5000) / 95000) * 100}%` }}
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min={5000}
+                    max={100000}
+                    step={2500}
+                    value={equity}
+                    onChange={(e) => setEquity(Number(e.target.value))}
+                    className="absolute inset-0 w-full opacity-0 cursor-pointer h-full z-10"
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FAFAFA] border-2 border-white shadow-md pointer-events-none"
+                    style={{ left: `calc(${((equity - 5000) / 95000) * 100}% * (1 - 16px / 100%))` }}
+                  />
+                </div>
+              </div>
+
+              {/* Risk Percentage Slider */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[13px]">
+                  <span className="text-[#A1A1AA]">Risk Tolerance</span>
+                  <span className="font-bold text-[#FAFAFA] tabular-nums">
+                    {riskPct.toFixed(2)}% (${riskAmount.toFixed(0)})
+                  </span>
+                </div>
+                <div className="relative h-6 flex items-center">
+                  <div className="w-full h-1.5 rounded-full bg-[#18181B] relative overflow-hidden">
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full bg-[#34D399]"
+                      style={{ width: `${((riskPct - 0.25) / 2.75) * 100}%` }}
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min={0.25}
+                    max={3.0}
+                    step={0.25}
+                    value={riskPct}
+                    onChange={(e) => setRiskPct(Number(e.target.value))}
+                    className="absolute inset-0 w-full opacity-0 cursor-pointer h-full z-10"
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FAFAFA] border-2 border-[#34D399] shadow-md pointer-events-none"
+                    style={{ left: `calc(${((riskPct - 0.25) / 2.75) * 100}% * (1 - 16px / 100%))` }}
+                  />
+                </div>
+              </div>
+
+              {/* Stop Distance Slider */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[13px]">
+                  <span className="text-[#A1A1AA]">Structural Invalidation Distance</span>
+                  <span className="font-bold text-[#FAFAFA] tabular-nums">
+                    {stopPips} pips
+                  </span>
+                </div>
+                <div className="relative h-6 flex items-center">
+                  <div className="w-full h-1.5 rounded-full bg-[#18181B] relative overflow-hidden">
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full bg-[#A1A1AA]"
+                      style={{ width: `${((stopPips - 5) / 45) * 100}%` }}
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min={5}
+                    max={50}
+                    step={1}
+                    value={stopPips}
+                    onChange={(e) => setStopPips(Number(e.target.value))}
+                    className="absolute inset-0 w-full opacity-0 cursor-pointer h-full z-10"
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FAFAFA] border-2 border-[#A1A1AA] shadow-md pointer-events-none"
+                    style={{ left: `calc(${((stopPips - 5) / 45) * 100}% * (1 - 16px / 100%))` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Sizing Output Display */}
+            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between">
+              <div>
+                <div className="text-[11px] uppercase text-[#71717A] font-medium">Position Sizing</div>
+                <div className="text-2xl font-bold text-[#FAFAFA] tabular-nums mt-0.5">
+                  {computedLots} <span className="text-[14px] text-[#A1A1AA] font-normal">Lots</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[11px] uppercase text-[#71717A] font-medium">Max Loss Cap</div>
+                <div className="text-lg font-semibold text-[#FAFAFA] tabular-nums mt-0.5">
+                  ${riskAmount.toFixed(0)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-
-      </ScrollReveal>
-
     </section>
   )
 }

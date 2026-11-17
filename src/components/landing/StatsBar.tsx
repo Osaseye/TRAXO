@@ -1,27 +1,52 @@
-import ScrollReveal from '@/components/ui/ScrollReveal'
+import { motion } from 'framer-motion'
 
-const METRICS = [
-  { value: '7,200+',  label: 'Signals generated' },
-  { value: '71%',     label: 'Average win rate'   },
-  { value: '5',       label: 'Proven strategies'  },
-  { value: '<100ms',  label: 'Signal delivery'    },
+const TELEMETRY_STATS = [
+  {
+    value: '05',
+    label: 'Algorithmic Engines',
+    detail: 'Wick, Breakout, Order Block, S&D, Trend',
+  },
+  {
+    value: '09',
+    label: 'Pre-Trade Gates',
+    detail: 'Automated spread, volatility & drawdown circuit breakers',
+  },
+  {
+    value: '1 : 2.8',
+    label: 'Minimum Expectancy',
+    detail: 'Asymmetric R:R structural invalidation targets',
+  },
+  {
+    value: '< 40ms',
+    label: 'Execution Latency',
+    detail: 'Direct DMA MetaTrader 5 bridge protocol',
+  },
 ]
 
 export function StatsBar() {
   return (
-    <ScrollReveal>
-    <div className="border-y border-white/[0.05] bg-[#09090d]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10 grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-8">
-        {METRICS.map((m) => (
-          <div key={m.label} className="flex flex-col">
-            <span className="text-3xl font-extrabold text-white tabular-nums tracking-tight leading-none mb-1">
-              {m.value}
-            </span>
-            <span className="text-[12px] text-[#4b5563] font-medium">{m.label}</span>
-          </div>
+    <section className="py-16 sm:py-20 px-4 sm:px-6 border-y border-white/[0.06] bg-[#09090B] select-none">
+      <div className="max-w-7xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-12">
+        {TELEMETRY_STATS.map((stat, idx) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 14 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{
+              duration: 0.45,
+              delay: idx * 0.08,
+            }}
+            className="space-y-1.5"
+          >
+            <div className="font-mono text-3xl sm:text-4xl font-bold tracking-tight text-[#FAFAFA] tabular-nums">
+              {stat.value}
+            </div>
+            <div className="text-[14px] font-semibold text-[#FAFAFA]">{stat.label}</div>
+            <div className="text-[12px] text-[#71717A] leading-relaxed">{stat.detail}</div>
+          </motion.div>
         ))}
       </div>
-    </div>
-    </ScrollReveal>
+    </section>
   )
 }

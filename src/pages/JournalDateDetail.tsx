@@ -1,472 +1,658 @@
 import { useMemo, useState } from 'react'
-import { useNavigate, useParams, Link } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
-  ArrowLeft,
-  Clock,
-  DollarSign,
-  Shield,
-  Target,
-  TrendingDown,
-  TrendingUp,
-  Edit2,
-  Check,
-  X,
-  ShieldCheck,
-  BookOpenCheck,
-} from 'lucide-react'
-import { DesktopWorkspaceNav, MobileFloatingWorkspaceNav } from '@/components/layout/WorkspaceNav'
-import { useTradingContextStore, type JournalEntry } from '@/stores/useTradingContextStore'
-import { cn } from '@/lib/utils'
+  PiArrowLeft,
+  PiCaretLeft,
+  PiCaretRight,
+  PiFloppyDisk,
+  PiHash,
+  PiPlus,
+  PiShield,
+  PiTag,
+  PiTrash,
+  PiX,
+} from 'react-icons/pi'
+import { updateJournalEntry } from '@/lib/api'
+import {
+  useTradingContextStore,
+  type JournalEntry,
+  type JournalOutcome,
+} from '@/stores/useTradingContextStore'
 
-function pad(num: number) {
-  return num < 10 ? `0${num}` : `${num}`
+const PRESET_TAGS = ['#A+', '#London', '#NewYork', '#TrendAligned', '#News', '#EarlyExit', '#RuleBreak']
+
+function toDateKey(ts: number): string {
+  const d = new Date(ts)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
-function dateKeyFromTimestamp(timestamp: number) {
-  const date = new Date(timestamp)
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+function shiftDateKey(dateKey: string, deltaDays: number): string {
+  const parts = dateKey.split('-').map(Number)
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return dateKey
+  const d = new Date(parts[0], parts[1] - 1, parts[2] + deltaDays)
+  return toDateKey(d.getTime())
 }
 
-function formatCurrency(value: number) {
-  return `${value < 0 ? '-' : ''}$${Math.abs(value).toLocaleString(undefined, {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
-  })}`
-}
-
-function formatPrice(value: number) {
-  return value.toLocaleString(undefined, {
-    maximumFractionDigits: 5,
-    minimumFractionDigits: 2,
+function formatHumanDate(dateKey: string): string {
+  const parts = dateKey.split('-').map(Number)
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return dateKey
+  const d = new Date(parts[0], parts[1] - 1, parts[2])
+  return d.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   })
 }
 
-function estimatePnl(entry: JournalEntry) {
-  if (!entry.taken || entry.outcome === 'skipped' || entry.outcome === 'pending') return null
-  if (entry.outcome === 'loss') return -entry.riskAmount
-  if (entry.outcome === 'breakeven') return 0
-
-  const riskDistance = Math.abs(entry.entry - entry.sl)
-  const rewardDistance = Math.abs(entry.tp - entry.entry)
-  const rewardToRisk = riskDistance > 0 ? rewardDistance / riskDistance : 0
-  return entry.riskAmount * rewardToRisk
+function formatPrice(val: number): string {
+  if (!Number.isFinite(val)) return '—'
+  if (val >= 100) return val.toFixed(2)
+  if (val >= 10) return val.toFixed(3)
+  return val.toFixed(5)
 }
 
-function outcomeTone(entry: JournalEntry) {
-  if (!entry.taken || entry.outcome === 'skipped') return 'border-slate-500/30 bg-slate-500/10 text-slate-300'
-  if (entry.outcome === 'win') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-  if (entry.outcome === 'loss') return 'border-rose-500/30 bg-rose-500/10 text-rose-400'
-  if (entry.outcome === 'breakeven') return 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-  return 'border-blue-500/30 bg-blue-500/10 text-blue-400'
+function formatSignedUsd(val: number): string {
+  const abs = Math.abs(val).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+  if (val > 0) return `+$${abs}`
+  if (val < 0) return `-$${abs}`
+  return `$${abs}`
 }
 
-function pnlTone(value: number | null) {
-  if (value == null) return 'text-slate-400'
-  if (value > 0) return 'text-emerald-400'
-  if (value < 0) return 'text-rose-400'
-  return 'text-white'
+function computePnl(entry: JournalEntry): { rr: number; pnlUsd: number; pnlR: number } {
+  const riskDist = Math.abs(entry.entry - entry.sl)
+  const rewardDist = Math.abs(entry.tp - entry.entry)
+  const rr = riskDist > 0 ? rewardDist / riskDist : 0
+  if (entry.outcome === 'win') {
+    return { rr, pnlUsd: entry.riskAmount > 0 ? entry.riskAmount * rr : 0, pnlR: rr }
+  }
+  if (entry.outcome === 'loss') {
+    return { rr, pnlUsd: entry.riskAmount > 0 ? -entry.riskAmount : 0, pnlR: -1 }
+  }
+  return { rr, pnlUsd: 0, pnlR: 0 }
 }
 
-function getRewardToRisk(entry: JournalEntry) {
-  const riskDistance = Math.abs(entry.entry - entry.sl)
-  const rewardDistance = Math.abs(entry.tp - entry.entry)
-  return riskDistance > 0 ? rewardDistance / riskDistance : 0
+function extractTags(notes?: string): string[] {
+  if (!notes) return []
+  const matches = notes.match(/#[a-zA-Z0-9_-]+/g)
+  return matches ? Array.from(new Set(matches)) : []
+}
+
+function stripTagsFromNotes(notes?: string): string {
+  if (!notes) return ''
+  return notes
+    .replace(/#[a-zA-Z0-9_-]+/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function serializeNotesAndTags(bodyText: string, tags: string[]): string {
+  const cleanBody = bodyText.trim()
+  const uniqueTags = Array.from(
+    new Set(tags.map((t) => (t.startsWith('#') ? t : `#${t.replace(/\s+/g, '')}`)).filter((t) => t.length > 1))
+  )
+  if (uniqueTags.length === 0) return cleanBody
+  if (!cleanBody) return uniqueTags.join(' ')
+  return `${cleanBody}\n\n${uniqueTags.join(' ')}`
+}
+
+interface EntryCardProps {
+  entry: JournalEntry
+  onEdit: (id: string, updates: Partial<JournalEntry>) => void
+  onDelete: (id: string) => void
+  onBreakEven: (id: string) => void
+}
+
+function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardProps) {
+  const { rr, pnlUsd, pnlR } = computePnl(entry)
+  const initialTags = useMemo(() => extractTags(entry.notes), [entry.notes])
+  const initialBody = useMemo(() => stripTagsFromNotes(entry.notes), [entry.notes])
+
+  const [notesDraft, setNotesDraft] = useState(initialBody)
+  const [tagsDraft, setTagsDraft] = useState<string[]>(initialTags)
+  const [customTag, setCustomTag] = useState('')
+  const [riskDraft, setRiskDraft] = useState(String(entry.riskAmount || 0))
+  const [savedNotice, setSavedNotice] = useState(false)
+
+  const handleSaveNotesAndRisk = () => {
+    const combinedNotes = serializeNotesAndTags(notesDraft, tagsDraft)
+    const parsedRisk = Math.max(0, Number(riskDraft) || 0)
+    const updatedEntry: JournalEntry = {
+      ...entry,
+      notes: combinedNotes,
+      riskAmount: parsedRisk,
+    }
+    const nextPnl = computePnl(updatedEntry)
+    onEdit(entry.id, { notes: combinedNotes, riskAmount: parsedRisk })
+    updateJournalEntry(entry.id, {
+      notes: combinedNotes,
+      outcome: entry.outcome,
+      pnlUsd: nextPnl.pnlUsd,
+    }).catch(() => {})
+    setSavedNotice(true)
+    setTimeout(() => setSavedNotice(false), 1800)
+  }
+
+  const toggleTag = (tag: string) => {
+    const normalized = tag.startsWith('#') ? tag : `#${tag}`
+    const nextTags = tagsDraft.includes(normalized)
+      ? tagsDraft.filter((t) => t !== normalized)
+      : [...tagsDraft, normalized]
+    setTagsDraft(nextTags)
+    const combinedNotes = serializeNotesAndTags(notesDraft, nextTags)
+    onEdit(entry.id, { notes: combinedNotes })
+    updateJournalEntry(entry.id, { notes: combinedNotes }).catch(() => {})
+  }
+
+  const handleAddCustomTag = () => {
+    const clean = customTag.trim().replace(/^#+/, '').replace(/\s+/g, '')
+    if (!clean) return
+    const formatted = `#${clean}`
+    if (!tagsDraft.includes(formatted)) {
+      const nextTags = [...tagsDraft, formatted]
+      setTagsDraft(nextTags)
+      const combinedNotes = serializeNotesAndTags(notesDraft, nextTags)
+      onEdit(entry.id, { notes: combinedNotes })
+      updateJournalEntry(entry.id, { notes: combinedNotes }).catch(() => {})
+    }
+    setCustomTag('')
+  }
+
+  const handleOutcomeSelect = (nextOutcome: JournalOutcome) => {
+    const nextPnl = computePnl({ ...entry, outcome: nextOutcome })
+    onEdit(entry.id, { outcome: nextOutcome })
+    updateJournalEntry(entry.id, {
+      outcome: nextOutcome,
+      pnlUsd: nextPnl.pnlUsd,
+    }).catch(() => {})
+  }
+
+  const effectiveSl = entry.currentSl ?? entry.sl
+
+  return (
+    <article className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 space-y-6">
+      {/* Top Row */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-5 border-b border-white/[0.06]">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span
+            className={`px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+              entry.action === 'BUY'
+                ? 'bg-[#34D399]/10 text-[#34D399]'
+                : 'bg-[#F87171]/10 text-[#F87171]'
+            }`}
+          >
+            {entry.action}
+          </span>
+          <span className="text-[16px] font-semibold text-[#FAFAFA]">
+            {entry.symbol}
+          </span>
+          <span className="px-2.5 py-0.5 rounded-lg bg-[#161619] text-[12px] text-[#A1A1AA]">
+            {entry.timeframe}
+          </span>
+          <span className="text-[14px] text-[#A1A1AA]">{entry.strategy}</span>
+          <span className="text-[12px] font-mono tabular-nums text-[#71717A]">
+            {new Date(entry.createdAt).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span
+            className={`text-[15px] font-mono font-semibold tabular-nums mr-1 ${
+              entry.outcome === 'win'
+                ? 'text-[#34D399]'
+                : entry.outcome === 'loss'
+                  ? 'text-[#F87171]'
+                  : 'text-[#A1A1AA]'
+            }`}
+          >
+            {entry.outcome === 'pending' || entry.outcome === 'skipped'
+              ? entry.outcome === 'pending'
+                ? 'Pending'
+                : 'Skipped'
+              : entry.riskAmount > 0
+                ? `${formatSignedUsd(pnlUsd)} (${pnlR >= 0 ? '+' : ''}${pnlR.toFixed(2)}R)`
+                : `${pnlR >= 0 ? '+' : ''}${pnlR.toFixed(2)}R`}
+          </span>
+
+          <select
+            value={entry.outcome}
+            onChange={(e) => handleOutcomeSelect(e.target.value as JournalOutcome)}
+            aria-label="Trade outcome"
+            className="px-3 py-1.5 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] focus:border-white/[0.2] focus:outline-none"
+          >
+            <option value="pending">Pending</option>
+            <option value="win">Win</option>
+            <option value="loss">Loss</option>
+            <option value="breakeven">Breakeven</option>
+            <option value="skipped">Skipped</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={() => onEdit(entry.id, { taken: !entry.taken })}
+            className={`px-3 py-1.5 rounded-xl text-[13px] font-medium transition-colors ${
+              entry.taken
+                ? 'bg-[#FAFAFA] text-[#09090B]'
+                : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]'
+            }`}
+          >
+            {entry.taken ? 'Taken' : 'Mark Taken'}
+          </button>
+
+          {entry.outcome === 'pending' && !entry.breakEvenTriggered && (
+            <button
+              type="button"
+              onClick={() => onBreakEven(entry.id)}
+              title="Move Stop Loss to Break-Even"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+            >
+              <PiShield className="h-4 w-4 text-[#34D399]" />
+              <span>Move SL to BE</span>
+            </button>
+          )}
+
+          {entry.breakEvenTriggered && (
+            <span className="px-2.5 py-1 rounded-xl bg-[#161619] text-[12px] font-medium text-[#34D399]">
+              BE Locked
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onDelete(entry.id)}
+            title="Delete trade entry"
+            className="p-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#71717A] hover:text-[#F87171] transition-colors"
+          >
+            <PiTrash className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Borderless Price Levels & Risk Sizing Tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+          <div className="text-[12px] text-[#71717A]">Entry</div>
+          <div className="text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA]">
+            {formatPrice(entry.entry)}
+          </div>
+        </div>
+        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+          <div className="text-[12px] text-[#71717A]">
+            {entry.breakEvenTriggered ? 'Active SL (BE)' : 'Stop Loss'}
+          </div>
+          <div className="text-[15px] font-mono font-medium tabular-nums text-[#F87171]">
+            {formatPrice(effectiveSl)}
+          </div>
+        </div>
+        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+          <div className="text-[12px] text-[#71717A]">Take Profit</div>
+          <div className="text-[15px] font-mono font-medium tabular-nums text-[#34D399]">
+            {formatPrice(entry.tp)}
+          </div>
+        </div>
+        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+          <div className="text-[12px] text-[#71717A]">Planned R:R</div>
+          <div className="text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA]">
+            {rr.toFixed(2)}R
+          </div>
+        </div>
+        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+          <div className="text-[12px] text-[#71717A]">Confidence</div>
+          <div className="text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA]">
+            {entry.confidence}%
+          </div>
+        </div>
+        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+          <label className="block text-[12px] text-[#71717A]">Risk ($)</label>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={riskDraft}
+            onChange={(e) => setRiskDraft(e.target.value)}
+            className="w-full bg-transparent text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA] focus:outline-none border-b border-transparent focus:border-white/[0.2]"
+          />
+        </div>
+      </div>
+
+      {/* Interactive Tags & Trade Reflection Notes */}
+      <div className="space-y-4">
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span className="inline-flex items-center gap-2 text-[13px] font-medium text-[#A1A1AA]">
+              <PiTag className="h-4 w-4 text-[#71717A]" />
+              Setup &amp; Mistake Tags
+            </span>
+
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <PiHash className="h-3.5 w-3.5 text-[#71717A] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={customTag}
+                  onChange={(e) => setCustomTag(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleAddCustomTag()
+                    }
+                  }}
+                  placeholder="Custom tag"
+                  className="pl-8 pr-3 py-1.5 rounded-xl bg-[#18181B] border border-white/[0.07] text-[12px] text-[#FAFAFA] placeholder:text-[#71717A] focus:border-white/[0.2] focus:outline-none w-32"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleAddCustomTag}
+                className="p-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#FAFAFA] transition-colors"
+                aria-label="Add tag"
+              >
+                <PiPlus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {Array.from(new Set([...PRESET_TAGS, ...tagsDraft])).map((tag) => {
+              const active = tagsDraft.includes(tag)
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleTag(tag)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
+                    active
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'bg-[#161619] text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-[#1D1D22]'
+                  }`}
+                >
+                  <span>{tag}</span>
+                  {active && <PiX className="h-3 w-3" />}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-[13px] font-medium text-[#A1A1AA]">
+              Execution Notes &amp; Post-Trade Review
+            </label>
+            <div className="flex items-center gap-3">
+              {savedNotice && (
+                <span className="text-[12px] font-medium text-[#34D399]">Saved</span>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveNotesAndRisk}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-medium transition-colors"
+              >
+                <PiFloppyDisk className="h-4 w-4" />
+                <span>Save Notes &amp; Risk</span>
+              </button>
+            </div>
+          </div>
+          <textarea
+            rows={3}
+            value={notesDraft}
+            onChange={(e) => setNotesDraft(e.target.value)}
+            placeholder="Record entry reasoning, market structure context, emotional discipline, or execution slippage..."
+            className="w-full px-4 py-3 rounded-xl bg-[#18181B] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-[14px] text-[#FAFAFA] placeholder:text-[#71717A] resize-y"
+          />
+        </div>
+      </div>
+    </article>
+  )
 }
 
 export default function JournalDateDetail() {
   const { date } = useParams<{ date: string }>()
   const navigate = useNavigate()
+  const [fallbackDateKey] = useState(() => toDateKey(Date.now()))
+  const activeDateKey = date || fallbackDateKey
+
   const journal = useTradingContextStore((s) => s.journal)
   const editJournalEntry = useTradingContextStore((s) => s.editJournalEntry)
+  const deleteJournalEntry = useTradingContextStore((s) => s.deleteJournalEntry)
   const triggerBreakEven = useTradingContextStore((s) => s.triggerBreakEven)
 
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState<string>('')
+  const dayEntries = useMemo(() => {
+    return journal
+      .filter((entry) => toDateKey(entry.createdAt) === activeDateKey)
+      .sort((a, b) => b.createdAt - a.createdAt)
+  }, [journal, activeDateKey])
 
-  const entries = useMemo(
-    () =>
-      journal
-        .filter((entry) => date && dateKeyFromTimestamp(entry.createdAt) === date)
-        .sort((a, b) => b.createdAt - a.createdAt),
-    [date, journal]
-  )
+  const takenEntries = useMemo(() => dayEntries.filter((e) => e.taken), [dayEntries])
+  const systemEntries = useMemo(() => dayEntries.filter((e) => !e.taken), [dayEntries])
 
-  const summary = useMemo(() => {
-    return entries.reduce(
-      (acc, entry) => {
-        const pnl = estimatePnl(entry)
-        return {
-          trades: acc.trades + 1,
-          wins: acc.wins + (entry.outcome === 'win' ? 1 : 0),
-          losses: acc.losses + (entry.outcome === 'loss' ? 1 : 0),
-          pending: acc.pending + (entry.outcome === 'pending' ? 1 : 0),
-          pnl: acc.pnl + (pnl ?? 0),
-        }
-      },
-      { trades: 0, wins: 0, losses: 0, pending: 0, pnl: 0 }
-    )
-  }, [entries])
+  const dayStats = useMemo(() => {
+    const baseList = takenEntries.length > 0 ? takenEntries : dayEntries
+    let wins = 0
+    let losses = 0
+    let netUsd = 0
+    let netR = 0
+    for (const e of baseList) {
+      const m = computePnl(e)
+      if (e.outcome === 'win') {
+        wins += 1
+        netUsd += m.pnlUsd
+        netR += m.pnlR
+      } else if (e.outcome === 'loss') {
+        losses += 1
+        netUsd += m.pnlUsd
+        netR += m.pnlR
+      }
+    }
+    const decided = wins + losses
+    return {
+      wins,
+      losses,
+      winRate: decided > 0 ? (wins / decided) * 100 : 0,
+      netUsd,
+      netR,
+      totalCount: dayEntries.length,
+    }
+  }, [takenEntries, dayEntries])
 
   return (
-    <div className="min-h-screen bg-[#070709] text-white pb-24 lg:pb-8 selection:bg-blue-500/20">
-      {/* Header Bar */}
-      <header className="h-14 border-b border-white/[0.08] bg-[#070709]/95 backdrop-blur-xl px-3 sm:px-6 flex items-center justify-between gap-3 sticky top-0 z-40">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex items-center gap-2 shrink-0 group">
-            <div className="w-7 h-7 rounded-lg bg-[#0d1117] border border-white/[0.12] flex items-center justify-center group-hover:border-white/[0.25] transition-colors">
-              <img src="/TRAXO-icon.png" alt="TRAXO" className="w-4 h-4 object-contain" />
-            </div>
-            <span className="text-[11px] font-black tracking-[0.22em] uppercase text-white hidden sm:inline">
-              TRAXO
-            </span>
-          </div>
-
-          <span className="h-4 w-px bg-white/[0.1] hidden sm:block shrink-0" />
-
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#0d1117] border border-white/[0.08]">
-              <BookOpenCheck className="w-3.5 h-3.5 text-blue-400" />
-              <span className="text-[11px] font-semibold text-slate-200 truncate">Date Breakdown: {date}</span>
-            </div>
-          </div>
-        </div>
-
-        <DesktopWorkspaceNav />
-      </header>
-
-      {/* Main Content Workspace */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
-        <button
-          onClick={() => navigate('/journal')}
-          className="h-8 px-3 rounded-lg border border-white/[0.08] bg-[#090d14] text-[11px] font-bold text-slate-400 hover:text-white hover:border-white/[0.18] inline-flex items-center gap-2 transition-colors"
-        >
-          <ArrowLeft size={13} />
-          <span>Back to Performance Calendar</span>
-        </button>
-
-        {/* UNIFIED CONTIGUOUS WORKSPACE CONTAINER (NO FLOATING CARDS) */}
-        <div className="rounded-xl border border-white/[0.08] bg-[#090d14]/95 shadow-2xl backdrop-blur-xl overflow-hidden divide-y divide-white/[0.08]">
-          
-          {/* Top Banner & Date Metrics Strip */}
-          <div className="p-5 sm:p-6 bg-[#05080f]/50 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-            <div className="space-y-1">
-              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                Daily Execution Log
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] overflow-x-hidden">
+      <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-8">
+        {/* Header Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div className="space-y-2">
+            <Link
+              to="/journal"
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+            >
+              <PiArrowLeft className="h-4 w-4" />
+              <span>Back to calendar</span>
+            </Link>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
+                {formatHumanDate(activeDateKey)}
+              </h1>
+              <span className="px-3 py-1 rounded-full bg-[#161619] text-[13px] font-mono tabular-nums text-[#A1A1AA]">
+                {activeDateKey}
               </span>
-              <h1 className="text-xl sm:text-2xl font-bold text-white mt-1">Trading Log for {date}</h1>
-              <p className="text-xs text-slate-400">Review price levels, position sizes, risk parameters, and estimated P/L for trades on this date.</p>
-            </div>
-
-            {/* Metrics Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full xl:w-auto xl:min-w-[34rem]">
-              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
-                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Total Trades</p>
-                <p className="mt-1 text-lg font-bold text-white tabular-nums">{summary.trades}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
-                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Wins</p>
-                <p className="mt-1 text-lg font-bold text-emerald-400 tabular-nums">{summary.wins}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
-                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Losses</p>
-                <p className="mt-1 text-lg font-bold text-rose-400 tabular-nums">{summary.losses}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-[#070b12] border border-white/[0.06] text-center sm:text-left">
-                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Est. P/L</p>
-                <p className={cn("mt-1 text-lg font-bold tabular-nums", pnlTone(summary.pnl))}>{formatCurrency(summary.pnl)}</p>
-              </div>
             </div>
           </div>
 
-          {/* Trade Rows Stream (Contiguous, Zero Floating Cards) */}
-          <div className="divide-y divide-white/[0.06]">
-            
-            {/* 1. PERSONAL TRADES SECTION */}
-            {entries.filter(e => e.taken).length > 0 && (
-              <div className="p-3 sm:p-4 bg-white/[0.02] border-b border-white/[0.06]">
-                <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <Target size={16} className="text-blue-400" />
-                  Trades Taken
-                </h2>
-              </div>
-            )}
-            
-            {entries.filter(e => e.taken).map((entry, index) => {
-              const pnl = estimatePnl(entry)
-              const rr = getRewardToRisk(entry)
-              const settledLabel = pnl == null ? 'Not settled' : formatCurrency(pnl)
-
-              return (
-                <article key={entry.id} className="p-5 bg-[#090d14]/60 space-y-4 hover:bg-white/[0.01] transition-colors">
-                  <div className="grid grid-cols-1 xl:grid-cols-[16rem_1fr_18rem] gap-5 items-start">
-                    
-                    {/* Column 1: Trade Identity */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500">Manual Trade</span>
-                        <span className={cn("px-2 py-0.5 rounded text-[9px] font-black uppercase border", outcomeTone(entry))}>
-                          {entry.outcome}
-                        </span>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-base font-bold text-white">{entry.symbol}</h3>
-                          <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 rounded bg-white/[0.06]">
-                            {entry.timeframe}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{entry.strategy}</p>
-                      </div>
-
-                      <div className="space-y-1 text-[11px] text-slate-400">
-                        <div className="flex justify-between">
-                          <span>Direction:</span>
-                          <span className={entry.action === 'BUY' ? 'font-bold text-emerald-400' : 'font-bold text-rose-400'}>
-                            {entry.action}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Time Logged:</span>
-                          <span className="font-medium text-slate-200">
-                            {new Date(entry.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Column 2: Price Levels Grid */}
-                    <div className="space-y-3">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500">Price Execution Levels</span>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="p-2.5 rounded-lg bg-[#05080f] border border-white/[0.06]">
-                          <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Entry Price</span>
-                          <span className="text-[13px] font-bold text-slate-200 tabular-nums mt-0.5 block">{formatPrice(entry.entry)}</span>
-                        </div>
-                        <div className="p-2.5 rounded-lg bg-[#05080f] border border-white/[0.06]">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Stop Loss</span>
-                            {entry.breakEvenTriggered && (
-                              <span className="text-[8px] font-extrabold text-emerald-400 bg-emerald-500/10 px-1 rounded">
-                                BE
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[13px] font-bold text-rose-400 tabular-nums mt-0.5 block">{formatPrice(entry.currentSl ?? entry.sl)}</span>
-                        </div>
-                        <div className="p-2.5 rounded-lg bg-[#05080f] border border-white/[0.06]">
-                          <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest">Take Profit</span>
-                          <span className="text-[13px] font-bold text-emerald-400 tabular-nums mt-0.5 block">{formatPrice(entry.tp)}</span>
-                        </div>
-                      </div>
-
-                      {entry.notes && (
-                        <div className="p-2.5 rounded-lg bg-[#05080f] border border-white/[0.06] text-[11px] text-slate-300">
-                          <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1">Trader Notes</span>
-                          {entry.notes}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Column 3: PnL Result & Position Editor */}
-                    <div className="p-4 rounded-lg bg-[#05080f] border border-white/[0.06] space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500">P/L Outcome</span>
-                        {pnl != null && pnl >= 0 ? (
-                          <TrendingUp size={16} className={pnl > 0 ? 'text-emerald-400' : 'text-slate-400'} />
-                        ) : (
-                          <TrendingDown size={16} className="text-rose-400" />
-                        )}
-                      </div>
-
-                      <div>
-                        <span className={cn("text-xl font-bold tabular-nums block", pnlTone(pnl))}>{settledLabel}</span>
-                      </div>
-
-                      <div className="space-y-1.5 text-[11px] text-slate-400 pt-2 border-t border-white/[0.06]">
-                        <div className="flex items-center justify-between">
-                          <span>Position Size:</span>
-                          {editingId === entry.id ? (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                className="h-6 w-20 bg-[#090d14] border border-blue-500/50 rounded px-1 text-right text-white text-[11px] focus:outline-none"
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                autoFocus
-                              />
-                              <button
-                                onClick={() => {
-                                  const val = Number(editValue)
-                                  if (!isNaN(val) && val > 0) {
-                                    const riskPct = Math.abs(entry.entry - entry.sl) / entry.entry
-                                    editJournalEntry(entry.id, {
-                                      suggestedPosition: val,
-                                      riskAmount: val * riskPct,
-                                    })
-                                  }
-                                  setEditingId(null)
-                                }}
-                                className="p-1 rounded bg-blue-500/20 text-blue-400"
-                              >
-                                <Check size={10} />
-                              </button>
-                            </div>
-                          ) : (
-                            <span
-                              className="font-bold text-slate-200 flex items-center gap-1 cursor-pointer hover:text-white"
-                              onClick={() => {
-                                setEditValue(entry.suggestedPosition.toFixed(2))
-                                setEditingId(entry.id)
-                              }}
-                            >
-                              {formatCurrency(entry.suggestedPosition)}
-                              <Edit2 size={10} className="text-slate-500" />
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <span>Risk Amount:</span>
-                          <span className="font-bold text-rose-400">{formatCurrency(entry.riskAmount)}</span>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <span>Risk-to-Reward:</span>
-                          <span className="font-bold text-blue-400">{rr.toFixed(1)}x</span>
-                        </div>
-                      </div>
-
-                      {/* Break-Even CTA */}
-                      {entry.taken && entry.outcome === 'pending' && (
-                        <div className="pt-2 border-t border-white/[0.06]">
-                          {entry.breakEvenTriggered ? (
-                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400">
-                              <ShieldCheck size={13} />
-                              <span>Break-Even Active</span>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => triggerBreakEven(entry.id)}
-                              className="w-full h-7 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition-colors flex items-center justify-center gap-1.5"
-                            >
-                              <ShieldCheck size={12} />
-                              <span>Set Break-Even SL</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                  </div>
-                </article>
-              )
-            })}
-
-            {/* 2. SYSTEM WINS SECTION */}
-            {entries.filter(e => !e.taken && e.outcome === 'win').length > 0 && (
-              <div className="p-3 sm:p-4 bg-emerald-500/[0.02] border-y border-white/[0.06]">
-                <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
-                  <TrendingUp size={16} />
-                  System Wins
-                </h2>
-              </div>
-            )}
-            
-            {entries.filter(e => !e.taken && e.outcome === 'win').map((entry) => (
-              <article key={entry.id} className="p-4 sm:p-5 bg-[#090d14]/40 hover:bg-white/[0.01] transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4 min-w-0">
-                  <span className="px-2 py-1 rounded text-[10px] font-black uppercase border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shrink-0">
-                    {entry.action} WIN
-                  </span>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-white">{entry.symbol}</h3>
-                      <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 rounded bg-white/[0.06]">
-                        {entry.timeframe}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">{entry.strategy}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 md:gap-6 shrink-0 w-full md:w-auto">
-                  <div className="text-center md:text-right">
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Confidence</span>
-                    <span className="text-xs font-bold text-blue-400 tabular-nums">{entry.confidence}%</span>
-                  </div>
-                  <div className="text-center md:text-right">
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">R:R Ratio</span>
-                    <span className="text-xs font-bold text-slate-200 tabular-nums">{getRewardToRisk(entry).toFixed(1)}x</span>
-                  </div>
-                  <div className="text-center md:text-right">
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Time Logged</span>
-                    <span className="text-xs font-bold text-slate-400">
-                      {new Date(entry.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                </div>
-              </article>
-            ))}
-
-            {/* 3. SYSTEM LOSSES SECTION */}
-            {entries.filter(e => !e.taken && e.outcome === 'loss').length > 0 && (
-              <div className="p-3 sm:p-4 bg-rose-500/[0.02] border-y border-white/[0.06]">
-                <h2 className="text-sm font-bold text-rose-400 uppercase tracking-wider flex items-center gap-2">
-                  <TrendingDown size={16} />
-                  System Losses
-                </h2>
-              </div>
-            )}
-            
-            {entries.filter(e => !e.taken && e.outcome === 'loss').map((entry) => (
-              <article key={entry.id} className="p-4 sm:p-5 bg-[#090d14]/40 hover:bg-white/[0.01] transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4 min-w-0">
-                  <span className="px-2 py-1 rounded text-[10px] font-black uppercase border bg-rose-500/10 text-rose-400 border-rose-500/30 shrink-0">
-                    {entry.action} LOSS
-                  </span>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-white">{entry.symbol}</h3>
-                      <span className="text-[10px] font-semibold text-slate-400 px-1.5 py-0.5 rounded bg-white/[0.06]">
-                        {entry.timeframe}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">{entry.strategy}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 md:gap-6 shrink-0 w-full md:w-auto">
-                  <div className="text-center md:text-right">
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Confidence</span>
-                    <span className="text-xs font-bold text-blue-400 tabular-nums">{entry.confidence}%</span>
-                  </div>
-                  <div className="text-center md:text-right">
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">R:R Ratio</span>
-                    <span className="text-xs font-bold text-slate-200 tabular-nums">{getRewardToRisk(entry).toFixed(1)}x</span>
-                  </div>
-                  <div className="text-center md:text-right">
-                    <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Time Logged</span>
-                    <span className="text-xs font-bold text-slate-400">
-                      {new Date(entry.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                </div>
-              </article>
-            ))}
-
-            {entries.length === 0 && (
-              <div className="p-12 text-center space-y-2">
-                <Clock size={20} className="mx-auto text-slate-500" />
-                <h3 className="text-sm font-bold text-white">No trades logged for this date</h3>
-                <p className="text-[11px] text-slate-400">Trades taken on the chart automatically log to this calendar date.</p>
-              </div>
-            )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate(`/journal/${shiftDateKey(activeDateKey, -1)}`)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+            >
+              <PiCaretLeft className="h-4 w-4 text-[#A1A1AA]" />
+              <span>Previous Day</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/journal/${shiftDateKey(activeDateKey, 1)}`)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+            >
+              <span>Next Day</span>
+              <PiCaretRight className="h-4 w-4 text-[#A1A1AA]" />
+            </button>
           </div>
         </div>
-      </main>
 
-      <MobileFloatingWorkspaceNav />
+        {/* Daily Review Card */}
+        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+              Daily Review
+            </h2>
+            <p className="text-[14px] text-[#A1A1AA]">
+              Price levels, risk sizing, execution notes, and realized outcome for this date.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:min-w-[540px]">
+            <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+              <div className="text-[12px] text-[#71717A]">Net P&amp;L</div>
+              <div
+                className={`text-[18px] font-mono font-semibold tabular-nums ${
+                  dayStats.netUsd > 0 || (dayStats.netUsd === 0 && dayStats.netR > 0)
+                    ? 'text-[#34D399]'
+                    : dayStats.netUsd < 0 || (dayStats.netUsd === 0 && dayStats.netR < 0)
+                      ? 'text-[#F87171]'
+                      : 'text-[#FAFAFA]'
+                }`}
+              >
+                {dayStats.netUsd !== 0
+                  ? formatSignedUsd(dayStats.netUsd)
+                  : `${dayStats.netR >= 0 ? '+' : ''}${dayStats.netR.toFixed(2)}R`}
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+              <div className="text-[12px] text-[#71717A]">R Multiple</div>
+              <div
+                className={`text-[18px] font-mono font-semibold tabular-nums ${
+                  dayStats.netR > 0
+                    ? 'text-[#34D399]'
+                    : dayStats.netR < 0
+                      ? 'text-[#F87171]'
+                      : 'text-[#FAFAFA]'
+                }`}
+              >
+                {dayStats.netR >= 0 ? '+' : ''}
+                {dayStats.netR.toFixed(2)}R
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+              <div className="text-[12px] text-[#71717A]">Win Rate</div>
+              <div className="text-[18px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+                {dayStats.winRate.toFixed(0)}%
+              </div>
+              <div className="text-[12px] font-mono tabular-nums text-[#71717A]">
+                <span className="text-[#34D399]">{dayStats.wins}W</span> /{' '}
+                <span className="text-[#F87171]">{dayStats.losses}L</span>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+              <div className="text-[12px] text-[#71717A]">Entries</div>
+              <div className="text-[18px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+                {dayStats.totalCount}
+              </div>
+              <div className="text-[12px] font-mono tabular-nums text-[#71717A]">
+                {takenEntries.length} taken · {systemEntries.length} sys
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {dayEntries.length === 0 ? (
+          <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-12 text-center space-y-4">
+            <img
+              src="/brand/empty-journal.png"
+              alt="No journal entries for this date"
+              className="w-full max-w-[260px] mx-auto rounded-xl object-cover opacity-90"
+            />
+            <div className="space-y-1.5">
+              <p className="text-[15px] font-medium text-[#FAFAFA]">
+                No trades or signals logged for {activeDateKey}
+              </p>
+              <p className="text-[14px] text-[#A1A1AA]">
+                Navigate to another trading day or return to the monthly P&amp;L calendar.
+              </p>
+            </div>
+            <div>
+              <Link
+                to="/journal"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+              >
+                <PiArrowLeft className="h-4 w-4" />
+                <span>Return to Calendar</span>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {takenEntries.length > 0 && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+                    Taken Executions{' '}
+                    <span className="text-[14px] font-mono tabular-nums font-normal text-[#71717A]">
+                      ({takenEntries.length})
+                    </span>
+                  </h2>
+                </div>
+                <div className="space-y-4">
+                  {takenEntries.map((entry) => (
+                    <JournalTradeCard
+                      key={entry.id}
+                      entry={entry}
+                      onEdit={editJournalEntry}
+                      onDelete={deleteJournalEntry}
+                      onBreakEven={triggerBreakEven}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {systemEntries.length > 0 && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#A1A1AA]">
+                    System Detected Signals{' '}
+                    <span className="text-[14px] font-mono tabular-nums font-normal text-[#71717A]">
+                      ({systemEntries.length})
+                    </span>
+                  </h2>
+                </div>
+                <div className="space-y-4">
+                  {systemEntries.map((entry) => (
+                    <JournalTradeCard
+                      key={entry.id}
+                      entry={entry}
+                      onEdit={editJournalEntry}
+                      onDelete={deleteJournalEntry}
+                      onBreakEven={triggerBreakEven}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

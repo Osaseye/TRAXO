@@ -1,6 +1,7 @@
 {
   "watch": [
     "index.js",
+    "src",
     "routes",
     "services",
     "algorithms",

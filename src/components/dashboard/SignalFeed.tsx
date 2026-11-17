@@ -1,68 +1,144 @@
-import { useState } from 'react'
-import { SignalCard } from './SignalCard'
+import { useMemo, useState } from 'react'
+import { SignalCard, type DashboardSignalItem } from './SignalCard'
 import { cn } from '@/lib/utils'
-import type { Signal, SignalDirection } from '@/types'
+import type { SignalDirection } from '@/types'
 
-interface SignalFeedProps {
-  signals: Signal[]
+export interface SignalFeedProps {
+  signals: DashboardSignalItem[]
+  selectedSignalId?: string | null
+  riskAmountUsd?: number
+  onFocusSignal?: (signal: DashboardSignalItem) => void
+  onExecuteSignal?: (signal: DashboardSignalItem, lotSize: number) => Promise<void> | void
+  onLogDecision?: (signal: DashboardSignalItem, taken: boolean) => void
+  className?: string
 }
 
-const FILTERS: Array<{ label: string; value: SignalDirection | 'ALL' }> = [
-  { label: 'All', value: 'ALL' },
-  { label: 'Buy', value: 'BUY' },
-  { label: 'Sell', value: 'SELL' },
-  { label: 'Skip', value: 'NO_TRADE' },
-]
+type DirectionFilter = SignalDirection | 'ALL' | 'LIVE'
 
-export function SignalFeed({ signals }: SignalFeedProps) {
-  const [filter, setFilter] = useState<SignalDirection | 'ALL'>('ALL')
+function getDirection(item: DashboardSignalItem): SignalDirection {
+  return 'signal' in item ? item.signal : item.direction
+}
 
-  const filtered = filter === 'ALL' ? signals : signals.filter((s) => s.signal === filter)
+function getStatus(item: DashboardSignalItem): string | undefined {
+  return 'status' in item ? item.status : undefined
+}
+
+export function SignalFeed({
+  signals,
+  selectedSignalId = null,
+  riskAmountUsd = 50,
+  onFocusSignal,
+  onExecuteSignal,
+  onLogDecision,
+  className,
+}: SignalFeedProps) {
+  const [filter, setFilter] = useState<DirectionFilter>('ALL')
+
+  const hasNoTrade = useMemo(
+    () => signals.some((s) => getDirection(s) === 'NO_TRADE'),
+    [signals]
+  )
+
+  const filterOptions: Array<{ label: string; value: DirectionFilter }> = useMemo(() => {
+    const base: Array<{ label: string; value: DirectionFilter }> = [
+      { label: 'All', value: 'ALL' },
+      { label: 'Live', value: 'LIVE' },
+      { label: 'Buy', value: 'BUY' },
+      { label: 'Sell', value: 'SELL' },
+    ]
+    if (hasNoTrade) base.push({ label: 'Skip', value: 'NO_TRADE' })
+    return base
+  }, [hasNoTrade])
+
+  const filtered = useMemo(() => {
+    if (filter === 'ALL') return signals
+    if (filter === 'LIVE') return signals.filter((s) => getStatus(s)?.toLowerCase() === 'live')
+    return signals.filter((s) => getDirection(s) === filter)
+  }, [signals, filter])
+
+  const liveCount = useMemo(
+    () => signals.filter((s) => getStatus(s)?.toLowerCase() === 'live').length,
+    [signals]
+  )
 
   return (
-    <div className="flex flex-col h-full bg-[#0d1117] border border-[#1e293b] rounded-xl overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e293b] shrink-0">
-        <div className="flex items-center gap-2.5">
-          <span className="text-[13px] font-semibold text-[#e5e7eb]">Signal Feed</span>
-          <span className="h-5 min-w-[20px] px-1.5 rounded-full bg-[#3b82f6]/15 text-[#3b82f6] text-[10px] font-bold flex items-center justify-center tabular">
-            {signals.length}
-          </span>
+    <div className={cn('flex flex-col h-full bg-transparent overflow-hidden', className)}>
+      {/* Header & Filter Strip */}
+      <div className="px-4 pt-3 pb-2.5 border-b border-white/[0.06] space-y-2.5 shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[14px] font-semibold text-[#FAFAFA]">Setups</span>
+            <span className="text-[12px] font-mono tabular-nums text-[#71717A]">
+              {filtered.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                'w-1.5 h-1.5 rounded-full',
+                liveCount > 0 ? 'bg-[#34D399]' : 'bg-[#52525B]'
+              )}
+            />
+            <span className="text-[12px] text-[#A1A1AA] tabular-nums">
+              {liveCount > 0 ? (
+                <>
+                  <span className="font-mono">{liveCount}</span> live
+                </>
+              ) : (
+                'Standby'
+              )}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
-          <span className="text-[10px] font-semibold text-[#22c55e] uppercase tracking-wider">Live</span>
+
+        {/* Clean Pill Filter Strip */}
+        <div className="flex items-center gap-1 rounded-full bg-[#161619] p-1">
+          {filterOptions.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setFilter(opt.value)}
+              className={cn(
+                'flex-1 py-1 px-2.5 rounded-full text-[12px] font-medium transition-colors',
+                filter === opt.value
+                  ? 'bg-white/[0.1] text-[#FAFAFA]'
+                  : 'text-[#71717A] hover:text-[#A1A1AA]'
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Filter pills */}
-      <div className="flex items-center gap-1 px-3 py-2 border-b border-[#1e293b] shrink-0">
-        {FILTERS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => setFilter(opt.value)}
-            className={cn(
-              'px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors duration-100 uppercase tracking-wide',
-              filter === opt.value
-                ? 'bg-[#3b82f6]/15 text-[#3b82f6]'
-                : 'text-[#374151] hover:text-[#e5e7eb] hover:bg-white/[0.04]'
-            )}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Signals */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+      {/* Signal List */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-3 space-y-3">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 gap-1">
-            <p className="text-[13px] text-[#374151]">No signals</p>
-            <p className="text-[11px] text-[#1e293b]">Waiting for market conditions...</p>
+          <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+            <img
+              src="/brand/empty-signals.png"
+              alt="No active setups"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+              className="w-48 aspect-video object-cover rounded-xl border border-white/[0.06] mb-4 opacity-90"
+            />
+            <p className="text-[14px] font-medium text-[#FAFAFA]">No setups matched</p>
+            <p className="text-[13px] text-[#71717A] mt-1 leading-relaxed max-w-[240px]">
+              Run a manual scan or adjust your active strategy engines below.
+            </p>
           </div>
         ) : (
           filtered.map((signal) => (
-            <SignalCard key={signal.id} signal={signal} />
+            <SignalCard
+              key={signal.id}
+              signal={signal}
+              isSelected={selectedSignalId === signal.id}
+              riskAmountUsd={riskAmountUsd}
+              onFocus={onFocusSignal}
+              onExecute={onExecuteSignal}
+              onLogDecision={onLogDecision}
+            />
           ))
         )}
       </div>

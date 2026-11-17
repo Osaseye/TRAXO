@@ -15,24 +15,6 @@ export type ChartSymbol =
   | 'EURJPY'
   | 'GBPJPY'
   | 'EURGBP'
-  | 'SPX500'
-  | 'NAS100'
-  | 'US30'
-  | 'DE40'
-  | 'UK100'
-  | 'JP225'
-  | 'FRA40'
-  | 'AUS200'
-  | 'WTI'
-  | 'BRENT'
-  | 'NATGAS'
-  | 'BTCUSDT'
-  | 'ETHUSD'
-  | 'SOLUSDT'
-  | 'XRPUSDT'
-  | 'ADAUSDT'
-  | 'DOGEUSDT'
-  | 'BNBUSDT'
   | 'AAPL'
   | 'MSFT'
   | 'NVDA'
@@ -45,7 +27,6 @@ export type ChartSymbol =
   | 'COIN'
   | 'MSTR'
   | 'SMCI'
-  | 'MNQ'
 export type ChartTimeframe = '1m' | '5m' | '15m' | '1H' | '4H' | '1D'
 
 export type JournalOutcome = 'pending' | 'skipped' | 'win' | 'loss' | 'breakeven'
@@ -87,8 +68,15 @@ interface TradingContextState {
   chartTimeframe: ChartTimeframe
   journal: JournalEntry[]
 
+  riskMode: 'fixedAmount' | 'percentage'
+  fixedRiskAmount: number
+  autoSyncBrokerBalance: boolean
+
   setAccountBalance: (value: number) => void
   setRiskPerTradePct: (value: number) => void
+  setFixedRiskAmount: (value: number) => void
+  setRiskMode: (mode: 'fixedAmount' | 'percentage') => void
+  setAutoSyncBrokerBalance: (value: boolean) => void
   setMaxDailyLossPct: (value: number) => void
   setChartSymbol: (value: ChartSymbol) => void
   setChartTimeframe: (value: ChartTimeframe) => void
@@ -99,6 +87,27 @@ interface TradingContextState {
   deleteJournalEntry: (id: string) => void
   /** Move SL to entry for a pending trade (break-even management). */
   triggerBreakEven: (id: string) => void
+
+  // --- Auto-Trade Guardrails & Execution Rules ---
+  autoTradeMinConfidence: number
+  autoTradeMaxPositions: number
+  autoTradeMinRR: number
+  autoTradeSessionFilter: 'all' | 'london_ny' | 'ny_only'
+  autoTradeAllowedCategories: string[]
+  autoTradeCooldownOnLoss: boolean
+  autoTradeCorrelationShield: boolean
+  autoTradeNewsFilter: boolean
+  autoTradeSpreadCapPips: number
+  setAutoTradeMinConfidence: (v: number) => void
+  setAutoTradeMaxPositions: (v: number) => void
+  setAutoTradeMinRR: (v: number) => void
+  setAutoTradeSessionFilter: (v: 'all' | 'london_ny' | 'ny_only') => void
+  setAutoTradeAllowedCategories: (cats: string[]) => void
+  toggleAutoTradeAllowedCategory: (cat: string) => void
+  setAutoTradeCooldownOnLoss: (v: boolean) => void
+  setAutoTradeCorrelationShield: (v: boolean) => void
+  setAutoTradeNewsFilter: (v: boolean) => void
+  setAutoTradeSpreadCapPips: (v: number) => void
 
   // --- Notification preferences ---
   notifToastEnabled: boolean
@@ -156,11 +165,75 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
         return { journal: updated }
       }),
   accountBalance: 10000,
-  riskPerTradePct: 1,
-  maxDailyLossPct: 2,
+  riskMode: 'fixedAmount',
+  fixedRiskAmount: 500,
+  autoSyncBrokerBalance: true,
+  riskPerTradePct: 2.5,
+  maxDailyLossPct: 6,
   chartSymbol: 'EURUSD',
   chartTimeframe: '4H',
   journal: [],
+
+  // --- Auto-Trade Defaults & Guardrails ---
+  autoTradeMinConfidence: 75,
+  autoTradeMaxPositions: 3,
+  autoTradeMinRR: 1.8,
+  autoTradeSessionFilter: 'all',
+  autoTradeAllowedCategories: ['forex', 'metals', 'stocks'],
+  autoTradeCooldownOnLoss: true,
+
+  setAutoTradeMinConfidence: (v) => {
+    const val = Math.max(50, Math.min(95, Number(v) || 75))
+    postTradingContext({ autoTradeMinConfidence: val }).catch(() => {})
+    set({ autoTradeMinConfidence: val })
+  },
+  setAutoTradeMaxPositions: (v) => {
+    const val = Math.max(1, Math.min(500, Number(v) || 1))
+    postTradingContext({ autoTradeMaxPositions: val }).catch(() => {})
+    set({ autoTradeMaxPositions: val })
+  },
+  setAutoTradeMinRR: (v) => {
+    const val = Math.max(1.0, Math.min(4.0, Number(v) || 1.8))
+    postTradingContext({ autoTradeMinRR: val }).catch(() => {})
+    set({ autoTradeMinRR: val })
+  },
+  setAutoTradeSessionFilter: (v) => {
+    postTradingContext({ autoTradeSessionFilter: v }).catch(() => {})
+    set({ autoTradeSessionFilter: v })
+  },
+  setAutoTradeAllowedCategories: (cats) => {
+    postTradingContext({ autoTradeAllowedCategories: cats }).catch(() => {})
+    set({ autoTradeAllowedCategories: cats })
+  },
+  toggleAutoTradeAllowedCategory: (cat) =>
+    set((state) => {
+      const next = state.autoTradeAllowedCategories.includes(cat)
+        ? state.autoTradeAllowedCategories.filter((c) => c !== cat)
+        : [...state.autoTradeAllowedCategories, cat]
+      postTradingContext({ autoTradeAllowedCategories: next }).catch(() => {})
+      return { autoTradeAllowedCategories: next }
+    }),
+  autoTradeCorrelationShield: true,
+  autoTradeNewsFilter: true,
+  autoTradeSpreadCapPips: 3.5,
+
+  setAutoTradeCorrelationShield: (v) => {
+    postTradingContext({ autoTradeCorrelationShield: v }).catch(() => {})
+    set({ autoTradeCorrelationShield: v })
+  },
+  setAutoTradeNewsFilter: (v) => {
+    postTradingContext({ autoTradeNewsFilter: v }).catch(() => {})
+    set({ autoTradeNewsFilter: v })
+  },
+  setAutoTradeSpreadCapPips: (v) => {
+    const val = Math.max(0.5, Math.min(15.0, Number(v) || 3.5))
+    postTradingContext({ autoTradeSpreadCapPips: val }).catch(() => {})
+    set({ autoTradeSpreadCapPips: val })
+  },
+  setAutoTradeCooldownOnLoss: (v) => {
+    postTradingContext({ autoTradeCooldownOnLoss: v }).catch(() => {})
+    set({ autoTradeCooldownOnLoss: v })
+  },
 
   notifToastEnabled: true,
   notifSoundEnabled: true,
@@ -204,6 +277,20 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
     const nextVal = Math.max(0.1, Math.min(10, Number(value) || 1))
     postTradingContext({ riskPerTradePct: nextVal }).catch(() => {})
     set({ riskPerTradePct: nextVal })
+  },
+  setFixedRiskAmount: (value) => {
+    const num = Number(value)
+    const nextVal = isNaN(num) ? 0 : Math.max(0, num)
+    postTradingContext({ fixedRiskAmount: nextVal }).catch(() => {})
+    set({ fixedRiskAmount: nextVal })
+  },
+  setRiskMode: (mode) => {
+    postTradingContext({ riskMode: mode }).catch(() => {})
+    set({ riskMode: mode })
+  },
+  setAutoSyncBrokerBalance: (value) => {
+    postTradingContext({ autoSyncBrokerBalance: value }).catch(() => {})
+    set({ autoSyncBrokerBalance: value })
   },
   setMaxDailyLossPct: (value) => {
     const nextVal = Math.max(0.5, Math.min(20, Number(value) || 2))
@@ -291,6 +378,14 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
       updateJournalEntry(target.id, { outcome }).catch(() => {})
       postTradingContext({ accountBalance: nextBalance }).catch(() => {})
 
+      if (outcome === 'loss') {
+        fetch('/api/strategy-optimization/analyze-loss', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(target),
+        }).catch(() => {})
+      }
+
       return {
         journal: updatedJournal,
         accountBalance: nextBalance,
@@ -301,7 +396,19 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
   partialize: (state) => ({
     accountBalance: state.accountBalance,
     riskPerTradePct: state.riskPerTradePct,
+    riskMode: state.riskMode,
+    fixedRiskAmount: state.fixedRiskAmount,
+    autoSyncBrokerBalance: state.autoSyncBrokerBalance,
     maxDailyLossPct: state.maxDailyLossPct,
+    autoTradeMinConfidence: state.autoTradeMinConfidence,
+    autoTradeMaxPositions: state.autoTradeMaxPositions,
+    autoTradeMinRR: state.autoTradeMinRR,
+    autoTradeSessionFilter: state.autoTradeSessionFilter,
+    autoTradeAllowedCategories: state.autoTradeAllowedCategories,
+    autoTradeCooldownOnLoss: state.autoTradeCooldownOnLoss,
+    autoTradeCorrelationShield: state.autoTradeCorrelationShield,
+    autoTradeNewsFilter: state.autoTradeNewsFilter,
+    autoTradeSpreadCapPips: state.autoTradeSpreadCapPips,
     chartSymbol: state.chartSymbol,
     chartTimeframe: state.chartTimeframe,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -1,108 +1,185 @@
 import { NavLink } from 'react-router'
 import {
-  LayoutDashboard,
-  BookOpenText,
-  Zap,
-  UserCircle2,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  Crown,
-  TrendingUp,
-} from 'lucide-react'
+  PiChartLineUp,
+  PiChartLineUpBold,
+  PiStack,
+  PiStackBold,
+  PiClockCounterClockwise,
+  PiClockCounterClockwiseBold,
+  PiBookOpen,
+  PiBookOpenBold,
+  PiBroadcast,
+  PiBroadcastBold,
+  PiGearSix,
+  PiGearSixBold,
+  PiUserCircle,
+  PiUserCircleBold,
+  PiCaretLeft,
+  PiCaretRight,
+} from 'react-icons/pi'
 import { cn } from '@/lib/utils'
+import { useNotificationStore } from '@/stores/useNotificationStore'
 
 interface SidebarProps {
   collapsed: boolean
   onToggle: () => void
 }
 
-const navItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/journal', icon: BookOpenText, label: 'Trading Journal' },
-  { to: '/strategies', icon: Zap, label: 'Strategies' },
-  { to: '/profile', icon: UserCircle2, label: 'Profile' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+const PRIMARY_NAV = [
+  { to: '/dashboard', icon: PiChartLineUp, activeIcon: PiChartLineUpBold, label: 'Terminal' },
+  { to: '/strategies', icon: PiStack, activeIcon: PiStackBold, label: 'Strategies' },
+  { to: '/backtesting', icon: PiClockCounterClockwise, activeIcon: PiClockCounterClockwiseBold, label: 'Backtest' },
+  { to: '/journal', icon: PiBookOpen, activeIcon: PiBookOpenBold, label: 'Journal' },
+  { to: '/notifications', icon: PiBroadcast, activeIcon: PiBroadcastBold, label: 'Signals & Ops' },
+]
+
+const UTILITY_NAV = [
+  { to: '/settings', icon: PiGearSix, activeIcon: PiGearSixBold, label: 'Settings' },
+  { to: '/profile', icon: PiUserCircle, activeIcon: PiUserCircleBold, label: 'Profile' },
 ]
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+  const unreadCount = useNotificationStore(
+    (s) => s.notifications.filter((n) => !n.read).length,
+  )
+
   return (
     <aside
       className={cn(
-        'hidden md:flex flex-col h-full bg-[#09090d] border-r border-[#1e293b] transition-all duration-200 shrink-0',
-        collapsed ? 'w-[68px]' : 'w-[220px]'
+        'hidden md:flex flex-col h-full bg-[#09090B] border-r border-white/[0.06] transition-[width] duration-150 shrink-0 select-none',
+        collapsed ? 'w-[64px]' : 'w-[220px]',
       )}
     >
-      {/* Logo */}
-      <div className="flex items-center h-[60px] border-b border-[#1e293b] shrink-0 px-4">
-        {collapsed ? (
-          <img src="/TRAXO-icon.png" className="w-7 h-7 object-contain mx-auto" alt="" />
-        ) : (
-          <div className="flex items-center gap-2.5">
-            <img src="/TRAXO-icon.png" className="w-7 h-7 object-contain" alt="" />
-            <span className="text-[11px] font-black tracking-[0.2em] uppercase text-white">TRAXO</span>
+      {/* Top 52px Brand Header aligned with Topbar */}
+      <div
+        className={cn(
+          'flex items-center h-[52px] border-b border-white/[0.06] shrink-0',
+          collapsed ? 'justify-center px-2' : 'justify-between px-4',
+        )}
+      >
+        <NavLink
+          to="/dashboard"
+          className="flex items-center gap-2.5 overflow-hidden group focus:outline-none"
+        >
+          <div className="relative w-7 h-7 rounded-lg bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 group-hover:border-white/20 transition-colors">
+            <img
+              src="/brand/traxo-mark.png"
+              alt="TRAXO"
+              className="w-5 h-5 object-contain"
+            />
           </div>
+          {!collapsed && (
+            <span className="text-[13px] font-bold tracking-[0.16em] uppercase text-[#FAFAFA] font-mono truncate">
+              TRAXO
+            </span>
+          )}
+        </NavLink>
+
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label="Collapse sidebar"
+            className="w-6 h-6 rounded flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.06] transition-colors"
+          >
+            <PiCaretLeft size={14} />
+          </button>
         )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 py-3 overflow-y-auto">
-        <ul className={cn('space-y-0.5', collapsed ? 'px-2' : 'px-2.5')}>
-          {navItems.map(({ to, icon: Icon, label }) => (
-            <li key={to}>
-              <NavLink
-                to={to}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-lg text-[13px] font-medium transition-colors duration-100 select-none',
-                    collapsed ? 'h-10 w-10 justify-center mx-auto' : 'px-3 py-2.5',
-                    isActive
-                      ? 'bg-[#3b82f6]/10 text-[#3b82f6]'
-                      : 'text-[#4b5563] hover:text-[#e5e7eb] hover:bg-white/[0.04]'
-                  )
-                }
-                title={collapsed ? label : undefined}
-              >
-                <Icon size={16} className="shrink-0" />
-                {!collapsed && <span>{label}</span>}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
+      {/* Primary Navigation */}
+      <div className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
+        {PRIMARY_NAV.map(({ to, icon: Icon, activeIcon: ActiveIcon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            title={collapsed ? label : undefined}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors relative group',
+                isActive
+                  ? 'bg-white/[0.08] text-[#FAFAFA]'
+                  : 'text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.03]',
+                collapsed && 'justify-center px-0',
+              )
+            }
+          >
+            {({ isActive }) => {
+              const CurrentIcon = isActive ? ActiveIcon : Icon
+              return (
+                <>
+                  <CurrentIcon
+                    size={18}
+                    className={cn(
+                      'shrink-0 transition-colors',
+                      isActive ? 'text-[#FAFAFA]' : 'text-[#71717A] group-hover:text-[#FAFAFA]',
+                    )}
+                  />
+                  {!collapsed && <span className="truncate">{label}</span>}
+                  {label === 'Signals & Ops' && unreadCount > 0 && (
+                    <span
+                      className={cn(
+                        'flex items-center justify-center rounded-full bg-[#34D399] text-[#09090B] font-mono font-bold',
+                        collapsed
+                          ? 'absolute top-1.5 right-1.5 w-2 h-2 p-0'
+                          : 'ml-auto text-[10px] px-1.5 py-0.2 min-w-4 h-4',
+                      )}
+                    >
+                      {!collapsed && unreadCount}
+                    </span>
+                  )}
+                </>
+              )
+            }}
+          </NavLink>
+        ))}
+      </div>
 
-        {/* Analyst Mode badge */}
-        {!collapsed && (
-          <div className="px-2.5 mt-5">
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#22c55e]/[0.05] border border-[#22c55e]/15">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse shrink-0" />
-              <div>
-                <p className="text-[10px] font-bold text-[#22c55e] leading-tight uppercase tracking-wider">Analyst Mode</p>
-                <p className="text-[9px] text-[#374151] leading-tight mt-0.5">Phase 1 · Live</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </nav>
+      {/* Bottom Utility Navigation */}
+      <div className="p-2 border-t border-white/[0.06] space-y-1 shrink-0">
+        {UTILITY_NAV.map(({ to, icon: Icon, activeIcon: ActiveIcon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            title={collapsed ? label : undefined}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors group',
+                isActive
+                  ? 'bg-white/[0.08] text-[#FAFAFA]'
+                  : 'text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.03]',
+                collapsed && 'justify-center px-0',
+              )
+            }
+          >
+            {({ isActive }) => {
+              const CurrentIcon = isActive ? ActiveIcon : Icon
+              return (
+                <>
+                  <CurrentIcon
+                    size={18}
+                    className={cn(
+                      'shrink-0 transition-colors',
+                      isActive ? 'text-[#FAFAFA]' : 'text-[#71717A] group-hover:text-[#FAFAFA]',
+                    )}
+                  />
+                  {!collapsed && <span className="truncate">{label}</span>}
+                </>
+              )
+            }}
+          </NavLink>
+        ))}
 
-      {/* Bottom: plan + collapse */}
-      <div className="border-t border-[#1e293b] p-3 space-y-2 shrink-0">
-        {!collapsed && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#f59e0b]/[0.06] border border-[#f59e0b]/20">
-            <Crown size={11} className="text-[#f59e0b] shrink-0" />
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-[#f59e0b] leading-tight uppercase tracking-wider">Free Plan</p>
-              <p className="text-[9px] text-[#4b5563] leading-tight mt-0.5 truncate">Upgrade for more signals</p>
-            </div>
-            <TrendingUp size={10} className="text-[#f59e0b] shrink-0 ml-auto" />
-          </div>
+        {collapsed && (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label="Expand sidebar"
+            className="w-full flex items-center justify-center py-2 text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.06] rounded transition-colors"
+          >
+            <PiCaretRight size={14} />
+          </button>
         )}
-        <button
-          onClick={onToggle}
-          className="flex items-center justify-center h-8 w-8 rounded-lg text-[#4b5563] hover:text-[#e5e7eb] hover:bg-white/[0.04] transition-colors mx-auto"
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </button>
       </div>
     </aside>
   )
