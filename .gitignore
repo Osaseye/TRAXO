@@ -33,3 +33,4 @@ dist-ssr
 **/*firebase-adminsdk*.json
 **/service-account*.json
 **/*-private-key*.json
+.env*

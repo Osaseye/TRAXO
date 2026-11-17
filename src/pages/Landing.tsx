@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import { PiArrowRight } from 'react-icons/pi'
 import { LandingNav } from '@/components/landing/LandingNav'
+import { LandingBackgroundAnimation } from '@/components/landing/LandingBackgroundAnimation'
 import { HeroSection } from '@/components/landing/HeroSection'
 import { SupportedMarkets } from '@/components/landing/SupportedMarkets'
 import { HowItWorks } from '@/components/landing/HowItWorks'
@@ -14,9 +15,12 @@ import { LandingFooter } from '@/components/landing/LandingFooter'
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-[#09090B] text-[#FAFAFA] font-sans overflow-x-hidden selection:bg-white/20 selection:text-[#FAFAFA]">
+    <div className="relative min-h-screen bg-[#09090B] text-[#FAFAFA] font-sans overflow-x-hidden selection:bg-white/20 selection:text-[#FAFAFA]">
+      {/* ── Minimalist Full-Page Kinetic Market Background Canvas ──────────── */}
+      <LandingBackgroundAnimation />
+
       <LandingNav />
-      <main className="pb-16 md:pb-0">
+      <main className="relative z-10 pb-16 md:pb-0">
         <HeroSection />
         <SupportedMarkets />
         <HowItWorks />

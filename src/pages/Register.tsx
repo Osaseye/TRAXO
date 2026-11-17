@@ -90,9 +90,9 @@ export default function Register() {
         </svg>
 
         {/* Ambient telemetry badge */}
-        <div className="absolute top-8 left-8 hidden md:flex items-center gap-4 text-[11px] font-mono text-[#71717A]">
+        <div className="absolute top-8 left-8 hidden md:flex items-center gap-4 text-[11px] font-sans text-[#71717A]">
           <span className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-ping" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
             STATION PROVISIONING
           </span>
           <span className="text-white/10">/</span>
@@ -103,10 +103,8 @@ export default function Register() {
       {/* ── Top Wordmark ────────────────────────────────────────────────────── */}
       <header className="relative z-10 pt-8 sm:pt-10 px-6 flex justify-center">
         <Link to="/" className="inline-flex items-center gap-2.5 group focus:outline-none">
-          <div className="relative w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.1] flex items-center justify-center group-hover:border-white/25 transition-colors">
-            <img src="/brand/traxo-mark.png" className="w-5 h-5 object-contain" alt="TRAXO" />
-          </div>
-          <span className="text-[12px] font-mono font-bold tracking-[0.24em] uppercase text-[#FAFAFA]">
+          <img src="/brand/traxo-mark.png" className="w-6 h-6 object-contain" alt="TRAXO" />
+          <span className="text-[12px] font-bold tracking-[0.24em] uppercase text-[#FAFAFA]">
             TRAXO
           </span>
         </Link>
@@ -145,12 +143,12 @@ export default function Register() {
           )}
 
           {/* Open-Canvas Registration Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 font-sans">
             {/* Operator Name */}
             <div className="space-y-1.5">
-              <label htmlFor={nameId} className="text-[11px] font-mono uppercase tracking-wider text-[#71717A] flex items-center justify-between">
+              <label htmlFor={nameId} className="text-[12px] font-medium text-[#A1A1AA] flex items-center justify-between">
                 <span>Operator Name / Handle</span>
-                <span className="text-[10px] text-white/30">REQ</span>
+                <span className="text-[10px] text-white/40">Required</span>
               </label>
               <div className="relative flex items-center group">
                 <PiUser className="absolute left-3.5 text-[#71717A] group-focus-within:text-[#34D399] transition-colors" size={17} />
@@ -162,16 +160,16 @@ export default function Register() {
                   placeholder="Alex Vance"
                   required
                   autoComplete="name"
-                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
+                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-sans"
                 />
               </div>
             </div>
 
             {/* Email Field */}
             <div className="space-y-1.5">
-              <label htmlFor={emailId} className="text-[11px] font-mono uppercase tracking-wider text-[#71717A] flex items-center justify-between">
+              <label htmlFor={emailId} className="text-[12px] font-medium text-[#A1A1AA] flex items-center justify-between">
                 <span>Direct Terminal Email</span>
-                <span className="text-[10px] text-white/30">REQ</span>
+                <span className="text-[10px] text-white/40">Required</span>
               </label>
               <div className="relative flex items-center group">
                 <PiEnvelopeSimple className="absolute left-3.5 text-[#71717A] group-focus-within:text-[#34D399] transition-colors" size={17} />
@@ -183,7 +181,7 @@ export default function Register() {
                   placeholder="operator@traxo.io"
                   required
                   autoComplete="email"
-                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
+                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-sans"
                 />
               </div>
             </div>
@@ -191,12 +189,12 @@ export default function Register() {
             {/* Password Field */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label htmlFor={passwordId} className="text-[11px] font-mono uppercase tracking-wider text-[#71717A]">
+                <label htmlFor={passwordId} className="text-[12px] font-medium text-[#A1A1AA]">
                   Clearance Key (Password)
                 </label>
                 {strength > 0 && (
                   <span
-                    className="text-[10px] font-mono uppercase tracking-wider font-semibold"
+                    className="text-[11px] font-medium"
                     style={{ color: strengthColor(strength) }}
                   >
                     {strengthLabel(strength)}
@@ -213,7 +211,7 @@ export default function Register() {
                   placeholder="••••••••••••"
                   required
                   autoComplete="new-password"
-                  className="w-full h-11 pl-10 pr-10 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
+                  className="w-full h-11 pl-10 pr-10 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-sans"
                 />
                 <button
                   type="button"
@@ -265,7 +263,7 @@ export default function Register() {
               className="w-full h-11 mt-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] active:scale-[0.99] text-[#09090B] text-[13px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_0_24px_rgba(255,255,255,0.08)] cursor-pointer disabled:opacity-50"
             >
               {isLoading ? (
-                <span className="inline-flex items-center gap-2 font-mono text-[12px]">
+                <span className="inline-flex items-center gap-2 text-[12px] font-medium">
                   <span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                   INITIALIZING WORKSPACE...
                 </span>
@@ -291,7 +289,7 @@ export default function Register() {
       </main>
 
       {/* ── Footer ──────────────────────────────────────────────────────────── */}
-      <footer className="relative z-10 pb-6 px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] font-mono text-[#52525B] max-w-5xl mx-auto w-full">
+      <footer className="relative z-10 pb-6 px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] font-sans text-[#71717A] max-w-5xl mx-auto w-full">
         <div className="flex items-center gap-2">
           <PiShieldCheck className="text-[#34D399]" size={14} />
           <span>ZERO DATA BROKERING PROTOCOL</span>

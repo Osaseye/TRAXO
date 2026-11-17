@@ -64,10 +64,8 @@ export default function AdminLogin() {
       {/* ── Top Wordmark ────────────────────────────────────────────────────── */}
       <header className="relative z-10 pt-8 sm:pt-12 px-6 flex justify-center">
         <Link to="/" className="inline-flex items-center gap-2.5 group focus:outline-none">
-          <div className="relative w-8 h-8 rounded-lg bg-[#F87171]/10 border border-[#F87171]/30 flex items-center justify-center group-hover:border-[#F87171]/50 transition-colors">
-            <img src="/brand/traxo-mark.png" className="w-5 h-5 object-contain" alt="TRAXO" />
-          </div>
-          <span className="text-[12px] font-mono font-bold tracking-[0.24em] uppercase text-[#FAFAFA]">
+          <img src="/brand/traxo-mark.png" className="w-6 h-6 object-contain" alt="TRAXO" />
+          <span className="text-[12px] font-bold tracking-[0.24em] uppercase text-[#FAFAFA]">
             TRAXO ROOT
           </span>
         </Link>
@@ -83,7 +81,7 @@ export default function AdminLogin() {
         >
           {/* Header Typography */}
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F87171]/10 border border-[#F87171]/20 text-[11px] font-mono text-[#F87171]">
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#F87171] uppercase tracking-wider">
               <PiLock />
               <span>RESTRICTED PERIMETER</span>
             </div>
@@ -108,11 +106,11 @@ export default function AdminLogin() {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 font-sans">
             <div className="space-y-1.5">
-              <label htmlFor={emailId} className="text-[11px] font-mono uppercase tracking-wider text-[#71717A] flex items-center justify-between">
+              <label htmlFor={emailId} className="text-[12px] font-medium text-[#A1A1AA] flex items-center justify-between">
                 <span>Authorized Admin Identity</span>
-                <span className="text-[10px] text-[#F87171]">ROOT</span>
+                <span className="text-[10px] text-[#F87171]">Root</span>
               </label>
               <div className="relative flex items-center group">
                 <PiEnvelopeSimple className="absolute left-3.5 text-[#71717A] group-focus-within:text-[#F87171] transition-colors" size={17} />
@@ -124,13 +122,13 @@ export default function AdminLogin() {
                   placeholder="admin@traxo.io"
                   required
                   autoComplete="email"
-                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#F87171]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#F87171]/20 transition-all font-mono"
+                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#F87171]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#F87171]/20 transition-all font-sans"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor={passwordId} className="text-[11px] font-mono uppercase tracking-wider text-[#71717A]">
+              <label htmlFor={passwordId} className="text-[12px] font-medium text-[#A1A1AA]">
                 Cryptographic Key
               </label>
               <div className="relative flex items-center group">
@@ -143,7 +141,7 @@ export default function AdminLogin() {
                   placeholder="••••••••••••"
                   required
                   autoComplete="current-password"
-                  className="w-full h-11 pl-10 pr-10 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#F87171]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#F87171]/20 transition-all font-mono"
+                  className="w-full h-11 pl-10 pr-10 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#F87171]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#F87171]/20 transition-all font-sans"
                 />
                 <button
                   type="button"
@@ -162,7 +160,7 @@ export default function AdminLogin() {
               className="w-full h-11 mt-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] active:scale-[0.99] text-[#09090B] text-[13px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_0_24px_rgba(255,255,255,0.08)] cursor-pointer disabled:opacity-50"
             >
               {submitting ? (
-                <span className="inline-flex items-center gap-2 font-mono text-[12px]">
+                <span className="inline-flex items-center gap-2 text-[12px] font-medium">
                   <span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                   AUTHENTICATING ROOT...
                 </span>

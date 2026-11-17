@@ -82,10 +82,8 @@ export default function VerifyOTP() {
       {/* ── Top Wordmark ────────────────────────────────────────────────────── */}
       <header className="relative z-10 pt-8 sm:pt-12 px-6 flex justify-center">
         <Link to="/" className="inline-flex items-center gap-2.5 group focus:outline-none">
-          <div className="relative w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.1] flex items-center justify-center group-hover:border-white/25 transition-colors">
-            <img src="/brand/traxo-mark.png" className="w-5 h-5 object-contain" alt="TRAXO" />
-          </div>
-          <span className="text-[12px] font-mono font-bold tracking-[0.24em] uppercase text-[#FAFAFA]">
+          <img src="/brand/traxo-mark.png" className="w-6 h-6 object-contain" alt="TRAXO" />
+          <span className="text-[12px] font-bold tracking-[0.24em] uppercase text-[#FAFAFA]">
             TRAXO
           </span>
         </Link>
@@ -101,7 +99,7 @@ export default function VerifyOTP() {
         >
           {/* Header Typography */}
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] font-mono text-[#A1A1AA]">
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#A1A1AA] uppercase tracking-wider">
               <PiLockKey className="text-[#34D399]" />
               <span>TOKEN VERIFICATION</span>
             </div>
@@ -110,7 +108,7 @@ export default function VerifyOTP() {
             </h1>
             <p className="text-[13px] text-[#71717A]">
               We transmitted a 6-digit cryptographic token to{' '}
-              <span className="text-[#FAFAFA] font-mono">{displayEmail}</span>
+              <span className="text-[#FAFAFA] font-medium">{displayEmail}</span>
             </p>
           </div>
 

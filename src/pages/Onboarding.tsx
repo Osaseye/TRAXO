@@ -27,16 +27,14 @@ function StepperHeader({ current, total }: { current: number; total: number }) {
   ]
 
   return (
-    <div className="w-full max-w-2xl mx-auto flex items-center justify-between pb-6 mb-8 border-b border-white/[0.06]">
+    <div className="w-full max-w-2xl mx-auto flex items-center justify-between pb-6 mb-8 border-b border-white/[0.06] font-sans">
       <div className="flex items-center gap-3">
-        <div className="w-7 h-7 rounded-lg bg-white/[0.05] border border-white/[0.1] flex items-center justify-center">
-          <img src="/brand/traxo-mark.png" className="w-4 h-4 object-contain" alt="TRAXO" />
-        </div>
+        <img src="/brand/traxo-mark.png" className="w-5 h-5 object-contain" alt="TRAXO" />
         <div>
-          <span className="text-[11px] font-mono font-bold tracking-[0.2em] uppercase text-[#FAFAFA]">
+          <span className="text-[12px] font-bold tracking-[0.2em] uppercase text-[#FAFAFA]">
             TRAXO SETUP
           </span>
-          <span className="hidden sm:inline-block text-[11px] font-mono text-[#71717A] ml-2">
+          <span className="hidden sm:inline-block text-[12px] text-[#71717A] ml-2">
             · {steps[current] ?? 'Configuration'}
           </span>
         </div>
@@ -122,19 +120,17 @@ function NavRow({
 // ─── Step 0: Welcome ────────────────────────────────────────────────────────
 function StepWelcome({ onNext }: { onNext: () => void }) {
   return (
-    <div className="space-y-9 text-center max-w-xl mx-auto">
-      {/* Floating Mark with Ambient Ring */}
+    <div className="space-y-9 text-center max-w-xl mx-auto font-sans">
+      {/* Floating Mark directly on canvas with ambient glow */}
       <div className="relative inline-block mx-auto pt-4">
-        <div className="absolute inset-0 rounded-full bg-[#34D399]/20 blur-2xl animate-pulse" />
-        <div className="relative w-20 h-20 rounded-2xl bg-white/[0.04] border border-white/[0.1] flex items-center justify-center mx-auto shadow-2xl">
-          <img src="/brand/traxo-mark.png" className="w-12 h-12 object-contain" alt="TRAXO" />
-        </div>
+        <div className="absolute inset-0 rounded-full bg-[#34D399]/15 blur-2xl pointer-events-none" />
+        <img src="/brand/traxo-mark.png" className="w-14 h-14 object-contain mx-auto relative z-10" alt="TRAXO" />
       </div>
 
       {/* Typography directly on canvas */}
-      <div className="space-y-3">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] font-mono text-[#A1A1AA]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] animate-pulse" />
+      <div className="space-y-2">
+        <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#34D399] uppercase tracking-wider">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
           <span>INSTITUTIONAL QUANT SUITE</span>
         </div>
         <h1 className="text-[32px] sm:text-[38px] font-bold text-[#FAFAFA] tracking-tight leading-tight">
@@ -206,9 +202,9 @@ function StepProfile({ onNext, onBack }: { onNext: () => void; onBack: () => voi
   return (
     <div className="space-y-8 max-w-xl mx-auto">
       <div>
-        <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-white/[0.04] text-[10.5px] font-mono text-[#34D399] mb-2">
-          <span>STAGE 01</span>
-        </div>
+        <span className="text-[11px] font-medium text-[#34D399] uppercase tracking-wider block mb-1">
+          STAGE 01
+        </span>
         <h2 className="text-[24px] sm:text-[28px] font-semibold text-[#FAFAFA] tracking-tight">
           Select your trading perimeter
         </h2>
@@ -219,7 +215,7 @@ function StepProfile({ onNext, onBack }: { onNext: () => void; onBack: () => voi
 
       {/* Experience Level Selector - unboxed open rows */}
       <div className="space-y-3">
-        <label className="text-[11px] font-mono text-[#A1A1AA] uppercase tracking-wider block">
+        <label className="text-[12px] font-medium text-[#A1A1AA] block">
           Operational Tier
         </label>
         <div className="space-y-2">
@@ -257,8 +253,8 @@ function StepProfile({ onNext, onBack }: { onNext: () => void; onBack: () => voi
 
       {/* Market Instruments Selector */}
       <div className="space-y-3">
-        <label className="text-[11px] font-mono text-[#A1A1AA] uppercase tracking-wider block">
-          Active Asset Watchlists <span className="text-[#71717A] normal-case">(multi-select)</span>
+        <label className="text-[12px] font-medium text-[#A1A1AA] block">
+          Active Asset Watchlists <span className="text-[#71717A] font-normal">(multi-select)</span>
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {INSTRUMENTS.map(({ id, label, tick }) => {
@@ -372,9 +368,9 @@ function StepPersonal({ onNext, onBack }: { onNext: () => void; onBack: () => vo
   return (
     <div className="space-y-7 max-w-xl mx-auto">
       <div>
-        <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-white/[0.04] text-[10.5px] font-mono text-[#34D399] mb-2">
-          <span>STAGE 02</span>
-        </div>
+        <span className="text-[11px] font-medium text-[#34D399] uppercase tracking-wider block mb-1">
+          STAGE 02
+        </span>
         <h2 className="text-[24px] sm:text-[28px] font-semibold text-[#FAFAFA] tracking-tight">
           Operator credentials
         </h2>
@@ -383,10 +379,10 @@ function StepPersonal({ onNext, onBack }: { onNext: () => void; onBack: () => vo
         </p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-4 font-sans">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label htmlFor={fullNameId} className="text-[11px] font-mono text-[#71717A] uppercase tracking-wider block">
+            <label htmlFor={fullNameId} className="text-[12px] font-medium text-[#A1A1AA] block">
               Full Legal Name
             </label>
             <input
@@ -394,11 +390,11 @@ function StepPersonal({ onNext, onBack }: { onNext: () => void; onBack: () => vo
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Alex Vance"
-              className="w-full h-11 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
+              className="w-full h-11 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-sans"
             />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor={displayNameId} className="text-[11px] font-mono text-[#71717A] uppercase tracking-wider block">
+            <label htmlFor={displayNameId} className="text-[12px] font-medium text-[#A1A1AA] block">
               Callsign / Display Handle
             </label>
             <input
@@ -406,14 +402,14 @@ function StepPersonal({ onNext, onBack }: { onNext: () => void; onBack: () => vo
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Vance_FX"
-              className="w-full h-11 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
+              className="w-full h-11 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-sans"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label htmlFor={dobId} className="text-[11px] font-mono text-[#71717A] uppercase tracking-wider block">
+            <label htmlFor={dobId} className="text-[12px] font-medium text-[#A1A1AA] block">
               Date of Birth
             </label>
             <input
@@ -421,11 +417,11 @@ function StepPersonal({ onNext, onBack }: { onNext: () => void; onBack: () => vo
               type="date"
               value={dob}
               onChange={(e) => setDob(e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 text-[13px] text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
+              className="w-full h-11 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 text-[13px] text-[#FAFAFA] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-sans"
             />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor={countryId} className="text-[11px] font-mono text-[#71717A] uppercase tracking-wider block">
+            <label htmlFor={countryId} className="text-[12px] font-medium text-[#A1A1AA] block">
               Base Country / Jurisdiction
             </label>
             <input
@@ -433,14 +429,14 @@ function StepPersonal({ onNext, onBack }: { onNext: () => void; onBack: () => vo
               value={country}
               onChange={(e) => setCountry(e.target.value)}
               placeholder="United Kingdom"
-              className="w-full h-11 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
+              className="w-full h-11 px-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-sans"
             />
           </div>
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor={bioId} className="text-[11px] font-mono text-[#71717A] uppercase tracking-wider block">
-            Session Focus Notes <span className="normal-case text-white/30">(optional)</span>
+          <label htmlFor={bioId} className="text-[12px] font-medium text-[#A1A1AA] block">
+            Session Focus Notes <span className="text-white/30 font-normal">(optional)</span>
           </label>
           <textarea
             id={bioId}
@@ -448,7 +444,7 @@ function StepPersonal({ onNext, onBack }: { onNext: () => void; onBack: () => vo
             onChange={(e) => setBio(e.target.value)}
             placeholder="Focusing on London open liquidity sweeps and New York continuation setups."
             rows={2}
-            className="w-full p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
+            className="w-full p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-sans"
           />
         </div>
       </div>
@@ -476,9 +472,9 @@ function StepStrategies({ onNext, onBack }: { onNext: () => void; onBack: () => 
   return (
     <div className="space-y-7 max-w-xl mx-auto">
       <div>
-        <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-white/[0.04] text-[10.5px] font-mono text-[#34D399] mb-2">
-          <span>STAGE 03</span>
-        </div>
+        <span className="text-[11px] font-medium text-[#34D399] uppercase tracking-wider block mb-1">
+          STAGE 03
+        </span>
         <h2 className="text-[24px] sm:text-[28px] font-semibold text-[#FAFAFA] tracking-tight">
           Activate algorithmic engines
         </h2>
@@ -636,9 +632,9 @@ function StepRisk({ onNext, onBack }: { onNext: () => void; onBack: () => void }
   return (
     <div className="space-y-7 max-w-xl mx-auto">
       <div>
-        <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-white/[0.04] text-[10.5px] font-mono text-[#34D399] mb-2">
-          <span>STAGE 04</span>
-        </div>
+        <span className="text-[11px] font-medium text-[#34D399] uppercase tracking-wider block mb-1">
+          STAGE 04
+        </span>
         <h2 className="text-[24px] sm:text-[28px] font-semibold text-[#FAFAFA] tracking-tight">
           Risk & capital guardrails
         </h2>
@@ -727,28 +723,28 @@ function StepComplete() {
       </div>
 
       {/* Summary telemetry list - open layout */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-4 border-y border-white/[0.06] text-left">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-4 border-y border-white/[0.06] text-left font-sans">
         <div>
-          <div className="text-[10px] font-mono uppercase text-[#71717A]">Experience</div>
+          <div className="text-[11px] font-medium text-[#71717A] uppercase tracking-wider">Experience</div>
           <div className="text-[13px] font-semibold text-[#FAFAFA] capitalize mt-0.5">
             {experienceLevel || 'Standard'}
           </div>
         </div>
         <div>
-          <div className="text-[10px] font-mono uppercase text-[#71717A]">Engines Active</div>
-          <div className="text-[13px] font-mono font-semibold text-[#34D399] mt-0.5">
+          <div className="text-[11px] font-medium text-[#71717A] uppercase tracking-wider">Engines Active</div>
+          <div className="text-[13px] font-semibold text-[#34D399] mt-0.5 tabular-nums">
             {selectedStrategyIds.length} / 5 Running
           </div>
         </div>
         <div>
-          <div className="text-[10px] font-mono uppercase text-[#71717A]">Risk / Setup</div>
-          <div className="text-[13px] font-mono font-semibold text-[#FAFAFA] mt-0.5">
+          <div className="text-[11px] font-medium text-[#71717A] uppercase tracking-wider">Risk / Setup</div>
+          <div className="text-[13px] font-semibold text-[#FAFAFA] mt-0.5 tabular-nums">
             {riskPerTrade}%
           </div>
         </div>
         <div>
-          <div className="text-[10px] font-mono uppercase text-[#71717A]">Max Drawdown</div>
-          <div className="text-[13px] font-mono font-semibold text-[#F87171] mt-0.5">
+          <div className="text-[11px] font-medium text-[#71717A] uppercase tracking-wider">Max Drawdown</div>
+          <div className="text-[13px] font-semibold text-[#F87171] mt-0.5 tabular-nums">
             {maxDailyLoss}%
           </div>
         </div>
@@ -829,7 +825,7 @@ export default function Onboarding() {
       </main>
 
       {/* ── Minimalist Bottom Telemetry ─────────────────────────────────────── */}
-      <footer className="relative z-10 pt-6 text-center text-[11px] font-mono text-[#52525B]">
+      <footer className="relative z-10 pt-6 text-center text-[11px] font-sans text-[#71717A]">
         <span>TRAXO ORCHESTRATOR v4.2 · ZERO-SLIPPAGE MT5 INTEGRATION PROTOCOL</span>
       </footer>
     </div>

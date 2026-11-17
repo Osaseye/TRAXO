@@ -17,8 +17,11 @@ export function Logo({ variant = 'full', size = 'md', className }: LogoProps) {
   if (variant === 'icon') {
     return (
       <img
-        src="/TRAXO-icon.png"
-        alt="Traxo"
+        src="/brand/traxo-mark.png"
+        onError={(e) => {
+          e.currentTarget.src = '/TRAXO-icon.png'
+        }}
+        alt="TRAXO"
         className={cn('object-contain', sizeClass, className)}
       />
     )
@@ -26,8 +29,11 @@ export function Logo({ variant = 'full', size = 'md', className }: LogoProps) {
 
   return (
     <img
-      src="/TRAXO.png"
-      alt="Traxo — Trade Smart. Execute Precisely."
+      src="/brand/traxo-mark.png"
+      onError={(e) => {
+        e.currentTarget.src = '/TRAXO.png'
+      }}
+      alt="TRAXO — Trade Smart. Execute Precisely."
       className={cn('object-contain', sizeClass, className)}
     />
   )

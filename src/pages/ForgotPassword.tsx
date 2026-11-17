@@ -33,10 +33,8 @@ export default function ForgotPassword() {
       {/* ── Top Wordmark ────────────────────────────────────────────────────── */}
       <header className="relative z-10 pt-8 sm:pt-12 px-6 flex justify-center">
         <Link to="/" className="inline-flex items-center gap-2.5 group focus:outline-none">
-          <div className="relative w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.1] flex items-center justify-center group-hover:border-white/25 transition-colors">
-            <img src="/brand/traxo-mark.png" className="w-5 h-5 object-contain" alt="TRAXO" />
-          </div>
-          <span className="text-[12px] font-mono font-bold tracking-[0.24em] uppercase text-[#FAFAFA]">
+          <img src="/brand/traxo-mark.png" className="w-6 h-6 object-contain" alt="TRAXO" />
+          <span className="text-[12px] font-bold tracking-[0.24em] uppercase text-[#FAFAFA]">
             TRAXO
           </span>
         </Link>
@@ -52,7 +50,7 @@ export default function ForgotPassword() {
         >
           {/* Header Typography */}
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] font-mono text-[#A1A1AA]">
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#A1A1AA] uppercase tracking-wider">
               <PiKey className="text-[#34D399]" />
               <span>STATION RECOVERY</span>
             </div>
@@ -65,11 +63,11 @@ export default function ForgotPassword() {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 font-sans">
             <div className="space-y-1.5">
-              <label htmlFor={emailId} className="text-[11px] font-mono uppercase tracking-wider text-[#71717A] flex items-center justify-between">
+              <label htmlFor={emailId} className="text-[12px] font-medium text-[#A1A1AA] flex items-center justify-between">
                 <span>Terminal Email</span>
-                <span className="text-[10px] text-white/30">REQ</span>
+                <span className="text-[10px] text-white/40">Required</span>
               </label>
               <div className="relative flex items-center group">
                 <PiEnvelopeSimple className="absolute left-3.5 text-[#71717A] group-focus-within:text-[#34D399] transition-colors" size={17} />
@@ -81,7 +79,7 @@ export default function ForgotPassword() {
                   placeholder="operator@traxo.io"
                   required
                   autoComplete="email"
-                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-mono"
+                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[13px] text-[#FAFAFA] placeholder:text-[#52525B] focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all font-sans"
                 />
               </div>
             </div>
