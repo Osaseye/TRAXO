@@ -1,4 +1,4 @@
-export type InstrumentAssetType = 'FOREX' | 'STOCKS' | 'CRYPTO';
+export type InstrumentAssetType = 'FOREX' | 'STOCKS' | 'CRYPTO' | 'FUTURES' | 'COMMODITY';
 export type MarketCategory = 'forex' | 'metals' | 'stocks' | 'crypto' | 'indices' | 'energy';
 export type UsdExposure = 'LONG_USD' | 'SHORT_USD' | null;
 
@@ -94,6 +94,31 @@ const STOCK_SPEC = (symbol: string): InstrumentSpec => ({
   scannable: true,
 });
 
+const FUTURES_SPEC = (
+  symbol: string,
+  twelveDataSymbol: string,
+  exnessSymbol: string,
+  exnessAliases: string[],
+  pointValue = 2.0,
+  pipSize = 0.25,
+  maxAllowedSpreadPips = 3.0,
+): InstrumentSpec => ({
+  symbol,
+  twelveDataSymbol,
+  exnessSymbol,
+  exnessAliases,
+  assetType: 'FUTURES',
+  category: 'indices',
+  digits: 2,
+  pipSize,
+  contractSize: pointValue,
+  riskPerUnitFactor: pointValue,
+  maxLots: 10.0,
+  maxAllowedSpreadPips,
+  usdCorrelationSide: null,
+  scannable: true,
+});
+
 export const INSTRUMENTS: Record<string, InstrumentSpec> = {
   // ── Forex (10) ──────────────────────────────────────────────────────────
   EURUSD: FX_STANDARD_SPEC('EURUSD', 'EUR/USD', 'INVERSE_USD', 3.5),
@@ -154,6 +179,10 @@ export const INSTRUMENTS: Record<string, InstrumentSpec> = {
   COIN: STOCK_SPEC('COIN'),
   MSTR: STOCK_SPEC('MSTR'),
   SMCI: STOCK_SPEC('SMCI'),
+
+  // ── Futures (MNQ / Micro E-mini Nasdaq) ──────────────────────────────────
+  MNQ: FUTURES_SPEC('MNQ', 'NQ', 'USTEC', ['USTEC', 'USTECm', 'NQ', 'MNQ'], 2.0, 0.25, 3.0),
+  USTEC: FUTURES_SPEC('USTEC', 'NQ', 'USTEC', ['USTEC', 'USTECm', 'NQ', 'MNQ'], 2.0, 0.25, 3.0),
 
   // ── Crypto / Indices / Energy Exness Mappings (non-scannable defaults) ─
   BTCUSD: {

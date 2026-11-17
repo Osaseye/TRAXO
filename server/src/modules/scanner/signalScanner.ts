@@ -9,7 +9,7 @@ import { getInstrumentDigits, getScannableInstruments, normalizeSymbol } from '.
 import * as marketDataService from '../market-data/marketDataService';
 import * as candleCache from '../market-data/candleCache';
 import { getAvailableCount } from '../market-data/keyRotator';
-import { getCachedNews } from '../market-data/newsCache';
+import { newsServiceClient } from '../../services/news/NewsServiceClient';
 import redis from '../market-data/redisClient';
 import { broadcast } from '../websocket/websocketManager';
 import { buildLiveStrategyContext, normalizeCandle, type RawCandleInput } from '../algorithms/contextBuilder';
@@ -20,7 +20,7 @@ import {
   processResolvedWin,
 } from '../optimizer/strategyOptimizer';
 import {
-  evaluatePreTradeGuardrails,
+  evaluatePreTradeGuardrailsAsync,
   getRiskRuntimeState,
   loadGuardrailConfig,
   recordGuardrailRejection,
@@ -109,63 +109,11 @@ async function waitForKey(maxWaitMs = 70_000): Promise<void> {
 export async function getUpcomingNewsContext(
   symbol: string
 ): Promise<{ minutesAway: number | null; newsEvents: NewsEvent[] }> {
-  const canonical = normalizeSymbol(symbol);
-  const ctx = buildLiveStrategyContext({
-    symbol: canonical,
-    timeframe: '15m',
-    candles: [
-      { open: 1, high: 1, low: 1, close: 1, volume: 0, timestamp: new Date().toISOString() },
-    ],
-  });
-  const assetType = ctx.assetType;
-  let category = 'general';
-  if (assetType === 'FOREX') category = 'forex';
-  if (assetType === 'CRYPTO') category = 'crypto';
-
-  const newsItems = await getCachedNews(`news:${category}`);
-  if (!newsItems || !newsItems.length) {
-    return { minutesAway: null, newsEvents: [] };
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  let minMinutes: number | null = null;
-  const newsEvents: NewsEvent[] = [];
-
-  const tokens =
-    assetType === 'FOREX' || assetType === 'CRYPTO'
-      ? [canonical.slice(0, 3), canonical.slice(3, 6)].filter(Boolean)
-      : [canonical];
-
-  for (const item of newsItems) {
-    const text = `${item.headline || ''} ${item.summary || ''}`.toUpperCase();
-    const isRelevant = tokens.some((t) => text.includes(t));
-    if (!isRelevant) continue;
-
-    const minutesAway = Math.floor(((item.datetime || 0) - now) / 60);
-    if (minutesAway >= 0 && (minMinutes === null || minutesAway < minMinutes)) {
-      minMinutes = minutesAway;
-    }
-
-    if (minutesAway >= -60 && minutesAway <= 180) {
-      const upperHeadline = String(item.headline || '').toUpperCase();
-      const severity: NewsEvent['severity'] = /\b(NFP|FOMC|CPI|FED|RATE DECISION|NON-FARM|INFLATION)\b/.test(
-        upperHeadline
-      )
-        ? 'CRITICAL'
-        : /\b(GDP|PMI|RETAIL SALES|UNEMPLOYMENT|CENTRAL BANK|ECB|BOE|BOJ)\b/.test(upperHeadline)
-          ? 'HIGH'
-          : 'MEDIUM';
-
-      newsEvents.push({
-        name: String(item.headline || 'Market Event').slice(0, 80),
-        severity,
-        timestamp_utc: new Date((item.datetime || now) * 1000).toISOString(),
-        minutes_away: minutesAway,
-      });
-    }
-  }
-
-  return { minutesAway: minMinutes, newsEvents };
+  const ctx = await newsServiceClient.getUpcomingNewsContext(symbol);
+  return {
+    minutesAway: ctx.minutesAway,
+    newsEvents: ctx.newsEvents,
+  };
 }
 
 export interface RunStrategiesOptions {
@@ -483,7 +431,7 @@ export async function runScan(): Promise<void> {
                 getSymbolQuote(signal.symbol),
               ]);
 
-              const evaluation = evaluatePreTradeGuardrails({
+              const evaluation = await evaluatePreTradeGuardrailsAsync({
                 signal,
                 config: cfg,
                 openPositions,

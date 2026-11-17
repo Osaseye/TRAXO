@@ -4,6 +4,7 @@ import {
   getUsdExposure,
   normalizeSymbol,
 } from '../../config/instruments';
+import { newsServiceClient } from '../../services/news/NewsServiceClient';
 import redis from '../market-data/redisClient';
 
 export type GuardrailCode = 'A.1' | 'A.2' | 'B.4' | 'B.7' | 'C.9' | 'C.10' | 'D.1' | 'D.2' | 'D.3';
@@ -344,6 +345,49 @@ export function evaluatePreTradeGuardrails(
     normalizedConfidence: normConf,
     evaluatedAt: now.toISOString(),
   };
+}
+
+/**
+ * Asynchronously resolves minutes-to-impact for a symbol via NewsServiceClient
+ * with non-blocking local fallback (fails open to null if news service fails/times out).
+ */
+export async function resolveNewsMinutesAway(
+  symbol: string,
+  config?: Partial<GuardrailConfig>
+): Promise<number | null> {
+  const cfg: GuardrailConfig = { ...DEFAULT_GUARDRAIL_CONFIG, ...(config || {}) };
+  if (!cfg.newsFilterEnabled) return null;
+
+  try {
+    const status = await newsServiceClient.getFreezeStatus(symbol, {
+      beforeMinutes: cfg.newsFreezeBeforeMinutes,
+      afterMinutes: cfg.newsFreezeAfterMinutes,
+    });
+    return status.minutesToImpact;
+  } catch (err: any) {
+    console.warn('[Guardrails] NewsServiceClient fallback to null:', err?.message || err);
+    return null;
+  }
+}
+
+/**
+ * Asynchronous guardrail evaluation that queries NewsServiceClient for D.3
+ * when `newsMinutesAway` is not already supplied by the caller.
+ */
+export async function evaluatePreTradeGuardrailsAsync(
+  input: GuardrailEvaluationInput
+): Promise<GuardrailEvaluationResult> {
+  const cfg: GuardrailConfig = { ...DEFAULT_GUARDRAIL_CONFIG, ...(input.config || {}) };
+  const newsMinutesAway =
+    input.newsMinutesAway !== undefined
+      ? input.newsMinutesAway
+      : await resolveNewsMinutesAway(input.signal.symbol, cfg);
+
+  return evaluatePreTradeGuardrails({
+    ...input,
+    config: cfg,
+    newsMinutesAway,
+  });
 }
 
 export async function loadGuardrailConfig(): Promise<GuardrailConfig> {

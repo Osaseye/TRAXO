@@ -5,6 +5,7 @@ import globalSignalsRouter from './globalSignals';
 import journalRouter from './journal';
 import metaApiRouter from './metaApi';
 import newsRouter from './news';
+import newsV1Router from '../services/news/newsRoutes';
 import scannerRouter from './scanner';
 import signalsRouter from './signals';
 import strategyOptimizationRouter from './strategyOptimization';
@@ -22,6 +23,7 @@ export function registerRoutes(app: any): void {
   });
 
   app.use('/api/news', newsRouter);
+  app.use('/api/v1/news', newsV1Router);
   app.use('/api/signals', signalsRouter);
   app.use('/api/candles', candlesRouter);
   app.use('/api/scanner', scannerRouter);

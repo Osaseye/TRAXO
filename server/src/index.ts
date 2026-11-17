@@ -2,7 +2,7 @@ import http from 'http';
 import cors from 'cors';
 import express from 'express';
 import { env } from './config/env';
-import { startNewsPoller } from './modules/market-data/newsPoller';
+import { startNewsPoller, stopNewsPoller } from './services/news/newsEngine';
 import { startCron } from './modules/scanner/scannerCron';
 import { initWebSocketServer } from './modules/websocket/websocketManager';
 import { registerRoutes } from './routes';
@@ -38,6 +38,7 @@ export function bootstrapServer() {
 
   const shutdown = (sig: string) => {
     console.log(`Received ${sig}, shutting down server cleanly...`);
+    stopNewsPoller();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 2000).unref();
   };

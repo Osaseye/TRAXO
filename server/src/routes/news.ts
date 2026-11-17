@@ -1,7 +1,11 @@
 import express from 'express';
 import { admin } from '../modules/market-data/firebaseAdmin';
-import { getCachedNews, setCachedNews } from '../modules/market-data/newsCache';
-import { fetchMarketNews, VALID_CATEGORIES } from '../modules/market-data/newsFetcher';
+import {
+  fetchMarketNews,
+  getCachedNews,
+  setCachedNews,
+  VALID_CATEGORIES,
+} from '../services/news/newsEngine';
 
 const router = express.Router();
 

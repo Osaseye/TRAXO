@@ -32,6 +32,7 @@ export interface ServerEnv {
   upstashRedisUrl: string;
   upstashRedisRestUrl: string;
   upstashRedisRestToken: string;
+  newsServiceUrl: string;
   firebaseServiceAccount: string;
   metaApiToken: string;
   metaApiAccountId: string;
@@ -60,6 +61,7 @@ export function getEnv(): ServerEnv {
     upstashRedisUrl: (process.env.UPSTASH_REDIS_URL || process.env.UPSTASH_REDIS_REST_URL || '').trim(),
     upstashRedisRestUrl: (process.env.UPSTASH_REDIS_REST_URL || '').trim(),
     upstashRedisRestToken: (process.env.UPSTASH_REDIS_REST_TOKEN || '').trim(),
+    newsServiceUrl: (process.env.NEWS_SERVICE_URL || '').trim(),
     firebaseServiceAccount: (process.env.FIREBASE_SERVICE_ACCOUNT || '').trim(),
     metaApiToken: (process.env.METAAPI_TOKEN || '').trim(),
     metaApiAccountId: (process.env.METAAPI_ACCOUNT_ID || '').trim(),

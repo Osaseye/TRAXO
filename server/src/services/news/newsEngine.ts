@@ -1,0 +1,628 @@
+import https from 'https';
+import { env } from '../../config/env';
+import { getAssetType, normalizeSymbol } from '../../config/instruments';
+
+export const NEWS_CATEGORIES = ['general', 'forex', 'crypto', 'merger'] as const;
+export type NewsCategory = (typeof NEWS_CATEGORIES)[number];
+export const VALID_CATEGORIES = new Set<string>(NEWS_CATEGORIES);
+
+export type NewsSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM';
+
+export const NEWS_TTL_SECONDS = 15 * 60;
+const REDIS_OP_TIMEOUT_MS = 2_000;
+const FINNHUB_TIMEOUT_MS = 8_000;
+
+export const DEFAULT_FREEZE_BEFORE_MINUTES = 30;
+export const DEFAULT_FREEZE_AFTER_MINUTES = 15;
+
+const CRITICAL_NEWS_RE = /\b(NFP|FOMC|CPI|FED|RATE DECISION|NON-FARM|INFLATION)\b/;
+const HIGH_NEWS_RE = /\b(GDP|PMI|RETAIL SALES|UNEMPLOYMENT|CENTRAL BANK|ECB|BOE|BOJ)\b/;
+const KNOWN_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'NZD', 'CAD', 'CHF', 'XAU', 'XAG', 'BTC', 'ETH'];
+
+export interface NormalizedNewsItem {
+  id: number;
+  category: string;
+  datetime: number;
+  headline: string;
+  summary: string;
+  source: string;
+  url: string;
+  image: string;
+  related: string;
+}
+
+export interface CalendarEvent {
+  id: number | string;
+  name: string;
+  headline: string;
+  category: string;
+  severity: NewsSeverity;
+  impact: NewsSeverity;
+  currencies: string[];
+  timestamp_utc: string;
+  datetime: number;
+  minutes_away: number;
+  source: string;
+  url: string;
+}
+
+export interface FreezeStatus {
+  symbol: string;
+  isFrozen: boolean;
+  reason: string | null;
+  minutesToImpact: number | null;
+  activeEvents: CalendarEvent[];
+  source?: 'engine' | 'cache' | 'remote' | 'fallback';
+  checkedAt: string;
+}
+
+export interface CalendarFilterOptions {
+  category?: string;
+  symbol?: string;
+  impact?: NewsSeverity[];
+  hoursAhead?: number;
+  includePastMinutes?: number;
+  nowMs?: number;
+}
+
+export interface CalendarResult {
+  events: CalendarEvent[];
+  count: number;
+  updatedAt: string;
+}
+
+export interface PollCategoryResult {
+  ok: boolean;
+  count: number;
+  error?: string;
+}
+
+export interface PollResult {
+  ok: boolean;
+  polledAt: string;
+  totalItems: number;
+  categories: Record<string, PollCategoryResult>;
+}
+
+export interface NewsEngineOptions {
+  finnhubApiKey?: string;
+  redisClient?: UpstashRedisLike | null;
+  fetcher?: (category: string, limit?: number) => Promise<NormalizedNewsItem[]>;
+  interCategoryDelayMs?: number;
+  ttlSeconds?: number;
+}
+
+export interface UpstashRedisLike {
+  get(key: string): Promise<unknown>;
+  set(key: string, value: string, options?: { ex?: number }): Promise<unknown>;
+  del(key: string): Promise<unknown>;
+}
+
+function createUpstashRedisClient(): UpstashRedisLike | null {
+  if (!env.upstashRedisRestUrl || !env.upstashRedisRestToken) {
+    console.log('[news-cache] No Redis credentials — using local in-memory cache');
+    return null;
+  }
+
+  try {
+    const { Redis } = require('@upstash/redis');
+    const client = new Redis({
+      url: env.upstashRedisRestUrl,
+      token: env.upstashRedisRestToken,
+    });
+    console.log('[news-cache] Connected to Upstash Redis');
+    return client;
+  } catch (err: any) {
+    console.warn('[news-cache] Failed to initialise Upstash Redis:', err?.message || err);
+    return null;
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out (${ms}ms)`)), ms);
+    if (typeof timer.unref === 'function') timer.unref();
+    promise.then(
+      (val) => {
+        clearTimeout(timer);
+        resolve(val);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
+function httpsGetJson(url: string, timeoutMs = FINNHUB_TIMEOUT_MS): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, (res) => {
+      if (res.statusCode === 429) {
+        reject(new Error('Finnhub rate limit reached (429)'));
+        res.resume();
+        return;
+      }
+      if (res.statusCode && res.statusCode >= 400) {
+        reject(new Error(`Finnhub HTTP error (${res.statusCode})`));
+        res.resume();
+        return;
+      }
+      let raw = '';
+      res.on('data', (chunk) => {
+        raw += chunk;
+      });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(raw));
+        } catch (e: any) {
+          reject(new Error(`JSON parse error: ${e.message}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`Finnhub request timed out (${timeoutMs / 1000}s)`));
+    });
+  });
+}
+
+export function normaliseNewsItem(item: any): NormalizedNewsItem {
+  return {
+    id: item?.id ?? 0,
+    category: item?.category ?? 'general',
+    datetime: Number(item?.datetime) || 0,
+    headline: item?.headline ?? '',
+    summary: item?.summary ?? '',
+    source: item?.source ?? '',
+    url: item?.url ?? '',
+    image: item?.image ?? '',
+    related: item?.related ?? '',
+  };
+}
+
+export function classifyNewsSeverity(headline: string, summary = ''): NewsSeverity {
+  const upper = `${headline} ${summary}`.toUpperCase();
+  if (CRITICAL_NEWS_RE.test(upper)) return 'CRITICAL';
+  if (HIGH_NEWS_RE.test(upper)) return 'HIGH';
+  return 'MEDIUM';
+}
+
+function extractCurrencies(item: NormalizedNewsItem): string[] {
+  const haystack = `${item.headline} ${item.summary} ${item.related}`.toUpperCase();
+  const found = KNOWN_CURRENCIES.filter((code) => haystack.includes(code));
+  if (item.related) {
+    for (const part of item.related.toUpperCase().split(/[\s,;/]+/)) {
+      const clean = part.trim();
+      if (clean && !found.includes(clean)) found.push(clean);
+    }
+  }
+  return found;
+}
+
+function getSymbolQueryPlan(rawSymbol: string): {
+  canonical: string;
+  categories: string[];
+  tokens: string[];
+} {
+  const canonical = normalizeSymbol(rawSymbol);
+  const assetType = String(getAssetType(canonical));
+
+  let primaryCategory = 'general';
+  if (assetType === 'FOREX') primaryCategory = 'forex';
+  else if (assetType === 'CRYPTO') primaryCategory = 'crypto';
+
+  const categories =
+    primaryCategory === 'general' ? ['general'] : [primaryCategory, 'general'];
+
+  const tokens: string[] = [];
+  if (assetType === 'FOREX' || assetType === 'CRYPTO') {
+    const base = canonical.slice(0, 3);
+    const quote = canonical.slice(3, 6);
+    if (base) tokens.push(base);
+    if (quote) tokens.push(quote);
+    if (canonical === 'XAUUSD') tokens.push('GOLD');
+    if (canonical === 'XAGUSD') tokens.push('SILVER');
+    if (canonical === 'BTCUSD') tokens.push('BITCOIN');
+    if (canonical === 'ETHUSD') tokens.push('ETHEREUM');
+  } else {
+    tokens.push(canonical);
+  }
+
+  return { canonical, categories, tokens };
+}
+
+function isItemRelevantToTokens(item: NormalizedNewsItem, tokens: string[]): boolean {
+  const text = `${item.headline || ''} ${item.summary || ''} ${item.related || ''}`.toUpperCase();
+  return tokens.some((token) => text.includes(token));
+}
+
+function toCalendarEvent(item: NormalizedNewsItem, nowSec: number): CalendarEvent {
+  const severity = classifyNewsSeverity(item.headline, item.summary);
+  const dt = Number(item.datetime) || nowSec;
+  const minutesAway = Math.floor((dt - nowSec) / 60);
+  const headline = String(item.headline || 'Market Event');
+
+  return {
+    id: item.id || `${item.category}:${dt}:${headline.slice(0, 24)}`,
+    name: headline.slice(0, 80),
+    headline,
+    category: item.category || 'general',
+    severity,
+    impact: severity,
+    currencies: extractCurrencies(item),
+    timestamp_utc: new Date(dt * 1000).toISOString(),
+    datetime: dt,
+    minutes_away: minutesAway,
+    source: item.source || '',
+    url: item.url || '',
+  };
+}
+
+/**
+ * Decoupled News Engine encapsulating Finnhub fetching, dual-layer caching
+ * (Upstash Redis + local in-memory TTL fallback), scheduled polling, and
+ * symbol freeze / economic calendar evaluation.
+ */
+export class NewsEngine {
+  private readonly upstashRedis: UpstashRedisLike | null;
+  private readonly memoryCache = new Map<string, { data: NormalizedNewsItem[]; expiresAt: number }>();
+  private readonly customFetcher?: (category: string, limit?: number) => Promise<NormalizedNewsItem[]>;
+  private readonly apiKeyOverride?: string;
+  private readonly interCategoryDelayMs: number;
+  private readonly ttlSeconds: number;
+
+  private started = false;
+  private cronTasks: Array<{ stop?: () => void }> = [];
+  private inFlightPoll: Promise<PollResult> | null = null;
+  private lastPolledAt: string | null = null;
+  private lastPollResult: PollResult | null = null;
+  private upstashRetryAfter = 0;
+
+  constructor(options: NewsEngineOptions = {}) {
+    this.upstashRedis =
+      options.redisClient !== undefined ? options.redisClient : createUpstashRedisClient();
+    this.customFetcher = options.fetcher;
+    this.apiKeyOverride = options.finnhubApiKey;
+    this.interCategoryDelayMs = options.interCategoryDelayMs ?? 500;
+    this.ttlSeconds = options.ttlSeconds ?? NEWS_TTL_SECONDS;
+  }
+
+  isRedisAvailable(): boolean {
+    return !!this.upstashRedis;
+  }
+
+  getStatus() {
+    return {
+      started: this.started,
+      redisAvailable: this.isRedisAvailable(),
+      memoryCacheKeys: Array.from(this.memoryCache.keys()),
+      lastPolledAt: this.lastPolledAt,
+      lastPollResult: this.lastPollResult,
+    };
+  }
+
+  async getCachedNews(key: string): Promise<NormalizedNewsItem[] | null> {
+    const memEntry = this.memoryCache.get(key);
+    if (memEntry) {
+      if (Date.now() <= memEntry.expiresAt) {
+        return memEntry.data;
+      }
+      this.memoryCache.delete(key);
+    }
+
+    if (this.upstashRedis && Date.now() >= this.upstashRetryAfter) {
+      try {
+        const value = await withTimeout(
+          this.upstashRedis.get(key),
+          REDIS_OP_TIMEOUT_MS,
+          'Upstash GET'
+        );
+        if (value) {
+          const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+          if (Array.isArray(parsed)) {
+            this.memoryCache.set(key, {
+              data: parsed,
+              expiresAt: Date.now() + this.ttlSeconds * 1000,
+            });
+            return parsed;
+          }
+        }
+      } catch (err: any) {
+        this.upstashRetryAfter = Date.now() + 60_000;
+        console.warn('[news-cache] GET failed, using local memory cache (60s Redis cooldown):', err?.message || err);
+      }
+    }
+
+    return null;
+  }
+
+  async setCachedNews(key: string, data: NormalizedNewsItem[]): Promise<void> {
+    this.memoryCache.set(key, {
+      data,
+      expiresAt: Date.now() + this.ttlSeconds * 1000,
+    });
+
+    if (!this.upstashRedis || Date.now() < this.upstashRetryAfter) return;
+    try {
+      await withTimeout(
+        this.upstashRedis.set(key, JSON.stringify(data), { ex: this.ttlSeconds }),
+        REDIS_OP_TIMEOUT_MS,
+        'Upstash SET'
+      );
+    } catch (err: any) {
+      this.upstashRetryAfter = Date.now() + 60_000;
+      console.warn('[news-cache] SET failed (60s Redis cooldown):', err?.message || err);
+    }
+  }
+
+  async invalidateCachedNews(key: string): Promise<void> {
+    this.memoryCache.delete(key);
+    if (!this.upstashRedis) return;
+    try {
+      await withTimeout(this.upstashRedis.del(key), REDIS_OP_TIMEOUT_MS, 'Upstash DEL');
+    } catch (err: any) {
+      console.warn('[news-cache] DEL failed:', err?.message || err);
+    }
+  }
+
+  async fetchMarketNews(category = 'general', limit = 25): Promise<NormalizedNewsItem[]> {
+    const cat = VALID_CATEGORIES.has(category) ? category : 'general';
+    if (this.customFetcher) {
+      const customItems = await this.customFetcher(cat, limit);
+      return customItems.slice(0, limit).map(normaliseNewsItem);
+    }
+
+    const token = this.apiKeyOverride ?? env.finnhubApiKey;
+    if (!token) {
+      throw new Error('FINNHUB_API_KEY is not set on the server');
+    }
+
+    const url = `https://finnhub.io/api/v1/news?category=${cat}&token=${token}`;
+    const items = await httpsGetJson(url, FINNHUB_TIMEOUT_MS);
+    if (!Array.isArray(items)) {
+      throw new Error(`Unexpected Finnhub response: ${JSON.stringify(items).slice(0, 200)}`);
+    }
+    return items.slice(0, limit).map(normaliseNewsItem);
+  }
+
+  async pollAllCategories(categories?: readonly string[]): Promise<PollResult> {
+    if (this.inFlightPoll) {
+      return this.inFlightPoll;
+    }
+
+    const targetCategories =
+      categories && categories.length > 0
+        ? categories.filter((c) => VALID_CATEGORIES.has(c))
+        : [...NEWS_CATEGORIES];
+
+    const runPoll = async (): Promise<PollResult> => {
+      console.log('[news-poller] Polling market news categories...');
+      const results: Record<string, PollCategoryResult> = {};
+      let totalItems = 0;
+      let successCount = 0;
+
+      for (let idx = 0; idx < targetCategories.length; idx++) {
+        const category = targetCategories[idx];
+        try {
+          const items = await this.fetchMarketNews(category);
+          await this.setCachedNews(`news:${category}`, items);
+          results[category] = { ok: true, count: items.length };
+          totalItems += items.length;
+          successCount += 1;
+          console.log(`[news-poller] Cached ${items.length} items — ${category}`);
+        } catch (err: any) {
+          const message = err?.message || String(err);
+          results[category] = { ok: false, count: 0, error: message };
+          console.warn(`[news-poller] Failed to prefetch "${category}":`, message);
+        }
+
+        if (idx < targetCategories.length - 1 && this.interCategoryDelayMs > 0) {
+          await new Promise((r) => setTimeout(r, this.interCategoryDelayMs));
+        }
+      }
+
+      const summary: PollResult = {
+        ok: successCount > 0,
+        polledAt: new Date().toISOString(),
+        totalItems,
+        categories: results,
+      };
+      this.lastPolledAt = summary.polledAt;
+      this.lastPollResult = summary;
+      console.log('[news-poller] Cache warm-up complete');
+      return summary;
+    };
+
+    this.inFlightPoll = runPoll().finally(() => {
+      this.inFlightPoll = null;
+    });
+
+    return this.inFlightPoll;
+  }
+
+  startPoller(): void {
+    if (this.started) return;
+    this.started = true;
+
+    let cron: any;
+    try {
+      cron = require('node-cron');
+    } catch {
+      console.warn('[news-poller] node-cron not installed — scheduled polling disabled');
+      void this.pollAllCategories();
+      return;
+    }
+
+    const dailyTask = cron.schedule('0 7 * * *', () => {
+      void this.pollAllCategories();
+    });
+    const marketHoursTask = cron.schedule('*/15 7-22 * * 1-5', () => {
+      void this.pollAllCategories();
+    });
+    this.cronTasks = [dailyTask, marketHoursTask];
+
+    console.log(
+      '[news-poller] Cron schedules registered (07:00 UTC daily + every 15 min weekday market hours)'
+    );
+    void this.pollAllCategories();
+  }
+
+  stopPoller(): void {
+    for (const task of this.cronTasks) {
+      try {
+        task?.stop?.();
+      } catch {}
+    }
+    this.cronTasks = [];
+    this.started = false;
+  }
+
+  private async collectCachedItems(categories: readonly string[]): Promise<NormalizedNewsItem[]> {
+    const batches = await Promise.all(
+      categories.map((cat) => this.getCachedNews(`news:${cat}`).catch(() => null))
+    );
+
+    const seen = new Set<string>();
+    const merged: NormalizedNewsItem[] = [];
+    for (const batch of batches) {
+      if (!batch || !Array.isArray(batch)) continue;
+      for (const item of batch) {
+        const dedupeKey = `${item.id}:${item.headline}`;
+        if (seen.has(dedupeKey)) continue;
+        seen.add(dedupeKey);
+        merged.push(item);
+      }
+    }
+    return merged;
+  }
+
+  async getUpcomingNewsContext(
+    symbol: string,
+    opts: { beforeMinutes?: number; afterMinutes?: number; nowMs?: number } = {}
+  ): Promise<{
+    minutesAway: number | null;
+    newsEvents: CalendarEvent[];
+    freezeStatus: FreezeStatus;
+  }> {
+    const nowMs = opts.nowMs ?? Date.now();
+    const nowSec = Math.floor(nowMs / 1000);
+    const beforeMinutes = opts.beforeMinutes ?? DEFAULT_FREEZE_BEFORE_MINUTES;
+    const afterMinutes = opts.afterMinutes ?? DEFAULT_FREEZE_AFTER_MINUTES;
+    const { canonical, categories, tokens } = getSymbolQueryPlan(symbol);
+
+    const items = await this.collectCachedItems(categories);
+    const relevantEvents: CalendarEvent[] = [];
+
+    for (const item of items) {
+      if (!isItemRelevantToTokens(item, tokens)) continue;
+      const evt = toCalendarEvent(item, nowSec);
+      if (evt.minutes_away >= -60 && evt.minutes_away <= 180) {
+        relevantEvents.push(evt);
+      }
+    }
+
+    relevantEvents.sort((a, b) => a.minutes_away - b.minutes_away);
+
+    const highImpactEvents = relevantEvents.filter(
+      (e) => e.severity === 'CRITICAL' || e.severity === 'HIGH'
+    );
+    const activeEvents = highImpactEvents
+      .filter((e) => e.minutes_away >= -afterMinutes && e.minutes_away <= beforeMinutes)
+      .sort((a, b) => Math.abs(a.minutes_away) - Math.abs(b.minutes_away));
+
+    const isFrozen = activeEvents.length > 0;
+
+    let minutesToImpact: number | null = null;
+    if (activeEvents.length > 0) {
+      minutesToImpact = activeEvents[0].minutes_away;
+    } else {
+      const nextHigh = highImpactEvents.find((e) => e.minutes_away >= 0);
+      const nextAny = relevantEvents.find((e) => e.minutes_away >= 0);
+      minutesToImpact = nextHigh?.minutes_away ?? nextAny?.minutes_away ?? null;
+    }
+
+    const reason = isFrozen
+      ? activeEvents[0].minutes_away >= 0
+        ? `${activeEvents[0].severity} impact event "${activeEvents[0].name}" in ${activeEvents[0].minutes_away}m`
+        : `${activeEvents[0].severity} impact event "${activeEvents[0].name}" active (${Math.abs(activeEvents[0].minutes_away)}m ago)`
+      : null;
+
+    const freezeStatus: FreezeStatus = {
+      symbol: canonical,
+      isFrozen,
+      reason,
+      minutesToImpact,
+      activeEvents,
+      source: 'engine',
+      checkedAt: new Date(nowMs).toISOString(),
+    };
+
+    return {
+      minutesAway: minutesToImpact,
+      newsEvents: relevantEvents,
+      freezeStatus,
+    };
+  }
+
+  async getFreezeStatus(
+    symbol: string,
+    opts: { beforeMinutes?: number; afterMinutes?: number; nowMs?: number } = {}
+  ): Promise<FreezeStatus> {
+    const ctx = await this.getUpcomingNewsContext(symbol, opts);
+    return ctx.freezeStatus;
+  }
+
+  async getCalendar(filters: CalendarFilterOptions = {}): Promise<CalendarResult> {
+    const nowMs = filters.nowMs ?? Date.now();
+    const nowSec = Math.floor(nowMs / 1000);
+    const hoursAhead = Number.isFinite(filters.hoursAhead) ? Number(filters.hoursAhead) : 24;
+    const includePastMinutes = Number.isFinite(filters.includePastMinutes)
+      ? Math.max(0, Number(filters.includePastMinutes))
+      : 0;
+    const allowedImpacts = new Set<NewsSeverity>(
+      filters.impact && filters.impact.length > 0 ? filters.impact : ['CRITICAL', 'HIGH']
+    );
+
+    const categories =
+      filters.category && VALID_CATEGORIES.has(filters.category.toLowerCase())
+        ? [filters.category.toLowerCase()]
+        : [...NEWS_CATEGORIES];
+
+    const symbolPlan = filters.symbol ? getSymbolQueryPlan(filters.symbol) : null;
+    const items = await this.collectCachedItems(categories);
+    const maxMinutes = hoursAhead * 60;
+    const events: CalendarEvent[] = [];
+
+    for (const item of items) {
+      if (symbolPlan && !isItemRelevantToTokens(item, symbolPlan.tokens)) continue;
+      const evt = toCalendarEvent(item, nowSec);
+      if (!allowedImpacts.has(evt.severity)) continue;
+      if (evt.minutes_away < -includePastMinutes || evt.minutes_away > maxMinutes) continue;
+      events.push(evt);
+    }
+
+    events.sort((a, b) => a.minutes_away - b.minutes_away);
+
+    return {
+      events,
+      count: events.length,
+      updatedAt: new Date(nowMs).toISOString(),
+    };
+  }
+}
+
+export const newsEngine = new NewsEngine();
+
+// Backward-compatible functional exports
+export const CATEGORIES = [...NEWS_CATEGORIES];
+export const getCachedNews = (key: string) => newsEngine.getCachedNews(key);
+export const setCachedNews = (key: string, data: NormalizedNewsItem[]) =>
+  newsEngine.setCachedNews(key, data);
+export const invalidateCachedNews = (key: string) => newsEngine.invalidateCachedNews(key);
+export const isRedisAvailable = () => newsEngine.isRedisAvailable();
+export const fetchMarketNews = (category = 'general', limit = 25) =>
+  newsEngine.fetchMarketNews(category, limit);
+export const prefetchAllCategories = () => newsEngine.pollAllCategories();
+export const startNewsPoller = () => newsEngine.startPoller();
+export const stopNewsPoller = () => newsEngine.stopPoller();
