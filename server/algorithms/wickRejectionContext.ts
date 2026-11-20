@@ -1,6 +1,6 @@
 export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1H' | '4H' | '1D' | string
-export type WickRejectionAssetType = 'STOCKS' | 'CRYPTO' | 'FOREX'
-export type WickRejectionSession = 'normal' | 'london_ny_overlap' | 'off_hours' | 'opening_bell'
+export type WickRejectionAssetType = 'STOCKS' | 'CRYPTO' | 'FOREX' | 'FUTURES' | 'COMMODITY'
+export type WickRejectionSession = 'normal' | 'london_open' | 'london_ny_overlap' | 'off_hours' | 'opening_bell'
 
 // Cached formatter for high-frequency calls
 const NY_FORMATTER = new Intl.DateTimeFormat('en-US', {
@@ -43,13 +43,21 @@ export function resolveWickRejectionSession(
     return 'normal'
   }
 
-  if (assetType === 'FOREX') {
+  if (assetType === 'FUTURES') {
+    return 'normal'
+  }
+
+  if (assetType === 'FOREX' || assetType === 'COMMODITY') {
     const utcDate = new Date(timestamp)
     if (!Number.isNaN(utcDate.getTime())) {
       const utcMinutes = utcDate.getUTCHours() * 60 + utcDate.getUTCMinutes()
-      // True London/NY overlap is ~13:00 - 16:00 UTC
+      // True London/NY overlap is 13:00 - 16:00 UTC
       if (utcMinutes >= 13 * 60 && utcMinutes < 16 * 60) {
         return 'london_ny_overlap'
+      }
+      // London Morning Open peak liquidity: 07:00 - 11:00 UTC
+      if (utcMinutes >= 7 * 60 && utcMinutes < 11 * 60) {
+        return 'london_open'
       }
       return 'off_hours'
     }

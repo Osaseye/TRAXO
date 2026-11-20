@@ -4,7 +4,7 @@
  * Precision calculation utilities for proprietary TRAXO engines.
  */
 
-import { TraxoCandle } from './types';
+import type { TraxoCandle } from './types';
 
 /**
  * Exponential Moving Average (EMA)

@@ -3,6 +3,7 @@
  */
 
 import type { ITraxoStrategy } from '../types';
+import { traxoAurumFix } from './traxoAurumFix';
 import { traxoAurumSweep } from './traxoAurumSweep';
 import { traxoBullionStrike } from './traxoBullionStrike';
 import { traxoNyBullet } from './traxoNyBullet';
@@ -14,6 +15,12 @@ export {
   extractAurumAsianRange,
   type AurumAsianRange,
 } from './traxoAurumSweep';
+
+export {
+  TraxoAurumFixStrategy,
+  traxoAurumFix,
+  AURUM_FIX_MIN_SL_ATR_BUFFER,
+} from './traxoAurumFix';
 
 export {
   TraxoBullionStrikeStrategy,
@@ -49,5 +56,6 @@ export const GOLD_STRATEGIES: ITraxoStrategy[] = [
   traxoAurumSweep,
   traxoBullionStrike,
   traxoNyBullet,
+  traxoAurumFix,
   traxoKineticNr7,
 ];

@@ -14,7 +14,7 @@ import {
   FUTURES_SUPPORTED_SYMBOLS,
   hasValidCandles,
   isSupportedFuturesSymbol,
-  NyClockSnapshot,
+  type NyClockSnapshot,
   resolveNyClock,
   toNyClock,
 } from './futuresUtils';

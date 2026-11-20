@@ -2,6 +2,7 @@ import {
   GOLD_STRATEGIES,
   GOLD_MIN_SL_ATR_BUFFER,
   traxoAurumSweep,
+  traxoAurumFix,
   traxoBullionStrike,
   traxoNyBullet,
   traxoKineticNr7,
@@ -45,7 +46,7 @@ function makeM15Series(
 }
 
 // 1. Contract & Barrel Export checks
-assertEqual(GOLD_STRATEGIES.length, 4, 'GOLD_STRATEGIES should export 4 strategies');
+assertEqual(GOLD_STRATEGIES.length, 5, 'GOLD_STRATEGIES should export 5 strategies');
 for (const s of GOLD_STRATEGIES as ITraxoStrategy[]) {
   assert(Boolean(s.id), 'Strategy must have id');
   assert(Boolean(s.name), 'Strategy must have name');
@@ -333,6 +334,69 @@ for (const s of GOLD_STRATEGIES as ITraxoStrategy[]) {
     traxoKineticNr7.evaluate({ symbol: 'XAU/USD', timeframe: '1D', candles: nonNr7Daily }),
     null,
     'Must return null when prior day is not NR7'
+  );
+}
+
+// 6. traxoAurumFix tests (14:30-15:30 UTC LBMA PM Fix VWAP 2.0σ Snapback + 1.35x ATR buffer)
+{
+  // Build 26 intraday M15 candles starting at 08:45 UTC (ends at 15:00 UTC = bar 25)
+  const fixBullCandles = makeM15Series('2026-11-17T08:45:00Z', 26, 2650, (i) => {
+    if (i < 23) {
+      return { open: 2650, high: 2651.5, low: 2648.5, close: 2650, volume: 1000 };
+    }
+    if (i === 23) {
+      // 14:30 UTC starts stretching downward
+      return { open: 2650, high: 2650.2, low: 2645.0, close: 2645.5, volume: 1400 };
+    }
+    if (i === 24) {
+      // 14:45 UTC pushes >= 2.0 sigma below VWAP
+      return { open: 2645.5, high: 2646.0, low: 2640.5, close: 2641.2, volume: 1800 };
+    }
+    // 15:00 UTC PM Fix snapback reversal candle closing back toward VWAP (~2648.x)
+    return { open: 2641.2, high: 2644.5, low: 2640.0, close: 2644.2, volume: 2100 };
+  });
+
+  const fixAtrArr = calculateATR(fixBullCandles, 14);
+  const fixAtr = fixAtrArr[fixAtrArr.length - 1];
+  const fixBullSig = traxoAurumFix.evaluate({
+    symbol: 'XAU/USD',
+    timeframe: '15m',
+    candles: fixBullCandles,
+  });
+  assert(fixBullSig !== null, 'traxoAurumFix should fire BUY snapback at 15:00 UTC >= 2σ below VWAP');
+  assertEqual(fixBullSig!.direction, 'BUY', 'Aurum Fix BUY expected');
+  assert(
+    2640.0 - fixBullSig!.slPrice >= GOLD_MIN_SL_ATR_BUFFER * fixAtr - 1e-9,
+    'Aurum Fix BUY SL must maintain >= 1.35x ATR Gold buffer beyond sweep low'
+  );
+
+  // Bearish PM Fix snapback at 15:15 UTC (starts 09:00 UTC -> bar 25 is 15:15 UTC)
+  const fixBearCandles = makeM15Series('2026-11-17T09:00:00Z', 26, 2650, (i) => {
+    if (i < 23) {
+      return { open: 2650, high: 2651.5, low: 2648.5, close: 2650, volume: 1000 };
+    }
+    if (i === 23) return { open: 2650, high: 2654.8, low: 2649.8, close: 2654.5, volume: 1400 };
+    if (i === 24) return { open: 2654.5, high: 2659.5, low: 2654.0, close: 2658.8, volume: 1800 };
+    return { open: 2658.8, high: 2660.0, low: 2655.4, close: 2655.8, volume: 2100 };
+  });
+
+  const fixBearSig = traxoAurumFix.evaluate({
+    symbol: 'XAUUSD',
+    timeframe: '15m',
+    candles: fixBearCandles,
+  });
+  assert(fixBearSig !== null, 'traxoAurumFix should fire SELL snapback at 15:15 UTC >= 2σ above VWAP');
+  assertEqual(fixBearSig!.direction, 'SELL', 'Aurum Fix SELL expected');
+
+  // Outside 14:30-15:30 UTC (e.g. 16:00 UTC) must return null
+  const outFixWindow = fixBullCandles.map((c, idx) => ({
+    ...c,
+    timestamp: new Date(Date.parse('2026-11-17T09:45:00Z') + idx * 15 * 60 * 1000).toISOString(),
+  }));
+  assertEqual(
+    traxoAurumFix.evaluate({ symbol: 'XAU/USD', timeframe: '15m', candles: outFixWindow }),
+    null,
+    'traxoAurumFix must return null outside 14:30-15:30 UTC'
   );
 }
 

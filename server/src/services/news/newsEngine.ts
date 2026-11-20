@@ -56,6 +56,13 @@ export interface FreezeStatus {
   checkedAt: string;
 }
 
+export interface NewsFreezeTransitionEvent {
+  type: 'NEWS_FREEZE_ENTER' | 'NEWS_RELEASED' | 'NEWS_FREEZE_EXIT';
+  symbol: string;
+  status: FreezeStatus;
+  timestamp: string;
+}
+
 export interface CalendarFilterOptions {
   category?: string;
   symbol?: string;
@@ -200,7 +207,7 @@ function extractCurrencies(item: NormalizedNewsItem): string[] {
   return found;
 }
 
-function getSymbolQueryPlan(rawSymbol: string): {
+export function getSymbolQueryPlan(rawSymbol: string): {
   canonical: string;
   categories: string[];
   tokens: string[];
@@ -209,14 +216,23 @@ function getSymbolQueryPlan(rawSymbol: string): {
   const assetType = String(getAssetType(canonical));
 
   let primaryCategory = 'general';
-  if (assetType === 'FOREX') primaryCategory = 'forex';
+  if (assetType === 'FOREX' || assetType === 'COMMODITY') primaryCategory = 'forex';
   else if (assetType === 'CRYPTO') primaryCategory = 'crypto';
 
   const categories =
     primaryCategory === 'general' ? ['general'] : [primaryCategory, 'general'];
 
   const tokens: string[] = [];
-  if (assetType === 'FOREX' || assetType === 'CRYPTO') {
+  if (assetType === 'COMMODITY') {
+    if (canonical === 'XAGUSD') {
+      tokens.push('XAG', 'SILVER');
+    } else {
+      tokens.push('XAU', 'GOLD');
+    }
+    tokens.push('USD', 'CPI', 'NFP', 'FOMC', 'FED');
+  } else if (assetType === 'FUTURES') {
+    tokens.push(canonical, 'NASDAQ', 'NQ', 'USTEC', 'USD', 'CPI', 'PPI', 'ISM', 'FOMC', 'FED', 'NFP');
+  } else if (assetType === 'FOREX' || assetType === 'CRYPTO') {
     const base = canonical.slice(0, 3);
     const quote = canonical.slice(3, 6);
     if (base) tokens.push(base);
@@ -278,6 +294,21 @@ export class NewsEngine {
   private lastPolledAt: string | null = null;
   private lastPollResult: PollResult | null = null;
   private upstashRetryAfter = 0;
+
+  private readonly lastFreezeState = new Map<
+    string,
+    { isFrozen: boolean; releasedEventIds: Set<string> }
+  >();
+  private watchedSymbols: string[] = [];
+  private transitionListener?: (event: NewsFreezeTransitionEvent) => void;
+
+  setTransitionListener(
+    listener: (event: NewsFreezeTransitionEvent) => void,
+    watchedSymbols: string[] = []
+  ): void {
+    this.transitionListener = listener;
+    this.watchedSymbols = watchedSymbols;
+  }
 
   constructor(options: NewsEngineOptions = {}) {
     this.upstashRedis =
@@ -431,6 +462,9 @@ export class NewsEngine {
       this.lastPolledAt = summary.polledAt;
       this.lastPollResult = summary;
       console.log('[news-poller] Cache warm-up complete');
+      if (this.watchedSymbols.length > 0 && this.transitionListener) {
+        await this.evaluateFreezeTransitions(this.watchedSymbols).catch(() => []);
+      }
       return summary;
     };
 
@@ -571,6 +605,62 @@ export class NewsEngine {
   ): Promise<FreezeStatus> {
     const ctx = await this.getUpcomingNewsContext(symbol, opts);
     return ctx.freezeStatus;
+  }
+
+  async evaluateFreezeTransitions(
+    symbols: string[],
+    nowMs: number = Date.now()
+  ): Promise<NewsFreezeTransitionEvent[]> {
+    const emitted: NewsFreezeTransitionEvent[] = [];
+    const timestamp = new Date(nowMs).toISOString();
+
+    for (const sym of symbols) {
+      const status = await this.getFreezeStatus(sym, { nowMs });
+      const canonical = status.symbol;
+      const prev = this.lastFreezeState.get(canonical) ?? {
+        isFrozen: false,
+        releasedEventIds: new Set<string>(),
+      };
+
+      const dispatch = (type: NewsFreezeTransitionEvent['type']) => {
+        const event: NewsFreezeTransitionEvent = {
+          type,
+          symbol: canonical,
+          status,
+          timestamp,
+        };
+        emitted.push(event);
+        if (this.transitionListener) {
+          try {
+            this.transitionListener(event);
+          } catch {}
+        }
+      };
+
+      if (!prev.isFrozen && status.isFrozen) {
+        dispatch('NEWS_FREEZE_ENTER');
+      }
+
+      if (status.isFrozen) {
+        for (const evt of status.activeEvents) {
+          const evtId = String(evt.id);
+          if (evt.minutes_away <= 0 && !prev.releasedEventIds.has(evtId)) {
+            prev.releasedEventIds.add(evtId);
+            dispatch('NEWS_RELEASED');
+          }
+        }
+      }
+
+      if (prev.isFrozen && !status.isFrozen) {
+        prev.releasedEventIds.clear();
+        dispatch('NEWS_FREEZE_EXIT');
+      }
+
+      prev.isFrozen = status.isFrozen;
+      this.lastFreezeState.set(canonical, prev);
+    }
+
+    return emitted;
   }
 
   async getCalendar(filters: CalendarFilterOptions = {}): Promise<CalendarResult> {

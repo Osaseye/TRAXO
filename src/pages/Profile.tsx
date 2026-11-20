@@ -59,6 +59,15 @@ const MARKET_INSTRUMENTS: Array<{ id: Instrument; label: string }> = [
   { id: 'stocks', label: 'US Equities' },
 ]
 
+type ProfileSectionTab = 'all' | 'identity' | 'terminal' | 'security'
+
+const PROFILE_MOBILE_TABS: Array<{ id: ProfileSectionTab; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'identity', label: 'Identity' },
+  { id: 'terminal', label: 'Terminal Defaults' },
+  { id: 'security', label: 'Security' },
+]
+
 function formatCurrency(value: number) {
   return `$${value.toLocaleString(undefined, {
     maximumFractionDigits: 2,
@@ -119,6 +128,7 @@ export default function Profile() {
   const [savedSuccess, setSavedSuccess] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [copiedUid, setCopiedUid] = useState(false)
+  const [mobileTab, setMobileTab] = useState<ProfileSectionTab>('all')
   const [resetState, setResetState] = useState<{
     status: 'idle' | 'sending' | 'sent' | 'error'
     message?: string
@@ -238,62 +248,65 @@ export default function Profile() {
     }
   }
 
+  const showSection = (section: Exclude<ProfileSectionTab, 'all'>) =>
+    mobileTab === 'all' || mobileTab === section
+
   return (
-    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] overflow-x-hidden">
-      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-8">
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] font-sans overflow-x-hidden">
+      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-5 sm:py-8 space-y-6 sm:space-y-8">
         {/* Page Header */}
         <div className="space-y-1.5">
           <p className="text-[12px] font-medium text-[#71717A]">Operator Profile</p>
-          <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
+          <h1 className="text-[24px] sm:text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight break-words">
             {displayName}
           </h1>
-          <p className="text-[14px] text-[#A1A1AA]">
+          <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA]">
             Personal operator identity, default chart configuration, and session security controls.
           </p>
         </div>
 
         {/* Operator Identity & Telemetry Card */}
         <section className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden">
-          <div className="p-6 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-            <div className="flex items-start sm:items-center gap-4 min-w-0">
-              <div className="w-14 h-14 rounded-2xl bg-[#161619] flex items-center justify-center text-[17px] font-semibold text-[#FAFAFA] shrink-0 font-mono">
+          <div className="p-4 sm:p-6 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-5">
+            <div className="flex items-start sm:items-center gap-3.5 sm:gap-4 min-w-0">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#161619] flex items-center justify-center text-[16px] sm:text-[17px] font-semibold text-[#FAFAFA] shrink-0 font-mono">
                 {initials}
               </div>
 
-              <div className="space-y-1.5 min-w-0">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <span className="text-[16px] font-semibold text-[#FAFAFA] truncate">
+              <div className="space-y-1.5 min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[15px] sm:text-[16px] font-semibold text-[#FAFAFA] truncate">
                     {displayName}
                   </span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-[#34D399]/10 text-[#34D399] text-[12px] font-medium">
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#34D399]/10 text-[#34D399] text-[12px] font-medium shrink-0">
                     Session Active
                   </span>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-[#A1A1AA]">
-                  <span className="inline-flex items-center gap-1.5">
-                    <PiEnvelopeSimple className="h-3.5 w-3.5 text-[#71717A]" />
-                    <span>{effectiveEmail}</span>
+                <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12.5px] sm:text-[13px] text-[#A1A1AA]">
+                  <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
+                    <PiEnvelopeSimple className="h-3.5 w-3.5 text-[#71717A] shrink-0" />
+                    <span className="truncate">{effectiveEmail}</span>
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <PiMapPin className="h-3.5 w-3.5 text-[#71717A]" />
+                    <PiMapPin className="h-3.5 w-3.5 text-[#71717A] shrink-0" />
                     <span>{authUser?.country || 'Location unset'}</span>
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <PiCalendarBlank className="h-3.5 w-3.5 text-[#71717A]" />
+                    <PiCalendarBlank className="h-3.5 w-3.5 text-[#71717A] shrink-0" />
                     <span>{dobLabel}</span>
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 pt-0.5">
+                <div className="flex flex-wrap items-center gap-2 pt-0.5">
                   <span className="text-[12px] text-[#71717A]">UID</span>
-                  <code className="px-2.5 py-0.5 rounded-lg bg-[#161619] text-[12px] font-mono text-[#A1A1AA] truncate max-w-[240px]">
+                  <code className="px-2.5 py-1 sm:py-0.5 rounded-lg bg-[#161619] text-[12px] font-mono text-[#A1A1AA] truncate max-w-[165px] sm:max-w-[240px]">
                     {operatorUid}
                   </code>
                   <button
                     type="button"
                     onClick={() => void handleCopyUid()}
-                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-[#18181B] hover:bg-[#222227] text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                    className="inline-flex items-center gap-1 min-h-[34px] sm:min-h-0 px-2.5 py-1 sm:py-0.5 rounded-lg bg-[#18181B] hover:bg-[#222227] text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
                     title="Copy UID"
                   >
                     {copiedUid ? (
@@ -307,24 +320,26 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 w-full sm:w-auto shrink-0">
               <button
                 type="button"
                 onClick={() => void handlePasswordReset()}
                 disabled={resetState.status === 'sending'}
-                className="px-3.5 py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center gap-2 transition-colors disabled:opacity-50"
+                className="min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
               >
-                <PiKey className="h-4 w-4 text-[#A1A1AA]" />
-                <span>{resetState.status === 'sending' ? 'Sending...' : 'Reset Password'}</span>
+                <PiKey className="h-4 w-4 text-[#A1A1AA] shrink-0" />
+                <span className="truncate">
+                  {resetState.status === 'sending' ? 'Sending...' : 'Reset Password'}
+                </span>
               </button>
 
               <button
                 type="button"
                 onClick={() => void handleLogout()}
                 disabled={authLoading}
-                className="px-3.5 py-2 rounded-xl bg-[#F87171]/10 hover:bg-[#F87171]/15 text-[13px] font-medium text-[#F87171] inline-flex items-center gap-2 transition-colors disabled:opacity-50"
+                className="min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#F87171]/10 hover:bg-[#F87171]/15 text-[13px] font-medium text-[#F87171] inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
               >
-                <PiSignOut className="h-4 w-4" />
+                <PiSignOut className="h-4 w-4 shrink-0" />
                 <span>Sign Out</span>
               </button>
             </div>
@@ -333,52 +348,52 @@ export default function Profile() {
           {resetState.status !== 'idle' && resetState.message && (
             <div
               className={cn(
-                'px-6 py-3 border-b border-white/[0.06] flex items-center gap-2 text-[13px]',
+                'px-4 sm:px-6 py-3 border-b border-white/[0.06] flex items-center gap-2 text-[13px]',
                 resetState.status === 'sent'
                   ? 'bg-[#34D399]/[0.06] text-[#34D399]'
                   : 'bg-[#F87171]/[0.06] text-[#F87171]',
               )}
             >
               {resetState.status === 'sent' ? (
-                <PiCheckCircle className="h-4 w-4" />
+                <PiCheckCircle className="h-4 w-4 shrink-0" />
               ) : (
-                <PiWarningCircle className="h-4 w-4" />
+                <PiWarningCircle className="h-4 w-4 shrink-0" />
               )}
               <span>{resetState.message}</span>
             </div>
           )}
 
           {/* Unboxed 4-Metric Strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06]">
-            <div className="p-5 space-y-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4">
+            <div className="p-4 sm:p-5 space-y-1 border-r border-b sm:border-b-0 border-white/[0.06]">
               <span className="text-[12px] text-[#71717A] block">Account Baseline</span>
-              <span className="text-[18px] font-semibold font-mono tabular-nums text-[#FAFAFA] block">
+              <span className="text-[17px] sm:text-[18px] font-semibold font-mono tabular-nums text-[#FAFAFA] block truncate">
                 {formatCurrency(accountBalance)}
               </span>
             </div>
 
-            <div className="p-5 space-y-1">
+            <div className="p-4 sm:p-5 space-y-1 border-b sm:border-b-0 sm:border-r border-white/[0.06]">
               <span className="text-[12px] text-[#71717A] block">Risk Sizing</span>
-              <span className="text-[18px] font-semibold font-mono tabular-nums text-[#FAFAFA] block">
+              <span className="text-[17px] sm:text-[18px] font-semibold font-mono tabular-nums text-[#FAFAFA] block truncate">
                 {riskMode === 'fixedAmount'
                   ? `${formatCurrency(fixedRiskAmount)}`
                   : `${riskPerTradePct.toFixed(1)}%`}
               </span>
             </div>
 
-            <div className="p-5 space-y-1">
+            <div className="p-4 sm:p-5 space-y-1 border-r border-white/[0.06]">
               <span className="text-[12px] text-[#71717A] block">Daily Loss Cap</span>
-              <span className="text-[18px] font-semibold font-mono tabular-nums text-[#F87171] block">
+              <span className="text-[17px] sm:text-[18px] font-semibold font-mono tabular-nums text-[#F87171] block">
                 {maxDailyLossPct.toFixed(1)}%
               </span>
             </div>
 
-            <div className="p-5 space-y-1">
+            <div className="p-4 sm:p-5 space-y-1">
               <span className="text-[12px] text-[#71717A] block">Journal Record</span>
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-baseline gap-2 flex-wrap">
                 <span
                   className={cn(
-                    'text-[18px] font-semibold font-mono tabular-nums',
+                    'text-[17px] sm:text-[18px] font-semibold font-mono tabular-nums',
                     journalStats.winRate >= 50 ? 'text-[#34D399]' : 'text-[#FAFAFA]',
                   )}
                 >
@@ -392,11 +407,41 @@ export default function Profile() {
           </div>
         </section>
 
+        {/* Mobile Horizontally Scrollable Section Pill Tabs */}
+        <div className="md:hidden -mx-4 px-4 overflow-x-auto pb-1">
+          <div
+            role="tablist"
+            aria-label="Profile sections"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#111113] border border-white/[0.07] p-1"
+          >
+            {PROFILE_MOBILE_TABS.map((tab) => {
+              const active = mobileTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setMobileTab(tab.id)}
+                  className={cn(
+                    'min-h-[44px] px-4 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors',
+                    active
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]',
+                  )}
+                >
+                  {tab.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* 1. Operator Identity (Linear Preference List) */}
-        <section className="space-y-3">
+        <section className={cn('space-y-3', !showSection('identity') && 'hidden md:block')}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+              <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
                 Operator Identity
               </h2>
               <p className="text-[13px] text-[#71717A]">
@@ -404,7 +449,7 @@ export default function Profile() {
               </p>
             </div>
             {savedSuccess && (
-              <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#34D399]">
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#34D399] shrink-0">
                 <PiCheckCircle className="h-4 w-4" />
                 <span>Saved</span>
               </span>
@@ -419,7 +464,7 @@ export default function Profile() {
           )}
 
           <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Full Name</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -430,11 +475,11 @@ export default function Profile() {
                 value={form.fullName}
                 onChange={(event) => updateField('fullName', event.target.value)}
                 placeholder="Operator full name"
-                className="w-full sm:w-64 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
+                className="w-full sm:w-64 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
               />
             </div>
 
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Display Handle</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -445,11 +490,11 @@ export default function Profile() {
                 value={form.displayName}
                 onChange={(event) => updateField('displayName', event.target.value)}
                 placeholder="Console handle"
-                className="w-full sm:w-64 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
+                className="w-full sm:w-64 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
               />
             </div>
 
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Date of Birth</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -460,11 +505,11 @@ export default function Profile() {
                 type="date"
                 value={form.dob}
                 onChange={(event) => updateField('dob', event.target.value)}
-                className="w-full sm:w-64 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] outline-none focus:border-white/[0.2]"
+                className="w-full sm:w-64 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] outline-none focus:border-white/[0.2]"
               />
             </div>
 
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Country / Desk TZ</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -475,11 +520,11 @@ export default function Profile() {
                 value={form.country}
                 onChange={(event) => updateField('country', event.target.value)}
                 placeholder="e.g. Nigeria"
-                className="w-full sm:w-64 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
+                className="w-full sm:w-64 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
               />
             </div>
 
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Email Address</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -490,11 +535,11 @@ export default function Profile() {
                 type="email"
                 value={form.email}
                 readOnly
-                className="w-full sm:w-64 px-3.5 py-2 rounded-xl bg-[#161619] border border-white/[0.05] text-[13px] text-[#71717A] outline-none cursor-not-allowed"
+                className="w-full sm:w-64 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#161619] border border-white/[0.05] text-[13px] text-[#71717A] outline-none cursor-not-allowed"
               />
             </div>
 
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5 sm:max-w-xs">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Operating Desk Notes</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -510,7 +555,7 @@ export default function Profile() {
               />
             </div>
 
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <span className="text-[13px] text-[#71717A]">
                 All 5 quantitative engines active in personal mode.
               </span>
@@ -518,7 +563,7 @@ export default function Profile() {
                 type="button"
                 onClick={() => void saveProfile()}
                 disabled={authLoading}
-                className="px-4 py-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-medium inline-flex items-center gap-2 transition-colors disabled:opacity-50"
+                className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-medium inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
               >
                 <PiFloppyDisk className="h-4 w-4" />
                 <span>Save Identity</span>
@@ -528,10 +573,10 @@ export default function Profile() {
         </section>
 
         {/* 2. Terminal Defaults */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
+        <section className={cn('space-y-3', !showSection('terminal') && 'hidden md:block')}>
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+              <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
                 Terminal Defaults
               </h2>
               <p className="text-[13px] text-[#71717A]">
@@ -540,7 +585,7 @@ export default function Profile() {
             </div>
             <Link
               to="/settings"
-              className="text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+              className="text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors shrink-0"
             >
               Risk Deck →
             </Link>
@@ -548,7 +593,7 @@ export default function Profile() {
 
           <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
             {/* Default Symbol */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Default Terminal Symbol</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -559,7 +604,7 @@ export default function Profile() {
                 value={chartSymbol}
                 onChange={(e) => setChartSymbol(e.target.value as ChartSymbol)}
                 aria-label="Default Terminal Symbol"
-                className="w-full sm:w-56 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-medium text-[#FAFAFA] outline-none focus:border-white/[0.2]"
+                className="w-full sm:w-56 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-medium text-[#FAFAFA] outline-none focus:border-white/[0.2]"
               >
                 {SYMBOL_GROUPS.map((grp) => (
                   <optgroup key={grp.label} label={grp.label}>
@@ -574,21 +619,21 @@ export default function Profile() {
             </div>
 
             {/* Default Timeframe */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Default Chart Timeframe</div>
                 <div className="text-[13px] text-[#71717A]">
                   Primary candlestick interval for structure evaluation.
                 </div>
               </div>
-              <div className="inline-flex max-w-full overflow-x-auto items-center rounded-xl bg-[#18181B] p-1">
+              <div className="grid grid-cols-6 sm:inline-flex items-center rounded-xl bg-[#18181B] p-1 w-full sm:w-auto">
                 {TIMEFRAME_OPTIONS.map((tf) => (
                   <button
                     key={tf}
                     type="button"
                     onClick={() => setChartTimeframe(tf)}
                     className={cn(
-                      'px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors',
+                      'min-h-[40px] sm:min-h-0 px-2 sm:px-3 py-2 sm:py-1.5 rounded-lg text-[12px] font-medium transition-colors',
                       chartTimeframe === tf
                         ? 'bg-[#FAFAFA] text-[#09090B]'
                         : 'text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -601,21 +646,21 @@ export default function Profile() {
             </div>
 
             {/* Execution Tier */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Experience Profile</div>
                 <div className="text-[13px] text-[#71717A]">
                   Tailors setup commentary density in strategy panels.
                 </div>
               </div>
-              <div className="inline-flex max-w-full overflow-x-auto items-center rounded-xl bg-[#18181B] p-1">
+              <div className="grid grid-cols-3 sm:inline-flex items-center rounded-xl bg-[#18181B] p-1 w-full sm:w-auto">
                 {EXPERIENCE_LEVELS.map((lvl) => (
                   <button
                     key={lvl.id}
                     type="button"
                     onClick={() => setExperienceLevel(lvl.id)}
                     className={cn(
-                      'px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors',
+                      'min-h-[40px] sm:min-h-0 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg text-[12px] font-medium transition-colors',
                       experienceLevel === lvl.id
                         ? 'bg-[#FAFAFA] text-[#09090B]'
                         : 'text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -628,7 +673,7 @@ export default function Profile() {
             </div>
 
             {/* Watched Asset Classes */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Watched Asset Classes</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -644,7 +689,7 @@ export default function Profile() {
                       type="button"
                       onClick={() => toggleInstrument(inst.id)}
                       className={cn(
-                        'px-3 py-1.5 rounded-xl text-[13px] font-medium transition-colors',
+                        'min-h-[40px] sm:min-h-0 px-3.5 py-2 sm:px-3 sm:py-1.5 rounded-xl text-[13px] font-medium transition-colors',
                         active
                           ? 'bg-[#FAFAFA] text-[#09090B]'
                           : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -658,7 +703,7 @@ export default function Profile() {
             </div>
 
             {/* Active Strategy Engines Summary */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   Active Engines ({activeStrategies.length})
@@ -688,9 +733,9 @@ export default function Profile() {
         </section>
 
         {/* 3. Security & Session */}
-        <section className="space-y-3">
+        <section className={cn('space-y-3', !showSection('security') && 'hidden md:block')}>
           <div>
-            <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+            <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
               Security &amp; Session
             </h2>
             <p className="text-[13px] text-[#71717A]">
@@ -699,7 +744,7 @@ export default function Profile() {
           </div>
 
           <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   Two-Factor Authentication (2FA)
@@ -712,22 +757,22 @@ export default function Profile() {
                 type="button"
                 onClick={() => setTwoFaEnabled(!twoFaEnabled)}
                 className={cn(
-                  'px-3.5 py-1.5 rounded-xl text-[13px] font-medium shrink-0 transition-colors',
+                  'w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:px-3.5 sm:py-1.5 rounded-xl text-[13px] font-medium shrink-0 transition-colors',
                   twoFaEnabled
                     ? 'bg-[#34D399]/15 text-[#34D399]'
                     : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
                 )}
               >
-                {twoFaEnabled ? 'Enabled' : 'Enable'}
+                {twoFaEnabled ? 'Enabled' : 'Enable 2FA'}
               </button>
             </div>
 
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
               <div className="flex items-center gap-2.5 text-[14px] font-medium text-[#FAFAFA]">
                 <PiGauge className="h-4 w-4 text-[#71717A]" />
                 <span>Authentication Provider</span>
               </div>
-              <div className="flex items-center gap-3 text-[13px] text-[#71717A]">
+              <div className="flex items-center justify-between sm:justify-end gap-3 text-[13px] text-[#71717A]">
                 <span>Firebase Identity</span>
                 <Link
                   to="/notifications?tab=telemetry"

@@ -1,21 +1,39 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import {
+  TRAXO_STRATEGIES,
+  type LegacyStrategyCatalogId,
+  type TraxoCatalogStrategyId,
+  type TraxoMarketPillar,
+} from '@/lib/traxoStrategies'
 
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'pro'
 export type Instrument = 'forex' | 'crypto' | 'stocks' | 'commodities'
 export type SubscriptionPlan = 'free' | 'pro'
 
-export const ONBOARDING_STRATEGIES = [
-  { id: 'wick-rejection',  name: 'Wick Rejection',  winRate: '74%', signalsPerDay: 4 },
-  { id: 'breakout',        name: 'Breakout',         winRate: '68%', signalsPerDay: 3 },
-  { id: 'order-block',     name: 'Order Block',      winRate: '71%', signalsPerDay: 3 },
-  { id: 'supply-demand',   name: 'Supply & Demand',  winRate: '77%', signalsPerDay: 3 },
-  { id: 'trend-following', name: 'Trend Following',  winRate: '69%', signalsPerDay: 2 },
-] as const
+export interface OnboardingStrategyItem {
+  id: TraxoCatalogStrategyId
+  name: string
+  winRate: string
+  signalsPerDay: number
+  market: TraxoMarketPillar
+  marketLabel: string
+}
 
-export type OnboardingStrategyId = (typeof ONBOARDING_STRATEGIES)[number]['id']
+export const ONBOARDING_STRATEGIES: readonly OnboardingStrategyItem[] = TRAXO_STRATEGIES.map(
+  (spec) => ({
+    id: spec.id,
+    name: spec.name,
+    winRate: spec.winRate,
+    signalsPerDay: spec.signalsPerDay,
+    market: spec.market,
+    marketLabel: spec.marketLabel,
+  }),
+)
 
-const DEFAULT_STRATEGY: OnboardingStrategyId = 'wick-rejection'
+export type OnboardingStrategyId = TraxoCatalogStrategyId | LegacyStrategyCatalogId
+
+const DEFAULT_STRATEGY: OnboardingStrategyId = 'traxo-london-apex'
 const ALL_STRATEGY_IDS: OnboardingStrategyId[] = ONBOARDING_STRATEGIES.map((s) => s.id)
 
 interface OnboardingState {
@@ -218,26 +236,26 @@ export const useOnboardingStore = create<OnboardingState>()(
     }),
     {
       name: 'traxo-onboarding',
-      version: 2,
+      version: 3,
       migrate: (persistedState) => {
         const state = (persistedState ?? {}) as Partial<OnboardingState>
-        const wasLockedFree = state.plan !== 'pro'
         const existingIds = Array.isArray(state.selectedStrategyIds)
           ? (state.selectedStrategyIds as OnboardingStrategyId[]).filter((id) =>
               ALL_STRATEGY_IDS.includes(id),
             )
           : []
+        const nextIds = existingIds.length > 0 ? existingIds.slice(0, ALL_STRATEGY_IDS.length) : [...ALL_STRATEGY_IDS]
+        const nextPrimary =
+          state.selectedStrategyId && ALL_STRATEGY_IDS.includes(state.selectedStrategyId)
+            ? state.selectedStrategyId
+            : nextIds[0]
 
         return {
           ...initialState,
           ...state,
           plan: 'pro' as SubscriptionPlan,
-          selectedStrategyIds:
-            wasLockedFree && existingIds.length <= 1
-              ? [...ALL_STRATEGY_IDS]
-              : existingIds.length > 0
-              ? existingIds.slice(0, ALL_STRATEGY_IDS.length)
-              : [...ALL_STRATEGY_IDS],
+          selectedStrategyId: nextPrimary,
+          selectedStrategyIds: nextIds,
         }
       },
       // Only persist data fields, not internal state or methods

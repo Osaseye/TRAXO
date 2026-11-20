@@ -18,6 +18,21 @@ const STRATEGY_LABELS: Record<string, string> = {
   order_block: 'Order Block',
   supply_demand: 'Supply & Demand',
   trend_following: 'Trend Following',
+  traxo_london_apex: 'TRAXO London Apex',
+  traxo_tokyo_yield: 'TRAXO Tokyo Yield',
+  traxo_sovereign_fix: 'TRAXO Sovereign Fix',
+  traxo_barrier_grid: 'TRAXO Barrier Grid',
+  traxo_macro_vector: 'TRAXO Macro Vector',
+  traxo_aurum_sweep: 'TRAXO Aurum Sweep',
+  traxo_bullion_strike: 'TRAXO Bullion Strike',
+  traxo_ny_bullet: 'TRAXO NY Bullet',
+  traxo_aurum_fix: 'TRAXO Aurum Fix',
+  traxo_kinetic_nr7: 'TRAXO Kinetic NR7',
+  traxo_globex_sweep: 'TRAXO Globex Sweep',
+  traxo_velocity_orb: 'TRAXO Velocity ORB',
+  traxo_initial_balance: 'TRAXO Initial Balance',
+  traxo_mean_equilibrium: 'TRAXO Mean Equilibrium',
+  traxo_power_hour_moc: 'TRAXO Power Hour MOC',
 };
 
 const PARAM_LABELS: Record<string, string> = {

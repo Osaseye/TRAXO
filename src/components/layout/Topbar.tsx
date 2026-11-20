@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router'
-import { PiBell, PiGearSix, PiUserCircle } from 'react-icons/pi'
+import { PiBell, PiList } from 'react-icons/pi'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
 import { useNotificationStore } from '@/stores/useNotificationStore'
@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 interface TopbarProps {
   title: string
   subtitle?: string
+  onMenuClick?: () => void
 }
 
 function subscribeWs(callback: () => void) {
@@ -29,7 +30,7 @@ function getWsSnapshot(): boolean {
   return Boolean(webSocketService.getClient()?.connected)
 }
 
-export function Topbar({ title, subtitle }: TopbarProps) {
+export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
   const displayName = useAuthStore(
     (s) => s.user?.displayName || s.user?.fullName || s.user?.email || 'Operator',
   )
@@ -72,20 +73,29 @@ export function Topbar({ title, subtitle }: TopbarProps) {
   }, [])
 
   return (
-    <header className="h-[52px] flex items-center justify-between px-4 sm:px-6 border-b border-white/[0.06] bg-[#09090B]/95 backdrop-blur-sm shrink-0 select-none">
-      {/* Left: Workspace Title */}
-      <div className="flex items-center gap-3 min-w-0">
-        <Link to="/dashboard" className="md:hidden shrink-0" title="TRAXO Terminal">
-          <img
-            src="/brand/traxo-mark.png"
-            onError={(e) => {
-              e.currentTarget.src = '/TRAXO.png'
-            }}
-            alt="TRAXO"
-            className="w-6 h-6 rounded-md object-contain"
-          />
-        </Link>
-        <h1 className="text-[14px] font-semibold tracking-[-0.01em] text-[#FAFAFA] truncate">
+    <header
+      className="min-h-[56px] md:min-h-[52px] flex items-center justify-between gap-2 px-3 sm:px-6 border-b border-white/[0.06] bg-[#09090B]/95 backdrop-blur-sm shrink-0 select-none"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
+      {/* Left: Mobile Drawer Trigger + Workspace Title */}
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        {onMenuClick && (
+          <button
+            type="button"
+            onClick={onMenuClick}
+            aria-label={unreadCount > 0 ? `Open navigation menu (${unreadCount} unread alerts)` : 'Open navigation menu'}
+            className="md:hidden relative w-11 h-11 -ml-1.5 rounded-xl hover:bg-white/[0.06] flex items-center justify-center text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors shrink-0"
+          >
+            <PiList size={20} />
+            {unreadCount > 0 && (
+              <span
+                className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-[#34D399]"
+                aria-hidden="true"
+              />
+            )}
+          </button>
+        )}
+        <h1 className="text-[15px] md:text-[14px] font-semibold tracking-[-0.01em] text-[#FAFAFA] truncate">
           {title}
         </h1>
         {subtitle && (
@@ -96,12 +106,12 @@ export function Topbar({ title, subtitle }: TopbarProps) {
         )}
       </div>
 
-      {/* Right: Calm Inline Telemetry, Status Dots & Links */}
-      <div className="flex items-center gap-3 shrink-0">
-        {/* Active Symbol & Timeframe Summary */}
+      {/* Right: Calm Inline Telemetry, Status Dots & Desktop Links */}
+      <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+        {/* Active Symbol & Timeframe Summary (desktop/tablet) */}
         <Link
           to="/dashboard"
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-white/[0.04] transition-colors"
+          className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-white/[0.04] transition-colors"
           title="Open active chart in Terminal"
         >
           <span className="text-[12.5px] font-mono font-medium text-[#FAFAFA] tabular-nums">
@@ -113,10 +123,10 @@ export function Topbar({ title, subtitle }: TopbarProps) {
           </span>
         </Link>
 
-        <span className="hidden sm:block w-px h-3.5 bg-white/[0.08]" aria-hidden="true" />
+        <span className="hidden md:block w-px h-3.5 bg-white/[0.08]" aria-hidden="true" />
 
         {/* MT5 & WebSocket Connection Status Dots */}
-        <div className="flex items-center gap-3 px-1">
+        <div className="flex items-center gap-2.5 sm:gap-3 px-1">
           <span
             className="flex items-center gap-1.5"
             title={mt5Connected ? 'MT5 Bridge Connected' : 'MT5 Bridge Standby'}
@@ -127,7 +137,7 @@ export function Topbar({ title, subtitle }: TopbarProps) {
                 mt5Connected ? 'bg-[#34D399]' : 'bg-[#52525B]',
               )}
             />
-            <span className="text-[12px] font-medium text-[#A1A1AA]">
+            <span className="text-[11.5px] sm:text-[12px] font-medium text-[#A1A1AA]">
               MT5
             </span>
           </span>
@@ -142,18 +152,18 @@ export function Topbar({ title, subtitle }: TopbarProps) {
                 wsConnected ? 'bg-[#34D399]' : 'bg-[#F87171]',
               )}
             />
-            <span className="text-[12px] font-medium text-[#A1A1AA]">
+            <span className="text-[11.5px] sm:text-[12px] font-medium text-[#A1A1AA]">
               WS
             </span>
           </span>
         </div>
 
-        <span className="w-px h-3.5 bg-white/[0.08]" aria-hidden="true" />
+        <span className="hidden md:block w-px h-3.5 bg-white/[0.08]" aria-hidden="true" />
 
-        {/* Alert Indicator */}
+        {/* Alert Indicator (desktop; mobile uses drawer Signals & Ops) */}
         <Link
           to="/notifications"
-          className="relative h-8 px-2 rounded-lg hover:bg-white/[0.05] flex items-center gap-1.5 text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+          className="hidden md:flex relative h-8 px-2 rounded-lg hover:bg-white/[0.05] items-center gap-1.5 text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
           title="Signals & Ops Alerts"
           aria-label={unreadCount > 0 ? `${unreadCount} unread alerts` : 'Signals & Ops Alerts'}
         >
@@ -165,28 +175,18 @@ export function Topbar({ title, subtitle }: TopbarProps) {
           )}
         </Link>
 
-        {/* Mobile quick link for Settings */}
-        <Link
-          to="/settings"
-          className="md:hidden h-8 w-8 rounded-lg hover:bg-white/[0.05] flex items-center justify-center text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
-          title="Settings"
-          aria-label="Settings"
-        >
-          <PiGearSix size={16} />
-        </Link>
-
+        {/* Operator Profile (desktop; mobile uses drawer Profile) */}
         <Link
           to="/profile"
-          className="h-8 px-2 rounded-lg hover:bg-white/[0.05] flex items-center gap-2 text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+          className="hidden md:flex h-8 px-2 rounded-lg hover:bg-white/[0.05] items-center gap-2 text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
           title="Operator Profile"
         >
           <span className="w-5 h-5 rounded-full bg-white/[0.08] text-[#FAFAFA] flex items-center justify-center text-[11px] font-medium shrink-0">
             {displayName.charAt(0).toUpperCase()}
           </span>
-          <span className="hidden sm:inline text-[13px] font-medium max-w-[7rem] truncate text-[#E4E4E7]">
+          <span className="text-[13px] font-medium max-w-[7rem] truncate text-[#E4E4E7]">
             {displayName}
           </span>
-          <PiUserCircle size={15} className="sm:hidden" />
         </Link>
       </div>
     </header>

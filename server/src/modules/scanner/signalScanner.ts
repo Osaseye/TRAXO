@@ -35,6 +35,13 @@ import {
 } from '../execution/metaApiService';
 import * as signalStore from './signalStore';
 import { updateScanState } from './globalSignalScanner';
+import {
+  TRAXO_STRATEGY_LABELS,
+  evaluateNinePointConfluence,
+  getTraxoStrategiesForSymbol,
+  type TraxoSignalResult,
+  type TraxoStrategyContext,
+} from '../../../algorithms/traxo';
 
 const TIMEFRAME_MAP: Record<string, string> = {
   '1min': '1m',
@@ -81,12 +88,13 @@ function stableSignalId(signal: {
   return ['sig', signal.strategyId, signal.symbol, signal.timeframe, signal.direction, signal.time].join(':');
 }
 
-const STRATEGY_LABELS: Record<string, string> = {
+export const STRATEGY_LABELS: Record<string, string> = {
   breakout: 'Breakout',
   order_block: 'Order Block',
   supply_demand: 'Supply & Demand',
   trend_following: 'Trend Following',
   wick_rejection: 'Wick Rejection',
+  ...TRAXO_STRATEGY_LABELS,
 };
 
 const API_CALL_DELAY_MS = 2_500;
@@ -244,6 +252,89 @@ export function runAllStrategies(
     } catch (err: any) {
       rejects[strategyId] = [`Error executing strategy: ${err.message || err}`];
       console.error(`[scanner] ${strategyId} error on ${canonicalSymbol} ${timeframe}: ${err.message || err}`);
+    }
+  }
+
+  // TRAXO Proprietary Tri-Market Strategy Engines (Forex, Gold, Futures)
+  const traxoCtx: TraxoStrategyContext = liveCtx.toTraxoContext();
+  const applicableTraxoStrategies = getTraxoStrategiesForSymbol(canonicalSymbol);
+
+  for (const strategy of applicableTraxoStrategies) {
+    try {
+      const params = getParameters(strategy.id);
+      const rawTraxo: TraxoSignalResult | null = strategy.evaluate(traxoCtx);
+
+      if (!rawTraxo) {
+        rejects[strategy.id] = ['Setup criteria not met on current bar'];
+        continue;
+      }
+
+      const confluence = evaluateNinePointConfluence(rawTraxo, traxoCtx);
+      const conf = Number(rawTraxo.confidencePct || 0);
+      if (conf < (params.minConfidence || 50)) {
+        rejects[strategy.id] = [
+          `Confidence ${conf}% below AI-tuned threshold of ${params.minConfidence}%`,
+        ];
+        continue;
+      }
+
+      const entry = Number(rawTraxo.entryPrice || 0);
+      const origSl = Number(rawTraxo.slPrice || 0);
+      const origTp = Number(rawTraxo.tp1Price || 0);
+      const direction = rawTraxo.direction;
+
+      const adjusted = applySlPaddingWithRRPreservation({
+        direction,
+        entryPrice: entry,
+        slPrice: origSl,
+        tpPrice: origTp,
+        atrSlPadding: params.atrSlPadding,
+        digits,
+      });
+
+      const riskD = Math.abs(entry - adjusted.slPrice);
+      const rewardD = Math.abs(adjusted.tpPrice - entry);
+      const rr = riskD > 0 ? Number((rewardD / riskD).toFixed(2)) : rawTraxo.riskRewardRatio;
+      const entryType: 'market' | 'limit' = rawTraxo.entryType === 'LIMIT' ? 'limit' : 'market';
+      const limitPrice = entryType === 'limit' ? entry : null;
+
+      signals.push({
+        id: stableSignalId({
+          strategyId: rawTraxo.strategyId,
+          symbol: canonicalSymbol,
+          timeframe: frontTimeframe,
+          direction,
+          time: lastTime,
+        }),
+        sourceId: rawTraxo.id,
+        time: lastTime,
+        strategyId: rawTraxo.strategyId,
+        strategyLabel: rawTraxo.strategyName || STRATEGY_LABELS[rawTraxo.strategyId],
+        market: rawTraxo.market,
+        tier: rawTraxo.tier,
+        direction,
+        entryType,
+        rawEntryType: rawTraxo.entryType,
+        entry,
+        limitPrice,
+        sl: adjusted.slPrice,
+        tp: adjusted.tpPrice,
+        tp2: rawTraxo.tp2Price,
+        rr,
+        confidence: conf,
+        risk: riskLabel(conf),
+        reason: rawTraxo.reasons || [],
+        metrics: rawTraxo.metrics,
+        confluence,
+        symbol: canonicalSymbol,
+        timeframe: frontTimeframe,
+        status: 'live',
+        htfBias: liveCtx.htfBias,
+        nearestZone: liveCtx.nearestZone,
+      });
+    } catch (err: any) {
+      rejects[strategy.id] = [`Error executing strategy: ${err?.message || err}`];
+      console.error(`[scanner] ${strategy.id} error on ${canonicalSymbol} ${timeframe}: ${err?.message || err}`);
     }
   }
 

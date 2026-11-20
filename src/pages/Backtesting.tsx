@@ -290,12 +290,12 @@ function MonochromeCharts({
     <section className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden grid grid-cols-1 xl:grid-cols-12 divide-y xl:divide-y-0 xl:divide-x divide-white/[0.06]">
       {/* Equity Curve */}
       <div className="xl:col-span-7 flex flex-col justify-between">
-        <div className="p-6 pb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-[16px] font-medium tracking-[-0.015em] text-[#FAFAFA]">
+        <div className="p-4 pb-3 sm:p-6 sm:pb-4 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+          <div className="min-w-0">
+            <h2 className="text-[15px] sm:text-[16px] font-medium tracking-[-0.015em] text-[#FAFAFA]">
               Simulated equity curve
             </h2>
-            <p className="text-[13px] text-[#71717A] mt-0.5">
+            <p className="text-[12.5px] sm:text-[13px] text-[#71717A] mt-0.5">
               {activePoint.step === 0
                 ? 'Initial capital'
                 : `Trade #${activePoint.step} (${activePoint.label})`}
@@ -306,7 +306,7 @@ function MonochromeCharts({
             </p>
           </div>
           <span
-            className={`px-2.5 py-1 rounded-full text-[12px] font-mono tabular-nums ${
+            className={`px-2.5 py-1 rounded-full text-[12px] font-mono tabular-nums shrink-0 ${
               lastEquity >= startingCapital
                 ? 'bg-[#34D399]/10 text-[#34D399]'
                 : 'bg-[#F87171]/10 text-[#F87171]'
@@ -317,13 +317,13 @@ function MonochromeCharts({
           </span>
         </div>
 
-        <div className="px-6 pb-6">
+        <div className="px-4 pb-4 sm:px-6 sm:pb-6">
           {!hasTrades ? (
-            <div className="h-[220px] rounded-xl bg-[#09090B] flex items-center justify-center text-[13px] text-[#71717A]">
+            <div className="h-[180px] sm:h-[220px] rounded-xl bg-[#09090B] flex items-center justify-center text-center px-4 text-[13px] text-[#71717A]">
               No resolved trades in replay window to plot equity progression.
             </div>
           ) : (
-            <div className="rounded-xl bg-[#09090B] p-3">
+            <div className="rounded-xl bg-[#09090B] p-2 sm:p-3">
               <svg viewBox={`0 0 ${width} ${eqHeight}`} className="w-full h-auto select-none">
                 {[0, 0.25, 0.5, 0.75, 1].map((t) => {
                   const y = pad.top + eqPlotH * t;
@@ -393,6 +393,7 @@ function MonochromeCharts({
                     className="cursor-pointer"
                     onMouseEnter={() => setHoverIdx(i)}
                     onMouseLeave={() => setHoverIdx(null)}
+                    onClick={() => setHoverIdx((prev) => (prev === i ? null : i))}
                   />
                 ))}
 
@@ -417,30 +418,30 @@ function MonochromeCharts({
 
       {/* Drawdown Chart */}
       <div className="xl:col-span-5 flex flex-col justify-between">
-        <div className="p-6 pb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-[16px] font-medium tracking-[-0.015em] text-[#FAFAFA]">
+        <div className="p-4 pb-3 sm:p-6 sm:pb-4 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+          <div className="min-w-0">
+            <h2 className="text-[15px] sm:text-[16px] font-medium tracking-[-0.015em] text-[#FAFAFA]">
               Peak-to-valley drawdown
             </h2>
-            <p className="text-[13px] text-[#71717A] mt-0.5">
+            <p className="text-[12.5px] sm:text-[13px] text-[#71717A] mt-0.5">
               Underwater depth:{' '}
               <span className="font-mono tabular-nums font-semibold text-[#F87171]">
                 {activePoint.drawdownPct.toFixed(2)}% ({formatCurrency(-activePoint.drawdownDollar)})
               </span>
             </p>
           </div>
-          <span className="px-2.5 py-1 rounded-full bg-[#F87171]/10 text-[#F87171] text-[12px] font-mono tabular-nums">
+          <span className="px-2.5 py-1 rounded-full bg-[#F87171]/10 text-[#F87171] text-[12px] font-mono tabular-nums shrink-0">
             Max {minDd.toFixed(2)}%
           </span>
         </div>
 
-        <div className="px-6 pb-6">
+        <div className="px-4 pb-4 sm:px-6 sm:pb-6">
           {!hasTrades ? (
-            <div className="h-[220px] rounded-xl bg-[#09090B] flex items-center justify-center text-[13px] text-[#71717A]">
+            <div className="h-[180px] sm:h-[220px] rounded-xl bg-[#09090B] flex items-center justify-center text-center px-4 text-[13px] text-[#71717A]">
               Zero underwater drawdown recorded.
             </div>
           ) : (
-            <div className="rounded-xl bg-[#09090B] p-3">
+            <div className="rounded-xl bg-[#09090B] p-2 sm:p-3">
               <svg viewBox={`0 0 ${width} ${ddHeight}`} className="w-full h-auto select-none">
                 {[0, 0.33, 0.66, 1].map((t) => {
                   const y = pad.top + ddPlotH * t;
@@ -640,6 +641,155 @@ function TradeLedgerRow({
   );
 }
 
+function MobileTradeCard({
+  sig,
+  idx,
+  symbol,
+  pnlDollar,
+}: {
+  sig: BacktestSignalResult;
+  idx: number;
+  symbol: ChartSymbol;
+  pnlDollar: number | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const isWin = sig.outcome === 'win';
+  const isLoss = sig.outcome === 'loss';
+
+  return (
+    <div className="bg-[#111113]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full p-4 text-left space-y-3 hover:bg-white/[0.02] transition-colors"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <span className="font-mono text-[12px] tabular-nums text-[#71717A]">
+              #{idx + 1}
+            </span>
+            <span
+              className={`px-2 py-0.5 rounded-md text-[11.5px] font-semibold ${
+                sig.direction === 'BUY'
+                  ? 'bg-[#34D399]/10 text-[#34D399]'
+                  : 'bg-[#F87171]/10 text-[#F87171]'
+              }`}
+            >
+              {sig.direction}
+            </span>
+            <span className="text-[12px] text-[#A1A1AA] capitalize truncate">
+              {sig.tier}
+            </span>
+            <span className="font-mono text-[11.5px] tabular-nums text-[#71717A]">
+              {formatShortDate(sig.time)}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span
+              className={`px-2 py-0.5 rounded-full text-[11.5px] font-medium capitalize ${
+                isWin
+                  ? 'bg-[#34D399]/10 text-[#34D399]'
+                  : isLoss
+                  ? 'bg-[#F87171]/10 text-[#F87171]'
+                  : 'bg-[#18181B] text-[#A1A1AA]'
+              }`}
+            >
+              {sig.outcome}
+            </span>
+            <span className="text-[#71717A]">
+              {open ? <PiCaretUp size={16} /> : <PiCaretDown size={16} />}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-baseline justify-between gap-2">
+          <span
+            className={`text-[16px] font-mono tabular-nums font-semibold ${
+              pnlDollar == null
+                ? 'text-[#71717A]'
+                : pnlDollar >= 0
+                ? 'text-[#34D399]'
+                : 'text-[#F87171]'
+            }`}
+          >
+            {pnlDollar == null ? '—' : `${pnlDollar >= 0 ? '+' : ''}${formatCurrency(pnlDollar)}`}
+          </span>
+          <span
+            className={`text-[13px] font-mono tabular-nums ${
+              sig.achievedRR == null
+                ? 'text-[#71717A]'
+                : sig.achievedRR >= 0
+                ? 'text-[#34D399]'
+                : 'text-[#F87171]'
+            }`}
+          >
+            {sig.achievedRR != null ? `${sig.achievedRR.toFixed(2)}R` : 'Pending'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/[0.06] text-[12px]">
+          <div>
+            <span className="block text-[11px] text-[#71717A]">Entry</span>
+            <span className="font-mono tabular-nums text-[#FAFAFA]">
+              {formatPrice(sig.entry, symbol)}
+            </span>
+          </div>
+          <div>
+            <span className="block text-[11px] text-[#71717A]">Stop loss</span>
+            <span className="font-mono tabular-nums text-[#F87171]">
+              {formatPrice(sig.sl, symbol)}
+            </span>
+          </div>
+          <div>
+            <span className="block text-[11px] text-[#71717A]">TP1</span>
+            <span className="font-mono tabular-nums text-[#34D399]">
+              {formatPrice(sig.tp1, symbol)}
+            </span>
+          </div>
+        </div>
+      </button>
+
+      {open && (
+        <div className="px-4 py-3.5 bg-[#161619] border-t border-white/[0.06] space-y-3 text-[12.5px]">
+          <div className="grid grid-cols-2 gap-3 text-[#A1A1AA]">
+            <div>
+              Score:{' '}
+              <strong className="font-mono tabular-nums text-[#FAFAFA]">{sig.score}</strong>
+            </div>
+            <div>
+              Confidence:{' '}
+              <strong className="font-mono tabular-nums text-[#FAFAFA]">
+                {sig.confidence}%
+              </strong>
+            </div>
+            <div>
+              Bars to exit:{' '}
+              <strong className="font-mono tabular-nums text-[#FAFAFA]">
+                {sig.barsToResolution ?? 'Open'}
+              </strong>
+            </div>
+            <div>
+              TP2 target:{' '}
+              <strong className="font-mono tabular-nums text-[#34D399]">
+                {formatPrice(sig.tp2, symbol)}
+              </strong>
+            </div>
+          </div>
+
+          {sig.reason.length > 0 && (
+            <div className="pt-2.5 border-t border-white/[0.06] space-y-1 text-[12.5px] text-[#A1A1AA] leading-relaxed">
+              {sig.reason.map((r, i) => (
+                <p key={i}>• {r}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Backtesting() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialAccountBalance = useTradingContextStore((s) => s.accountBalance);
@@ -733,36 +883,36 @@ export default function Backtesting() {
 
   return (
     <div className="min-h-full bg-[#09090B] text-[#FAFAFA] overflow-x-hidden">
-      <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-8">
+      <div className="max-w-[1360px] mx-auto px-3.5 sm:px-8 py-5 sm:py-8 space-y-6 sm:space-y-8">
         {/* Workbench Header */}
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-1.5">
+        <header className="flex flex-wrap items-end justify-between gap-3 sm:gap-4">
+          <div className="space-y-1">
             <p className="text-[12px] font-medium text-[#71717A]">
               Walk-forward historical simulator
             </p>
-            <h1 className="text-[28px] font-semibold tracking-[-0.03em] leading-[1.15] text-[#FAFAFA]">
+            <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-[-0.03em] leading-[1.15] text-[#FAFAFA]">
               Backtesting Workbench
             </h1>
           </div>
 
           {result && (
-            <div className="px-3.5 py-2 rounded-full bg-[#111113] border border-white/[0.07] text-[12.5px] font-mono tabular-nums text-[#A1A1AA]">
+            <div className="max-w-full truncate px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-[#111113] border border-white/[0.07] text-[12px] sm:text-[12.5px] font-mono tabular-nums text-[#A1A1AA]">
               {result.symbol} · {result.timeframe} · {result.totalCandles} candles scanned
             </div>
           )}
         </header>
 
         {/* Parameter Control Bar */}
-        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4 items-end">
-            <div className="space-y-1.5">
+        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4 items-end">
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
               <label className="block text-[12px] font-medium text-[#71717A]">
                 Algorithm
               </label>
               <select
                 value={strategy}
                 onChange={(e) => handleStrategyChange(e.target.value as BacktestStrategyId)}
-                className="w-full h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] text-[#FAFAFA] transition-colors"
+                className="w-full h-11 sm:h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] text-[#FAFAFA] transition-colors"
               >
                 {STRATEGIES.map((s) => (
                   <option key={s.id} value={s.id} className="bg-[#18181B]">
@@ -779,7 +929,7 @@ export default function Backtesting() {
               <select
                 value={symbol}
                 onChange={(e) => setSymbol(e.target.value as ChartSymbol)}
-                className="w-full h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-medium text-[#FAFAFA] transition-colors"
+                className="w-full h-11 sm:h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-medium text-[#FAFAFA] transition-colors"
               >
                 {SYMBOLS.map((sym) => (
                   <option key={sym} value={sym} className="bg-[#18181B]">
@@ -796,7 +946,7 @@ export default function Backtesting() {
               <select
                 value={timeframe}
                 onChange={(e) => setTimeframe(e.target.value as ChartTimeframe)}
-                className="w-full h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-mono tabular-nums text-[#FAFAFA] transition-colors"
+                className="w-full h-11 sm:h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-mono tabular-nums text-[#FAFAFA] transition-colors"
               >
                 {TIMEFRAMES.map((tf) => (
                   <option key={tf} value={tf} className="bg-[#18181B]">
@@ -806,14 +956,14 @@ export default function Backtesting() {
               </select>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
               <label className="block text-[12px] font-medium text-[#71717A]">
                 Candle range
               </label>
               <select
                 value={lookback}
                 onChange={(e) => setLookback(Number(e.target.value))}
-                className="w-full h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-mono tabular-nums text-[#FAFAFA] transition-colors"
+                className="w-full h-11 sm:h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-mono tabular-nums text-[#FAFAFA] transition-colors"
               >
                 {LOOKBACKS.map((l) => (
                   <option key={l.value} value={l.value} className="bg-[#18181B]">
@@ -833,7 +983,7 @@ export default function Backtesting() {
                 step={500}
                 value={capital}
                 onChange={(e) => setCapital(Math.max(1, parseFloat(e.target.value) || 0))}
-                className="w-full h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-mono tabular-nums text-[#FAFAFA] transition-colors"
+                className="w-full h-11 sm:h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-mono tabular-nums text-[#FAFAFA] transition-colors"
               />
             </div>
 
@@ -848,16 +998,16 @@ export default function Backtesting() {
                 step={0.25}
                 value={riskPct}
                 onChange={(e) => setRiskPct(Math.max(0.1, parseFloat(e.target.value) || 0.1))}
-                className="w-full h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-mono tabular-nums text-[#FAFAFA] transition-colors"
+                className="w-full h-11 sm:h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-mono tabular-nums text-[#FAFAFA] transition-colors"
               />
             </div>
 
-            <div className="col-span-2 md:col-span-4 xl:col-span-1">
+            <div className="col-span-2 md:col-span-4 xl:col-span-1 pt-1 sm:pt-0">
               <button
                 type="button"
                 onClick={() => void handleRun()}
                 disabled={status === 'loading'}
-                className="w-full h-10 px-4 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-semibold inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                className="w-full h-11 sm:h-10 px-4 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-semibold inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
               >
                 <PiPlayFill size={14} />
                 {status === 'loading' ? 'Simulating...' : 'Run replay'}
@@ -876,17 +1026,17 @@ export default function Backtesting() {
 
         {/* Calm Pre-Run Empty State */}
         {status === 'idle' && (
-          <div className="py-14 px-6 rounded-2xl bg-[#111113] border border-white/[0.07] text-center space-y-5">
+          <div className="py-10 sm:py-14 px-5 sm:px-6 rounded-2xl bg-[#111113] border border-white/[0.07] text-center space-y-5">
             <img
               src="/brand/empty-journal.png"
               alt="Historical replay canvas"
-              className="w-full max-w-[340px] mx-auto rounded-xl opacity-90"
+              className="w-full max-w-[300px] sm:max-w-[340px] mx-auto rounded-xl opacity-90"
             />
             <div className="space-y-2">
-              <p className="text-[16px] font-medium text-[#FAFAFA]">
+              <p className="text-[15px] sm:text-[16px] font-medium text-[#FAFAFA]">
                 Configure parameters above to run a walk-forward replay
               </p>
-              <p className="text-[14px] text-[#A1A1AA] max-w-[54ch] mx-auto leading-relaxed">
+              <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA] max-w-[54ch] mx-auto leading-relaxed">
                 Evaluates signal triggers candle by candle without look-ahead bias, computing compounded equity, drawdown depth, profit factor, and trade execution telemetry.
               </p>
             </div>
@@ -895,29 +1045,29 @@ export default function Backtesting() {
 
         {/* Simulation Results */}
         {result && simMetrics && (
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8">
             {/* Unified 5-Metric KPI Bar */}
-            <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 lg:gap-0 lg:divide-x lg:divide-white/[0.06]">
-              <div className="lg:pr-6">
+            <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6 lg:gap-0 lg:divide-x lg:divide-white/[0.06]">
+              <div className="p-3 sm:p-0 rounded-xl sm:rounded-none bg-[#09090B]/60 sm:bg-transparent border border-white/[0.05] sm:border-0 lg:pr-6 min-w-0">
                 <p className="text-[12px] font-medium text-[#71717A]">Net profit</p>
                 <p
-                  className={`text-[24px] leading-tight font-mono font-semibold tabular-nums mt-1.5 ${
+                  className={`text-[19px] sm:text-[24px] leading-tight font-mono font-semibold tabular-nums mt-1.5 truncate ${
                     simMetrics.netProfitDollar >= 0 ? 'text-[#34D399]' : 'text-[#F87171]'
                   }`}
                 >
                   {simMetrics.netProfitDollar >= 0 ? '+' : ''}
                   {formatCurrency(simMetrics.netProfitDollar)}
                 </p>
-                <p className="text-[12px] font-mono tabular-nums text-[#71717A] mt-1">
+                <p className="text-[11.5px] sm:text-[12px] font-mono tabular-nums text-[#71717A] mt-1 truncate">
                   {simMetrics.netProfitPct >= 0 ? '+' : ''}
                   {simMetrics.netProfitPct.toFixed(2)}% on {formatCurrency(capital)}
                 </p>
               </div>
 
-              <div className="lg:px-6">
+              <div className="p-3 sm:p-0 rounded-xl sm:rounded-none bg-[#09090B]/60 sm:bg-transparent border border-white/[0.05] sm:border-0 lg:px-6 min-w-0">
                 <p className="text-[12px] font-medium text-[#71717A]">Win rate</p>
                 <p
-                  className={`text-[24px] leading-tight font-mono font-semibold tabular-nums mt-1.5 ${
+                  className={`text-[19px] sm:text-[24px] leading-tight font-mono font-semibold tabular-nums mt-1.5 ${
                     simMetrics.winRatePct === null
                       ? 'text-[#71717A]'
                       : simMetrics.winRatePct >= 50
@@ -927,16 +1077,16 @@ export default function Backtesting() {
                 >
                   {simMetrics.winRatePct !== null ? `${simMetrics.winRatePct.toFixed(1)}%` : '—'}
                 </p>
-                <p className="text-[12px] font-mono tabular-nums text-[#71717A] mt-1">
+                <p className="text-[11.5px] sm:text-[12px] font-mono tabular-nums text-[#71717A] mt-1 truncate">
                   Expectancy {result.expectancy >= 0 ? '+' : ''}
                   {result.expectancy.toFixed(2)}R
                 </p>
               </div>
 
-              <div className="lg:px-6">
+              <div className="p-3 sm:p-0 rounded-xl sm:rounded-none bg-[#09090B]/60 sm:bg-transparent border border-white/[0.05] sm:border-0 lg:px-6 min-w-0">
                 <p className="text-[12px] font-medium text-[#71717A]">Profit factor</p>
                 <p
-                  className={`text-[24px] leading-tight font-mono font-semibold tabular-nums mt-1.5 ${
+                  className={`text-[19px] sm:text-[24px] leading-tight font-mono font-semibold tabular-nums mt-1.5 ${
                     simMetrics.profitFactor === null
                       ? 'text-[#71717A]'
                       : simMetrics.profitFactorInfinite || simMetrics.profitFactor >= 1.2
@@ -952,15 +1102,15 @@ export default function Backtesting() {
                     ? 'INF'
                     : simMetrics.profitFactor.toFixed(2)}
                 </p>
-                <p className="text-[12px] font-mono tabular-nums text-[#71717A] mt-1">
+                <p className="text-[11.5px] sm:text-[12px] font-mono tabular-nums text-[#71717A] mt-1 truncate">
                   Avg win {result.avgWinRR.toFixed(2)}R
                 </p>
               </div>
 
-              <div className="lg:px-6">
+              <div className="p-3 sm:p-0 rounded-xl sm:rounded-none bg-[#09090B]/60 sm:bg-transparent border border-white/[0.05] sm:border-0 lg:px-6 min-w-0">
                 <p className="text-[12px] font-medium text-[#71717A]">Max drawdown</p>
                 <p
-                  className={`text-[24px] leading-tight font-mono font-semibold tabular-nums mt-1.5 ${
+                  className={`text-[19px] sm:text-[24px] leading-tight font-mono font-semibold tabular-nums mt-1.5 ${
                     simMetrics.maxDrawdownPct > 0 ? 'text-[#F87171]' : 'text-[#FAFAFA]'
                   }`}
                 >
@@ -968,17 +1118,17 @@ export default function Backtesting() {
                     ? `-${simMetrics.maxDrawdownPct.toFixed(2)}%`
                     : '0.00%'}
                 </p>
-                <p className="text-[12px] font-mono tabular-nums text-[#71717A] mt-1">
+                <p className="text-[11.5px] sm:text-[12px] font-mono tabular-nums text-[#71717A] mt-1 truncate">
                   Max streak loss: {result.maxConsecLosses}
                 </p>
               </div>
 
-              <div className="col-span-2 sm:col-span-1 lg:pl-6">
+              <div className="col-span-2 sm:col-span-1 p-3 sm:p-0 rounded-xl sm:rounded-none bg-[#09090B]/60 sm:bg-transparent border border-white/[0.05] sm:border-0 lg:pl-6 min-w-0">
                 <p className="text-[12px] font-medium text-[#71717A]">Total trades</p>
-                <p className="text-[24px] leading-tight font-mono font-semibold tabular-nums text-[#FAFAFA] mt-1.5">
+                <p className="text-[19px] sm:text-[24px] leading-tight font-mono font-semibold tabular-nums text-[#FAFAFA] mt-1.5">
                   {result.totalSignals}
                 </p>
-                <p className="text-[12px] font-mono tabular-nums text-[#71717A] mt-1">
+                <p className="text-[11.5px] sm:text-[12px] font-mono tabular-nums text-[#71717A] mt-1">
                   <span className="text-[#34D399]">{result.wins}W</span>
                   {' / '}
                   <span className="text-[#F87171]">{result.losses}L</span>
@@ -993,19 +1143,19 @@ export default function Backtesting() {
               startingCapital={capital}
             />
 
-            {/* Clean Scrollable Trade Ledger */}
+            {/* Clean Scrollable Trade Ledger (Cards on Mobile, Table on Desktop) */}
             <section className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden">
-              <div className="p-6 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-4">
+              <div className="p-4 sm:p-6 border-b border-white/[0.06] flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 sm:gap-4">
                 <div>
-                  <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+                  <h2 className="text-[16px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
                     Simulated trade ledger
                   </h2>
-                  <p className="text-[13px] text-[#71717A] mt-0.5">
+                  <p className="text-[12.5px] sm:text-[13px] text-[#71717A] mt-0.5">
                     Select any execution row to inspect algorithmic triggers and score metadata
                   </p>
                 </div>
 
-                <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[#18181B]">
+                <div className="flex items-center gap-1 p-1 rounded-full bg-[#18181B] max-w-full overflow-x-auto">
                   {(
                     [
                       { key: 'all', label: `All (${result.signals.length})` },
@@ -1018,7 +1168,7 @@ export default function Backtesting() {
                       key={tab.key}
                       type="button"
                       onClick={() => setFilter(tab.key)}
-                      className={`px-3 py-1 rounded-full text-[12.5px] font-medium transition-colors ${
+                      className={`min-h-[34px] sm:min-h-0 px-3 py-1 rounded-full text-[12px] sm:text-[12.5px] font-medium whitespace-nowrap shrink-0 transition-colors ${
                         filter === tab.key
                           ? 'bg-[#FAFAFA] text-[#09090B] font-semibold'
                           : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
@@ -1035,35 +1185,51 @@ export default function Backtesting() {
                   No simulated trades match the selected filter.
                 </div>
               ) : (
-                <div className="overflow-x-auto max-h-[540px] overflow-y-auto">
-                  <div className="min-w-[820px]">
-                    <div className="sticky top-0 z-10 px-6 py-3 bg-[#161619] border-b border-white/[0.06] grid grid-cols-[2.5rem_5.5rem_4rem_5rem_6rem_6rem_6rem_4.5rem_6rem_5rem_1.5rem] gap-2 text-[12px] font-medium text-[#71717A]">
-                      <span>#</span>
-                      <span>Date</span>
-                      <span className="text-center">Side</span>
-                      <span>Tier</span>
-                      <span className="text-right">Entry</span>
-                      <span className="text-right">SL</span>
-                      <span className="text-right">TP1</span>
-                      <span className="text-right">R:R</span>
-                      <span className="text-right">P&amp;L ($)</span>
-                      <span className="text-center">Result</span>
-                      <span />
-                    </div>
+                <>
+                  {/* Mobile Stacked Trade Cards (< md) */}
+                  <div className="md:hidden divide-y divide-white/[0.06] max-h-[560px] overflow-y-auto">
+                    {filteredSignals.map((sig, idx) => (
+                      <MobileTradeCard
+                        key={sig.id}
+                        sig={sig}
+                        idx={idx}
+                        symbol={symbol}
+                        pnlDollar={simMetrics.pnlBySignalId[sig.id]}
+                      />
+                    ))}
+                  </div>
 
-                    <div className="divide-y divide-white/[0.05]">
-                      {filteredSignals.map((sig, idx) => (
-                        <TradeLedgerRow
-                          key={sig.id}
-                          sig={sig}
-                          idx={idx}
-                          symbol={symbol}
-                          pnlDollar={simMetrics.pnlBySignalId[sig.id]}
-                        />
-                      ))}
+                  {/* Desktop Table (>= md) */}
+                  <div className="hidden md:block overflow-x-auto max-h-[540px] overflow-y-auto">
+                    <div className="min-w-[820px]">
+                      <div className="sticky top-0 z-10 px-6 py-3 bg-[#161619] border-b border-white/[0.06] grid grid-cols-[2.5rem_5.5rem_4rem_5rem_6rem_6rem_6rem_4.5rem_6rem_5rem_1.5rem] gap-2 text-[12px] font-medium text-[#71717A]">
+                        <span>#</span>
+                        <span>Date</span>
+                        <span className="text-center">Side</span>
+                        <span>Tier</span>
+                        <span className="text-right">Entry</span>
+                        <span className="text-right">SL</span>
+                        <span className="text-right">TP1</span>
+                        <span className="text-right">R:R</span>
+                        <span className="text-right">P&amp;L ($)</span>
+                        <span className="text-center">Result</span>
+                        <span />
+                      </div>
+
+                      <div className="divide-y divide-white/[0.05]">
+                        {filteredSignals.map((sig, idx) => (
+                          <TradeLedgerRow
+                            key={sig.id}
+                            sig={sig}
+                            idx={idx}
+                            symbol={symbol}
+                            pnlDollar={simMetrics.pnlBySignalId[sig.id]}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </>
               )}
             </section>
           </div>

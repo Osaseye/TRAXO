@@ -1071,19 +1071,19 @@ export default function Notifications() {
   const tdAvailable = healthData?.twelvedata?.availableKeys ?? 0
 
   return (
-    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] overflow-x-hidden">
-      <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-6">
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] font-sans overflow-x-hidden">
+      <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-5 sm:py-8 space-y-5 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div className="space-y-1.5">
             <p className="text-[12px] font-medium text-[#71717A]">Signals &amp; Ops</p>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
+            <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+              <h1 className="text-[24px] sm:text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
                 Signal Ledger &amp; Engine Ops
               </h1>
               <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#161619] text-[12px] text-[#A1A1AA]">
                 <span
-                  className={`h-2 w-2 rounded-full ${
+                  className={`h-2 w-2 rounded-full shrink-0 ${
                     effectiveRunning ? 'bg-[#34D399]' : isRedisOk ? 'bg-[#FAFAFA]' : 'bg-[#71717A]'
                   }`}
                 />
@@ -1099,29 +1099,29 @@ export default function Notifications() {
                 </span>
               )}
             </div>
-            <p className="text-[14px] text-[#A1A1AA]">
+            <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA]">
               Setup ledger, guardrail rejections, and real-time scanner infrastructure health.
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="grid grid-cols-2 sm:flex items-center gap-2.5 w-full sm:w-auto">
             <button
               type="button"
               onClick={handleTriggerManualScan}
               disabled={manualScanBusy}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
+              className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 sm:py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
             >
-              <PiPlay className="h-4 w-4" />
-              <span>{manualScanBusy ? 'Triggering...' : 'Run Manual Scan'}</span>
+              <PiPlay className="h-4 w-4 shrink-0" />
+              <span className="truncate">{manualScanBusy ? 'Triggering...' : 'Run Manual Scan'}</span>
             </button>
             <button
               type="button"
               onClick={handleRefreshAll}
               disabled={ledgerLoading || rejectionsLoading || telemetryLoading}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] disabled:opacity-50 transition-colors"
+              className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] disabled:opacity-50 transition-colors"
             >
               <PiArrowsClockwise
-                className={`h-4 w-4 text-[#A1A1AA] ${
+                className={`h-4 w-4 text-[#A1A1AA] shrink-0 ${
                   ledgerLoading || rejectionsLoading || telemetryLoading ? 'animate-spin' : ''
                 }`}
               />
@@ -1142,7 +1142,7 @@ export default function Notifications() {
             <button
               type="button"
               onClick={() => setManualScanNotice(null)}
-              className="text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA]"
+              className="min-h-[36px] px-2 text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] shrink-0"
             >
               Dismiss
             </button>
@@ -1150,14 +1150,14 @@ export default function Notifications() {
         )}
 
         {/* Unboxed Summary Strip */}
-        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
-          <div className="p-5 space-y-1">
+        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] grid grid-cols-2 lg:grid-cols-4">
+          <div className="p-4 sm:p-5 space-y-1 border-r border-b lg:border-b-0 border-white/[0.06]">
             <div className="flex items-center justify-between text-[12px] text-[#71717A]">
               <span>Signal Ledger</span>
-              <PiBell className="h-4 w-4" />
+              <PiBell className="h-4 w-4 shrink-0" />
             </div>
-            <div className="flex items-baseline gap-2.5">
-              <span className="text-[22px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-[20px] sm:text-[22px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
                 {ledgerSummary.total}
               </span>
               <span className="text-[12px] font-mono tabular-nums text-[#A1A1AA]">
@@ -1169,14 +1169,14 @@ export default function Notifications() {
             </div>
           </div>
 
-          <div className="p-5 space-y-1">
+          <div className="p-4 sm:p-5 space-y-1 border-b lg:border-b-0 lg:border-r border-white/[0.06]">
             <div className="flex items-center justify-between text-[12px] text-[#71717A]">
               <span>Resolved Win Rate</span>
-              <PiGauge className="h-4 w-4" />
+              <PiGauge className="h-4 w-4 shrink-0" />
             </div>
-            <div className="flex items-baseline gap-2.5">
+            <div className="flex items-baseline gap-2 flex-wrap">
               <span
-                className={`text-[22px] font-mono font-semibold tabular-nums ${
+                className={`text-[20px] sm:text-[22px] font-mono font-semibold tabular-nums ${
                   ledgerSummary.winRate >= 50 ? 'text-[#34D399]' : 'text-[#FAFAFA]'
                 }`}
               >
@@ -1192,13 +1192,13 @@ export default function Notifications() {
             </div>
           </div>
 
-          <div className="p-5 space-y-1">
+          <div className="p-4 sm:p-5 space-y-1 border-r border-white/[0.06]">
             <div className="flex items-center justify-between text-[12px] text-[#71717A]">
               <span>Scanner Rejections</span>
-              <PiShieldCheck className="h-4 w-4" />
+              <PiShieldCheck className="h-4 w-4 shrink-0" />
             </div>
-            <div className="flex items-baseline gap-2.5">
-              <span className="text-[22px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-[20px] sm:text-[22px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
                 {rejections.length}
               </span>
               <span className="text-[12px] text-[#71717A]">buffered</span>
@@ -1208,14 +1208,14 @@ export default function Notifications() {
             </div>
           </div>
 
-          <div className="p-5 space-y-1">
+          <div className="p-4 sm:p-5 space-y-1">
             <div className="flex items-center justify-between text-[12px] text-[#71717A]">
               <span>Engine &amp; Broker</span>
-              <PiHardDrives className="h-4 w-4" />
+              <PiHardDrives className="h-4 w-4 shrink-0" />
             </div>
-            <div className="flex items-baseline gap-2.5">
+            <div className="flex items-baseline gap-2 flex-wrap">
               <span
-                className={`text-[15px] font-medium ${
+                className={`text-[14px] sm:text-[15px] font-medium ${
                   mt5Account?.connected ? 'text-[#34D399]' : 'text-[#FAFAFA]'
                 }`}
               >
@@ -1225,20 +1225,20 @@ export default function Notifications() {
                 {mt5Positions.length} open
               </span>
             </div>
-            <div className="text-[12px] font-mono tabular-nums text-[#71717A]">
-              Optimizer: {optimizerStatus?.isFeedbackEngineEnabled ? 'Active' : 'Paused'} · TD Keys:{' '}
+            <div className="text-[11.5px] sm:text-[12px] font-mono tabular-nums text-[#71717A] truncate">
+              Opt: {optimizerStatus?.isFeedbackEngineEnabled ? 'Active' : 'Paused'} · TD:{' '}
               {healthData ? tdAvailable : '—'}
             </div>
           </div>
         </section>
 
         {/* Sleek Rounded-Full 3-Tab Switcher */}
-        <div className="flex items-center overflow-x-auto pb-1">
-          <div className="inline-flex items-center gap-1 rounded-full bg-[#111113] border border-white/[0.07] p-1.5">
+        <div className="-mx-4 px-4 sm:mx-0 sm:px-0 flex items-center overflow-x-auto pb-1">
+          <div className="inline-flex items-center gap-1 rounded-full bg-[#111113] border border-white/[0.07] p-1 sm:p-1.5">
             <button
               type="button"
               onClick={() => handleSelectTab('ledger')}
-              className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${
+              className={`min-h-[44px] sm:min-h-0 inline-flex items-center gap-2 px-4 py-2 sm:py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'ledger'
                   ? 'bg-[#FAFAFA] text-[#09090B]'
                   : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
@@ -1258,7 +1258,7 @@ export default function Notifications() {
             <button
               type="button"
               onClick={() => handleSelectTab('rejections')}
-              className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${
+              className={`min-h-[44px] sm:min-h-0 inline-flex items-center gap-2 px-4 py-2 sm:py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'rejections'
                   ? 'bg-[#FAFAFA] text-[#09090B]'
                   : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
@@ -1278,7 +1278,7 @@ export default function Notifications() {
             <button
               type="button"
               onClick={() => handleSelectTab('telemetry')}
-              className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${
+              className={`min-h-[44px] sm:min-h-0 inline-flex items-center gap-2 px-4 py-2 sm:py-1.5 rounded-full text-[13px] font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'telemetry'
                   ? 'bg-[#FAFAFA] text-[#09090B]'
                   : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
@@ -1294,9 +1294,9 @@ export default function Notifications() {
         {activeTab === 'ledger' && (
           <div className="space-y-5">
             {/* Clean Filter Toolbar */}
-            <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-5 space-y-4">
+            <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-5 space-y-4">
               <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-                <div className="relative flex-1 min-w-[220px]">
+                <div className="relative flex-1 min-w-0">
                   <PiMagnifyingGlass className="h-4 w-4 text-[#71717A] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
@@ -1306,11 +1306,11 @@ export default function Notifications() {
                       setLedgerPage(1)
                     }}
                     placeholder="Filter by symbol, strategy, or confluence note..."
-                    className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-[13px] text-[#FAFAFA] placeholder:text-[#71717A]"
+                    className="w-full min-h-[44px] sm:min-h-0 pl-9 pr-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-[13px] text-[#FAFAFA] placeholder:text-[#71717A]"
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5">
                   <select
                     value={symbolFilter}
                     onChange={(e) => {
@@ -1318,29 +1318,12 @@ export default function Notifications() {
                       setLedgerPage(1)
                     }}
                     aria-label="Filter by symbol"
-                    className="px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] focus:border-white/[0.2] focus:outline-none"
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] focus:border-white/[0.2] focus:outline-none"
                   >
                     <option value="ALL">All symbols</option>
                     {availableSymbols.map((sym) => (
                       <option key={sym} value={sym}>
                         {sym}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={strategyFilter}
-                    onChange={(e) => {
-                      setStrategyFilter(e.target.value)
-                      setLedgerPage(1)
-                    }}
-                    aria-label="Filter by strategy"
-                    className="px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] focus:border-white/[0.2] focus:outline-none"
-                  >
-                    <option value="ALL">All strategies</option>
-                    {availableStrategies.map((st) => (
-                      <option key={st.id} value={st.id}>
-                        {st.label}
                       </option>
                     ))}
                   </select>
@@ -1352,7 +1335,7 @@ export default function Notifications() {
                       setLedgerPage(1)
                     }}
                     aria-label="Filter by timeframe"
-                    className="px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] focus:border-white/[0.2] focus:outline-none"
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] focus:border-white/[0.2] focus:outline-none"
                   >
                     <option value="ALL">All timeframes</option>
                     {['1m', '5m', '15m', '1H', '4H', '1D'].map((tf) => (
@@ -1361,55 +1344,76 @@ export default function Notifications() {
                       </option>
                     ))}
                   </select>
+
+                  <select
+                    value={strategyFilter}
+                    onChange={(e) => {
+                      setStrategyFilter(e.target.value)
+                      setLedgerPage(1)
+                    }}
+                    aria-label="Filter by strategy"
+                    className="col-span-2 sm:col-span-1 w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] focus:border-white/[0.2] focus:outline-none"
+                  >
+                    <option value="ALL">All strategies</option>
+                    {availableStrategies.map((st) => (
+                      <option key={st.id} value={st.id}>
+                        {st.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t border-white/[0.06]">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <div className="inline-flex items-center rounded-full bg-[#18181B] p-1">
-                    {(['ALL', 'BUY', 'SELL'] as DirectionFilter[]).map((dir) => (
-                      <button
-                        key={dir}
-                        type="button"
-                        onClick={() => {
-                          setDirectionFilter(dir)
-                          setLedgerPage(1)
-                        }}
-                        className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
-                          directionFilter === dir
-                            ? 'bg-[#FAFAFA] text-[#09090B]'
-                            : dir === 'BUY'
-                              ? 'text-[#34D399] hover:text-[#FAFAFA]'
-                              : dir === 'SELL'
-                                ? 'text-[#F87171] hover:text-[#FAFAFA]'
-                                : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
-                        }`}
-                      >
-                        {dir === 'ALL' ? 'All sides' : dir}
-                      </button>
-                    ))}
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5">
+                  <div className="overflow-x-auto max-w-full">
+                    <div className="inline-flex items-center rounded-full bg-[#18181B] p-1">
+                      {(['ALL', 'BUY', 'SELL'] as DirectionFilter[]).map((dir) => (
+                        <button
+                          key={dir}
+                          type="button"
+                          onClick={() => {
+                            setDirectionFilter(dir)
+                            setLedgerPage(1)
+                          }}
+                          className={`min-h-[38px] sm:min-h-0 px-3.5 sm:px-3 py-1.5 sm:py-1 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors ${
+                            directionFilter === dir
+                              ? 'bg-[#FAFAFA] text-[#09090B]'
+                              : dir === 'BUY'
+                                ? 'text-[#34D399] hover:text-[#FAFAFA]'
+                                : dir === 'SELL'
+                                  ? 'text-[#F87171] hover:text-[#FAFAFA]'
+                                  : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                          }`}
+                        >
+                          {dir === 'ALL' ? 'All sides' : dir}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  <div className="inline-flex items-center rounded-full bg-[#18181B] p-1 flex-wrap">
-                    {(['ALL', 'LIVE', 'WIN', 'LOSS', 'EXPIRED'] as SignalStatusFilter[]).map((st) => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => {
-                          setStatusFilter(st)
-                          setLedgerPage(1)
-                        }}
-                        className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
-                          statusFilter === st
-                            ? 'bg-[#FAFAFA] text-[#09090B]'
-                            : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
-                        }`}
-                      >
-                        {st === 'ALL'
-                          ? 'All'
-                          : st.charAt(0) + st.slice(1).toLowerCase()}
-                      </button>
-                    ))}
+                  <div className="overflow-x-auto max-w-full">
+                    <div className="inline-flex items-center rounded-full bg-[#18181B] p-1">
+                      {(['ALL', 'LIVE', 'WIN', 'LOSS', 'EXPIRED'] as SignalStatusFilter[]).map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => {
+                            setStatusFilter(st)
+                            setLedgerPage(1)
+                          }}
+                          className={`min-h-[38px] sm:min-h-0 px-3 py-1.5 sm:py-1 rounded-full text-[12px] font-medium whitespace-nowrap transition-colors ${
+                            statusFilter === st
+                              ? 'bg-[#FAFAFA] text-[#09090B]'
+                              : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                          }`}
+                        >
+                          {st === 'ALL'
+                            ? 'All'
+                            : st.charAt(0) + st.slice(1).toLowerCase()}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -1418,7 +1422,7 @@ export default function Notifications() {
                     <button
                       type="button"
                       onClick={markAllRead}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[12px] font-medium text-[#FAFAFA] transition-colors"
+                      className="min-h-[40px] sm:min-h-0 inline-flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[12px] font-medium text-[#FAFAFA] transition-colors"
                     >
                       <PiChecks className="h-4 w-4 text-[#34D399]" />
                       <span>Mark All Read</span>
@@ -1428,7 +1432,7 @@ export default function Notifications() {
                     <button
                       type="button"
                       onClick={clearNotifications}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[12px] font-medium text-[#A1A1AA] hover:text-[#F87171] transition-colors"
+                      className="min-h-[40px] sm:min-h-0 inline-flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[12px] font-medium text-[#A1A1AA] hover:text-[#F87171] transition-colors"
                     >
                       <PiTrash className="h-4 w-4" />
                       <span>Clear Alerts</span>
@@ -1438,7 +1442,7 @@ export default function Notifications() {
                     type="button"
                     onClick={handleExportCsv}
                     disabled={filteredLedger.length === 0}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                    className="min-h-[40px] sm:min-h-0 inline-flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
                   >
                     <PiDownloadSimple className="h-4 w-4" />
                     <span>Export CSV</span>
@@ -1450,7 +1454,7 @@ export default function Notifications() {
             {/* Table Card */}
             <div className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden">
               {filteredLedger.length === 0 ? (
-                <div className="p-12 text-center space-y-3">
+                <div className="p-8 sm:p-12 text-center space-y-3">
                   <img
                     src="/brand/empty-signals.png"
                     alt="No signals matching filter"
@@ -1464,60 +1468,37 @@ export default function Notifications() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/[0.06] text-[12px] font-medium text-[#71717A]">
-                        <th className="py-3.5 px-4">Detected</th>
-                        <th className="py-3.5 px-4">Pair</th>
-                        <th className="py-3.5 px-4">Strategy</th>
-                        <th className="py-3.5 px-4">Side</th>
-                        <th className="py-3.5 px-4 text-right">Entry</th>
-                        <th className="py-3.5 px-4 text-right">SL</th>
-                        <th className="py-3.5 px-4 text-right">TP</th>
-                        <th className="py-3.5 px-4 text-right">R:R</th>
-                        <th className="py-3.5 px-4 text-right">Conf</th>
-                        <th className="py-3.5 px-4">Status</th>
-                        <th className="py-3.5 px-4 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
-                      {paginatedLedger.map((sig) => {
-                        const isExpanded = expandedSignalKey === sig.key
-                        const isUnread = sig.hasNotification && !sig.read
-                        return (
-                          <Fragment key={sig.key}>
-                            <tr
-                              onClick={() =>
-                                setExpandedSignalKey(isExpanded ? null : sig.key)
-                              }
-                              className={`cursor-pointer transition-colors hover:bg-white/[0.02] ${
-                                isUnread ? 'bg-white/[0.02]' : ''
-                              }`}
-                            >
-                              <td className="py-3.5 px-4 whitespace-nowrap font-mono tabular-nums text-[#A1A1AA]">
-                                <div className="flex items-center gap-2">
-                                  {isUnread && (
-                                    <span
-                                      className="h-2 w-2 rounded-full bg-[#34D399] shrink-0"
-                                      title="Unread alert"
-                                    />
-                                  )}
-                                  <span>{formatRelative(sig.timestampMs)}</span>
-                                </div>
-                              </td>
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                <span className="font-medium text-[#FAFAFA]">{sig.symbol}</span>{' '}
-                                <span className="text-[12px] text-[#71717A]">
+                <>
+                  {/* Mobile Stacked Card Rows (< 768px) */}
+                  <div className="md:hidden divide-y divide-white/[0.06]">
+                    {paginatedLedger.map((sig) => {
+                      const isExpanded = expandedSignalKey === sig.key
+                      const isUnread = sig.hasNotification && !sig.read
+                      return (
+                        <div
+                          key={sig.key}
+                          className={`p-4 space-y-3 ${isUnread ? 'bg-white/[0.02]' : ''}`}
+                        >
+                          <div
+                            onClick={() => setExpandedSignalKey(isExpanded ? null : sig.key)}
+                            className="space-y-2.5 cursor-pointer"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                {isUnread && (
+                                  <span
+                                    className="h-2 w-2 rounded-full bg-[#34D399] shrink-0"
+                                    title="Unread alert"
+                                  />
+                                )}
+                                <span className="text-[15px] font-semibold text-[#FAFAFA]">
+                                  {sig.symbol}
+                                </span>
+                                <span className="text-[12px] font-mono text-[#71717A]">
                                   {sig.timeframe}
                                 </span>
-                              </td>
-                              <td className="py-3.5 px-4 text-[#A1A1AA] max-w-[180px] truncate">
-                                {sig.strategyLabel}
-                              </td>
-                              <td className="py-3.5 px-4 whitespace-nowrap">
                                 <span
-                                  className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+                                  className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
                                     sig.direction === 'BUY'
                                       ? 'bg-[#34D399]/10 text-[#34D399]'
                                       : 'bg-[#F87171]/10 text-[#F87171]'
@@ -1525,25 +1506,10 @@ export default function Notifications() {
                                 >
                                   {sig.direction}
                                 </span>
-                              </td>
-                              <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#FAFAFA]">
-                                {formatPrice(sig.entry)}
-                              </td>
-                              <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#F87171]">
-                                {formatPrice(sig.sl)}
-                              </td>
-                              <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#34D399]">
-                                {formatPrice(sig.tp)}
-                              </td>
-                              <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
-                                {sig.rr ? `${sig.rr.toFixed(2)}R` : '—'}
-                              </td>
-                              <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#FAFAFA]">
-                                {sig.confidence}%
-                              </td>
-                              <td className="py-3.5 px-4 whitespace-nowrap">
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
                                 <span
-                                  className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+                                  className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
                                     sig.status === 'WIN'
                                       ? 'bg-[#34D399]/10 text-[#34D399]'
                                       : sig.status === 'LOSS'
@@ -1555,124 +1521,321 @@ export default function Notifications() {
                                 >
                                   {sig.status}
                                 </span>
-                              </td>
-                              <td
-                                className="py-3.5 px-4 text-right whitespace-nowrap"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <div className="inline-flex items-center gap-1.5">
-                                  {isUnread && (
-                                    <button
-                                      type="button"
-                                      onClick={() => markRead(sig.id)}
-                                      title="Mark as read"
-                                      className="p-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#A1A1AA] hover:text-[#34D399] transition-colors"
-                                    >
-                                      <PiCheck className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenInTerminal(sig)}
-                                    title="Open in Terminal"
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[12px] font-medium text-[#FAFAFA] transition-colors"
-                                  >
-                                    <span>Chart</span>
-                                    <PiArrowUpRight className="h-3.5 w-3.5 text-[#A1A1AA]" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setExpandedSignalKey(isExpanded ? null : sig.key)
-                                    }
-                                    aria-label="Toggle details"
-                                    className="p-1.5 text-[#71717A] hover:text-[#FAFAFA]"
-                                  >
-                                    {isExpanded ? (
-                                      <PiCaretUp className="h-4 w-4" />
-                                    ) : (
-                                      <PiCaretDown className="h-4 w-4" />
-                                    )}
-                                  </button>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 text-[12px] text-[#A1A1AA]">
+                              <span className="truncate">{sig.strategyLabel}</span>
+                              <span className="font-mono tabular-nums text-[#71717A] shrink-0">
+                                {formatRelative(sig.timestampMs)}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 rounded-xl bg-[#161619] p-2.5 text-[12px]">
+                              <div>
+                                <div className="text-[10.5px] text-[#71717A]">Entry</div>
+                                <div className="font-mono tabular-nums text-[#FAFAFA] mt-0.5">
+                                  {formatPrice(sig.entry)}
                                 </div>
-                              </td>
-                            </tr>
-                            {isExpanded && (
-                              <tr key={`${sig.key}-detail`} className="bg-[#0D0D10]">
-                                <td colSpan={11} className="px-5 py-4 border-t border-white/[0.05]">
-                                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                    <div className="space-y-2">
-                                      <div className="text-[12px] text-[#71717A]">
-                                        <span className="font-mono tabular-nums">{sig.id}</span> ·
-                                        Logged{' '}
-                                        <span className="font-mono tabular-nums">
-                                          {formatDateTime(sig.timestampMs)}
-                                        </span>{' '}
-                                        · Source: {sig.source}
-                                      </div>
-                                      {sig.reason.length > 0 ? (
-                                        <div className="flex flex-wrap gap-2">
-                                          {sig.reason.map((r, i) => (
-                                            <span
-                                              key={i}
-                                              className="px-2.5 py-1 rounded-lg bg-[#161619] text-[12px] text-[#A1A1AA]"
-                                            >
-                                              {r}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <span className="text-[13px] text-[#71717A]">
-                                          No extra confluence notes recorded.
-                                        </span>
-                                      )}
-                                    </div>
+                              </div>
+                              <div>
+                                <div className="text-[10.5px] text-[#71717A]">Stop Loss</div>
+                                <div className="font-mono tabular-nums text-[#F87171] mt-0.5">
+                                  {formatPrice(sig.sl)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[10.5px] text-[#71717A]">Take Profit</div>
+                                <div className="font-mono tabular-nums text-[#34D399] mt-0.5">
+                                  {formatPrice(sig.tp)}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[12px] font-mono tabular-nums text-[#A1A1AA]">
+                              <span>R:R {sig.rr ? `${sig.rr.toFixed(2)}R` : '—'}</span>
+                              <span className="text-[#FAFAFA]">Conf {sig.confidence}%</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenInTerminal(sig)}
+                              className="flex-1 min-h-[44px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[12.5px] font-medium text-[#FAFAFA] transition-colors"
+                            >
+                              <span>Open Chart</span>
+                              <PiArrowUpRight className="h-3.5 w-3.5 text-[#A1A1AA]" />
+                            </button>
+                            {isUnread && (
+                              <button
+                                type="button"
+                                onClick={() => markRead(sig.id)}
+                                title="Mark as read"
+                                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#A1A1AA] hover:text-[#34D399] transition-colors"
+                              >
+                                <PiCheck className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedSignalKey(isExpanded ? null : sig.key)
+                              }
+                              aria-label="Toggle details"
+                              className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl bg-[#18181B] text-[#71717A] hover:text-[#FAFAFA]"
+                            >
+                              {isExpanded ? (
+                                <PiCaretUp className="h-4 w-4" />
+                              ) : (
+                                <PiCaretDown className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="rounded-xl bg-[#0D0D10] border border-white/[0.06] p-3.5 space-y-2.5">
+                              <div className="text-[11.5px] text-[#71717A] break-all">
+                                <span className="font-mono tabular-nums">{sig.id}</span> · Logged{' '}
+                                <span className="font-mono tabular-nums">
+                                  {formatDateTime(sig.timestampMs)}
+                                </span>{' '}
+                                · {sig.source}
+                              </div>
+                              {sig.reason.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {sig.reason.map((r, i) => (
+                                    <span
+                                      key={i}
+                                      className="px-2.5 py-1 rounded-lg bg-[#161619] text-[12px] text-[#A1A1AA]"
+                                    >
+                                      {r}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-[12.5px] text-[#71717A]">
+                                  No extra confluence notes recorded.
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Desktop Table (>= 768px) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/[0.06] text-[12px] font-medium text-[#71717A]">
+                          <th className="py-3.5 px-4">Detected</th>
+                          <th className="py-3.5 px-4">Pair</th>
+                          <th className="py-3.5 px-4">Strategy</th>
+                          <th className="py-3.5 px-4">Side</th>
+                          <th className="py-3.5 px-4 text-right">Entry</th>
+                          <th className="py-3.5 px-4 text-right">SL</th>
+                          <th className="py-3.5 px-4 text-right">TP</th>
+                          <th className="py-3.5 px-4 text-right">R:R</th>
+                          <th className="py-3.5 px-4 text-right">Conf</th>
+                          <th className="py-3.5 px-4">Status</th>
+                          <th className="py-3.5 px-4 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
+                        {paginatedLedger.map((sig) => {
+                          const isExpanded = expandedSignalKey === sig.key
+                          const isUnread = sig.hasNotification && !sig.read
+                          return (
+                            <Fragment key={sig.key}>
+                              <tr
+                                onClick={() =>
+                                  setExpandedSignalKey(isExpanded ? null : sig.key)
+                                }
+                                className={`cursor-pointer transition-colors hover:bg-white/[0.02] ${
+                                  isUnread ? 'bg-white/[0.02]' : ''
+                                }`}
+                              >
+                                <td className="py-3.5 px-4 whitespace-nowrap font-mono tabular-nums text-[#A1A1AA]">
+                                  <div className="flex items-center gap-2">
+                                    {isUnread && (
+                                      <span
+                                        className="h-2 w-2 rounded-full bg-[#34D399] shrink-0"
+                                        title="Unread alert"
+                                      />
+                                    )}
+                                    <span>{formatRelative(sig.timestampMs)}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3.5 px-4 whitespace-nowrap">
+                                  <span className="font-medium text-[#FAFAFA]">{sig.symbol}</span>{' '}
+                                  <span className="text-[12px] text-[#71717A]">
+                                    {sig.timeframe}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-[#A1A1AA] max-w-[180px] truncate">
+                                  {sig.strategyLabel}
+                                </td>
+                                <td className="py-3.5 px-4 whitespace-nowrap">
+                                  <span
+                                    className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+                                      sig.direction === 'BUY'
+                                        ? 'bg-[#34D399]/10 text-[#34D399]'
+                                        : 'bg-[#F87171]/10 text-[#F87171]'
+                                    }`}
+                                  >
+                                    {sig.direction}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#FAFAFA]">
+                                  {formatPrice(sig.entry)}
+                                </td>
+                                <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#F87171]">
+                                  {formatPrice(sig.sl)}
+                                </td>
+                                <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#34D399]">
+                                  {formatPrice(sig.tp)}
+                                </td>
+                                <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
+                                  {sig.rr ? `${sig.rr.toFixed(2)}R` : '—'}
+                                </td>
+                                <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#FAFAFA]">
+                                  {sig.confidence}%
+                                </td>
+                                <td className="py-3.5 px-4 whitespace-nowrap">
+                                  <span
+                                    className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+                                      sig.status === 'WIN'
+                                        ? 'bg-[#34D399]/10 text-[#34D399]'
+                                        : sig.status === 'LOSS'
+                                          ? 'bg-[#F87171]/10 text-[#F87171]'
+                                          : sig.status === 'LIVE'
+                                            ? 'bg-[#18181B] text-[#FAFAFA]'
+                                            : 'bg-[#161619] text-[#71717A]'
+                                    }`}
+                                  >
+                                    {sig.status}
+                                  </span>
+                                </td>
+                                <td
+                                  className="py-3.5 px-4 text-right whitespace-nowrap"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="inline-flex items-center gap-1.5">
+                                    {isUnread && (
+                                      <button
+                                        type="button"
+                                        onClick={() => markRead(sig.id)}
+                                        title="Mark as read"
+                                        className="p-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#A1A1AA] hover:text-[#34D399] transition-colors"
+                                      >
+                                        <PiCheck className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() => handleOpenInTerminal(sig)}
-                                      className="self-start inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] text-[13px] font-medium hover:bg-[#E4E4E7] transition-colors"
+                                      title="Open in Terminal"
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[12px] font-medium text-[#FAFAFA] transition-colors"
                                     >
-                                      <PiTerminalWindow className="h-4 w-4" />
-                                      <span>
-                                        Load {sig.symbol} {sig.timeframe}
-                                      </span>
+                                      <span>Chart</span>
+                                      <PiArrowUpRight className="h-3.5 w-3.5 text-[#A1A1AA]" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setExpandedSignalKey(isExpanded ? null : sig.key)
+                                      }
+                                      aria-label="Toggle details"
+                                      className="p-1.5 text-[#71717A] hover:text-[#FAFAFA]"
+                                    >
+                                      {isExpanded ? (
+                                        <PiCaretUp className="h-4 w-4" />
+                                      ) : (
+                                        <PiCaretDown className="h-4 w-4" />
+                                      )}
                                     </button>
                                   </div>
                                 </td>
                               </tr>
-                            )}
-                          </Fragment>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                              {isExpanded && (
+                                <tr key={`${sig.key}-detail`} className="bg-[#0D0D10]">
+                                  <td colSpan={11} className="px-5 py-4 border-t border-white/[0.05]">
+                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                      <div className="space-y-2">
+                                        <div className="text-[12px] text-[#71717A]">
+                                          <span className="font-mono tabular-nums">{sig.id}</span> ·
+                                          Logged{' '}
+                                          <span className="font-mono tabular-nums">
+                                            {formatDateTime(sig.timestampMs)}
+                                          </span>{' '}
+                                          · Source: {sig.source}
+                                        </div>
+                                        {sig.reason.length > 0 ? (
+                                          <div className="flex flex-wrap gap-2">
+                                            {sig.reason.map((r, i) => (
+                                              <span
+                                                key={i}
+                                                className="px-2.5 py-1 rounded-lg bg-[#161619] text-[12px] text-[#A1A1AA]"
+                                              >
+                                                {r}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <span className="text-[13px] text-[#71717A]">
+                                            No extra confluence notes recorded.
+                                          </span>
+                                        )}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenInTerminal(sig)}
+                                        className="self-start inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] text-[13px] font-medium hover:bg-[#E4E4E7] transition-colors"
+                                      >
+                                        <PiTerminalWindow className="h-4 w-4" />
+                                        <span>
+                                          Load {sig.symbol} {sig.timeframe}
+                                        </span>
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
 
               {filteredLedger.length > PAGE_SIZE && (
-                <div className="flex items-center justify-between px-5 py-3.5 border-t border-white/[0.06] text-[13px] text-[#A1A1AA]">
-                  <span className="font-mono tabular-nums">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3.5 border-t border-white/[0.06] text-[13px] text-[#A1A1AA]">
+                  <span className="font-mono tabular-nums text-center sm:text-left">
                     Showing {(safeLedgerPage - 1) * PAGE_SIZE + 1}–
                     {Math.min(safeLedgerPage * PAGE_SIZE, filteredLedger.length)} of{' '}
                     {filteredLedger.length}
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-3 sm:flex items-center gap-2">
                     <button
                       type="button"
                       disabled={safeLedgerPage <= 1}
                       onClick={() => setLedgerPage(Math.max(1, safeLedgerPage - 1))}
-                      className="px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#FAFAFA]"
+                      className="min-h-[44px] sm:min-h-0 px-3 py-2 sm:py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#FAFAFA]"
                     >
                       Previous
                     </button>
-                    <span className="px-2 font-mono tabular-nums text-[12px]">
+                    <span className="px-2 font-mono tabular-nums text-[12px] text-center">
                       {safeLedgerPage} / {totalLedgerPages}
                     </span>
                     <button
                       type="button"
                       disabled={safeLedgerPage >= totalLedgerPages}
                       onClick={() => setLedgerPage(Math.min(totalLedgerPages, safeLedgerPage + 1))}
-                      className="px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#FAFAFA]"
+                      className="min-h-[44px] sm:min-h-0 px-3 py-2 sm:py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#FAFAFA]"
                     >
                       Next
                     </button>
@@ -1686,24 +1849,24 @@ export default function Notifications() {
         {/* TAB 2: SCANNER REJECTIONS */}
         {activeTab === 'rejections' && (
           <div className="space-y-5">
-            <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-5 flex flex-col lg:flex-row lg:items-center gap-3">
-              <div className="relative flex-1 min-w-[220px]">
+            <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center gap-3">
+              <div className="relative flex-1 min-w-0">
                 <PiMagnifyingGlass className="h-4 w-4 text-[#71717A] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={rejectSearch}
                   onChange={(e) => setRejectSearch(e.target.value)}
                   placeholder="Search exact rejection reason (spread, R:R, cooldown, EMA)..."
-                  className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-[13px] text-[#FAFAFA] placeholder:text-[#71717A]"
+                  className="w-full min-h-[44px] sm:min-h-0 pl-9 pr-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-[13px] text-[#FAFAFA] placeholder:text-[#71717A]"
                 />
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5">
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5">
                 <select
                   value={rejectSymbolFilter}
                   onChange={(e) => setRejectSymbolFilter(e.target.value)}
                   aria-label="Filter rejections by symbol"
-                  className="px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
+                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
                 >
                   <option value="ALL">All symbols</option>
                   {rejectionSymbols.map((sym) => (
@@ -1714,24 +1877,10 @@ export default function Notifications() {
                 </select>
 
                 <select
-                  value={rejectStrategyFilter}
-                  onChange={(e) => setRejectStrategyFilter(e.target.value)}
-                  aria-label="Filter rejections by strategy"
-                  className="px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
-                >
-                  <option value="ALL">All strategies</option>
-                  {rejectionStrategies.map((st) => (
-                    <option key={st} value={st}>
-                      {strategyDisplayName(st)}
-                    </option>
-                  ))}
-                </select>
-
-                <select
                   value={rejectTfFilter}
                   onChange={(e) => setRejectTfFilter(e.target.value)}
                   aria-label="Filter rejections by timeframe"
-                  className="px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
+                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
                 >
                   <option value="ALL">All timeframes</option>
                   {['1m', '5m', '15m', '1H', '4H', '1D'].map((tf) => (
@@ -1741,11 +1890,25 @@ export default function Notifications() {
                   ))}
                 </select>
 
+                <select
+                  value={rejectStrategyFilter}
+                  onChange={(e) => setRejectStrategyFilter(e.target.value)}
+                  aria-label="Filter rejections by strategy"
+                  className="col-span-2 sm:col-span-1 w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
+                >
+                  <option value="ALL">All strategies</option>
+                  {rejectionStrategies.map((st) => (
+                    <option key={st} value={st}>
+                      {strategyDisplayName(st)}
+                    </option>
+                  ))}
+                </select>
+
                 <button
                   type="button"
                   onClick={fetchRejections}
                   disabled={rejectionsLoading}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+                  className="col-span-2 sm:col-span-1 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
                 >
                   <PiArrowsClockwise className={`h-4 w-4 ${rejectionsLoading ? 'animate-spin' : ''}`} />
                   <span>Reload</span>
@@ -1762,7 +1925,7 @@ export default function Notifications() {
 
             <div className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden">
               {filteredRejections.length === 0 ? (
-                <div className="p-12 text-center space-y-3">
+                <div className="p-8 sm:p-12 text-center space-y-3">
                   <img
                     src="/brand/empty-signals.png"
                     alt="No buffered scanner rejections"
@@ -1779,43 +1942,89 @@ export default function Notifications() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/[0.06] text-[12px] font-medium text-[#71717A]">
-                        <th className="py-3.5 px-4">Timestamp</th>
-                        <th className="py-3.5 px-4">Symbol</th>
-                        <th className="py-3.5 px-4">Strategy</th>
-                        <th className="py-3.5 px-4">Rejection Reason</th>
-                        <th className="py-3.5 px-4 text-right">Conf</th>
-                        <th className="py-3.5 px-4 text-right">Spread</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
-                      {filteredRejections.map((r) => (
-                        <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3.5 px-4 whitespace-nowrap font-mono tabular-nums text-[#71717A]">
+                <>
+                  {/* Mobile Stacked Rejection Cards (< 768px) */}
+                  <div className="md:hidden divide-y divide-white/[0.06]">
+                    {filteredRejections.map((r) => (
+                      <div key={r.id} className="p-4 space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <span className="text-[14.5px] font-semibold text-[#FAFAFA]">
+                              {r.symbol}
+                            </span>
+                            <span className="text-[12px] font-mono text-[#71717A]">
+                              {r.timeframe}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-lg bg-[#161619] text-[11.5px] text-[#A1A1AA] truncate max-w-[160px]">
+                              {strategyDisplayName(r.strategy)}
+                            </span>
+                          </div>
+                          <span className="text-[11.5px] font-mono tabular-nums text-[#71717A] shrink-0">
                             {r.timestampMs ? formatDateTime(r.timestampMs) : 'Latest cycle'}
-                          </td>
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className="font-medium text-[#FAFAFA]">{r.symbol}</span>{' '}
-                            <span className="text-[12px] text-[#71717A]">{r.timeframe}</span>
-                          </td>
-                          <td className="py-3.5 px-4 whitespace-nowrap text-[#A1A1AA]">
-                            {strategyDisplayName(r.strategy)}
-                          </td>
-                          <td className="py-3.5 px-4 text-[#FAFAFA]">{r.reason}</td>
-                          <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
-                            {r.confidence ?? '—'}
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
-                            {r.spread ?? '—'}
-                          </td>
+                          </span>
+                        </div>
+
+                        <p className="text-[13px] text-[#FAFAFA] leading-relaxed break-words">
+                          {r.reason}
+                        </p>
+
+                        {(r.confidence || r.spread) && (
+                          <div className="flex flex-wrap items-center gap-2 text-[12px] font-mono tabular-nums text-[#A1A1AA]">
+                            {r.confidence && (
+                              <span className="px-2.5 py-0.5 rounded-lg bg-[#161619]">
+                                Conf: {r.confidence}
+                              </span>
+                            )}
+                            {r.spread && (
+                              <span className="px-2.5 py-0.5 rounded-lg bg-[#161619]">
+                                Spread: {r.spread}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table (>= 768px) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/[0.06] text-[12px] font-medium text-[#71717A]">
+                          <th className="py-3.5 px-4">Timestamp</th>
+                          <th className="py-3.5 px-4">Symbol</th>
+                          <th className="py-3.5 px-4">Strategy</th>
+                          <th className="py-3.5 px-4">Rejection Reason</th>
+                          <th className="py-3.5 px-4 text-right">Conf</th>
+                          <th className="py-3.5 px-4 text-right">Spread</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
+                        {filteredRejections.map((r) => (
+                          <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3.5 px-4 whitespace-nowrap font-mono tabular-nums text-[#71717A]">
+                              {r.timestampMs ? formatDateTime(r.timestampMs) : 'Latest cycle'}
+                            </td>
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <span className="font-medium text-[#FAFAFA]">{r.symbol}</span>{' '}
+                              <span className="text-[12px] text-[#71717A]">{r.timeframe}</span>
+                            </td>
+                            <td className="py-3.5 px-4 whitespace-nowrap text-[#A1A1AA]">
+                              {strategyDisplayName(r.strategy)}
+                            </td>
+                            <td className="py-3.5 px-4 text-[#FAFAFA]">{r.reason}</td>
+                            <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
+                              {r.confidence ?? '—'}
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
+                              {r.spread ?? '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -1823,19 +2032,19 @@ export default function Notifications() {
 
         {/* TAB 3: ENGINE HEALTH */}
         {activeTab === 'telemetry' && (
-          <div className="space-y-6">
+          <div className="space-y-5 sm:space-y-6">
             {/* Row 1: Scanner Heartbeat + Infrastructure Matrix */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 space-y-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <PiGauge className="h-5 w-5 text-[#FAFAFA]" />
-                    <h2 className="text-[15px] font-medium text-[#FAFAFA]">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
+              <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-6 space-y-5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <PiGauge className="h-5 w-5 text-[#FAFAFA] shrink-0" />
+                    <h2 className="text-[15px] font-medium text-[#FAFAFA] truncate">
                       Scanner Heartbeat
                     </h2>
                   </div>
                   <span
-                    className={`px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+                    className={`px-2.5 py-0.5 rounded-full text-[12px] font-medium shrink-0 ${
                       effectiveRunning
                         ? 'bg-[#34D399]/10 text-[#34D399]'
                         : 'bg-[#18181B] text-[#A1A1AA]'
@@ -1847,13 +2056,13 @@ export default function Notifications() {
 
                 {/* Progress Bar */}
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-[13px] text-[#A1A1AA]">
-                    <span>
+                  <div className="flex items-center justify-between gap-2 text-[12.5px] sm:text-[13px] text-[#A1A1AA]">
+                    <span className="truncate">
                       {effectiveCurrent
                         ? `Active target: ${effectiveCurrent}`
                         : 'Waiting for next sweep'}
                     </span>
-                    <span className="font-mono tabular-nums">
+                    <span className="font-mono tabular-nums shrink-0">
                       {effectiveDone} / {effectiveTotal} ({scanProgressPct}%)
                     </span>
                   </div>
@@ -1865,19 +2074,19 @@ export default function Notifications() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-[#161619] p-3.5 sm:p-4 space-y-1">
                     <div className="text-[12px] text-[#71717A]">Last Sweep</div>
-                    <div className="text-[14px] font-mono tabular-nums text-[#FAFAFA]">
+                    <div className="text-[13.5px] sm:text-[14px] font-mono tabular-nums text-[#FAFAFA]">
                       {effectiveLastAt
                         ? formatDateTime(normalizeTimestampMs(effectiveLastAt))
                         : '—'}
                     </div>
                   </div>
-                  <div className="rounded-xl bg-[#161619] p-4 space-y-1">
+                  <div className="rounded-xl bg-[#161619] p-3.5 sm:p-4 space-y-1">
                     <div className="text-[12px] text-[#71717A]">Global Scanner Error</div>
                     <div
-                      className={`text-[14px] truncate ${
+                      className={`text-[13.5px] sm:text-[14px] truncate ${
                         globalScanStatus?.lastError ? 'text-[#F87171]' : 'text-[#A1A1AA]'
                       }`}
                     >
@@ -1886,30 +2095,30 @@ export default function Notifications() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2.5">
                   <button
                     type="button"
                     onClick={handleTriggerManualScan}
                     disabled={manualScanBusy}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
                   >
-                    <PiPlay className="h-4 w-4" />
+                    <PiPlay className="h-4 w-4 shrink-0" />
                     <span>{manualScanBusy ? 'Scanning...' : 'Trigger Backend Scan'}</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleRunClientProbe}
                     disabled={probeBusy}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] disabled:opacity-50 transition-colors"
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] disabled:opacity-50 transition-colors"
                   >
-                    <PiLightning className="h-4 w-4 text-[#A1A1AA]" />
+                    <PiLightning className="h-4 w-4 text-[#A1A1AA] shrink-0" />
                     <span>{probeBusy ? 'Probing Charts...' : 'Run Diagnostic Probe'}</span>
                   </button>
                 </div>
 
                 {probeResult && (
-                  <div className="rounded-xl bg-[#161619] p-4 space-y-2.5">
-                    <div className="flex items-center justify-between text-[12px] text-[#A1A1AA]">
+                  <div className="rounded-xl bg-[#161619] p-3.5 sm:p-4 space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[12px] text-[#A1A1AA]">
                       <span className="font-mono tabular-nums">
                         Probe complete ({formatDateTime(probeResult.ranAt)})
                       </span>
@@ -1921,7 +2130,7 @@ export default function Notifications() {
                       {probeResult.items.map((item) => (
                         <div
                           key={`${item.symbol}-${item.timeframe}`}
-                          className="py-2 flex items-center justify-between text-[13px]"
+                          className="py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[13px]"
                         >
                           <span className="font-medium text-[#FAFAFA]">
                             {item.symbol} {item.timeframe}
@@ -1929,7 +2138,7 @@ export default function Notifications() {
                           {item.error ? (
                             <span className="text-[#F87171]">{item.error}</span>
                           ) : (
-                            <span className="font-mono tabular-nums text-[#A1A1AA]">
+                            <span className="font-mono tabular-nums text-[12px] sm:text-[13px] text-[#A1A1AA]">
                               {item.candles} bars · {item.signals} signals · {item.latencyMs}ms
                             </span>
                           )}
@@ -1941,17 +2150,17 @@ export default function Notifications() {
               </section>
 
               {/* Infrastructure Matrix */}
-              <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 space-y-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <PiDatabase className="h-5 w-5 text-[#FAFAFA]" />
-                    <h2 className="text-[15px] font-medium text-[#FAFAFA]">
+              <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-6 space-y-5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <PiDatabase className="h-5 w-5 text-[#FAFAFA] shrink-0" />
+                    <h2 className="text-[15px] font-medium text-[#FAFAFA] truncate">
                       Backend, Redis, MetaApi &amp; TwelveData
                     </h2>
                   </div>
                   <Link
                     to="/admin"
-                    className="inline-flex items-center gap-1 text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA]"
+                    className="inline-flex items-center gap-1 text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] shrink-0"
                   >
                     <span>Admin</span>
                     <PiArrowUpRight className="h-4 w-4" />
@@ -1959,17 +2168,17 @@ export default function Notifications() {
                 </div>
 
                 <div className="divide-y divide-white/[0.06]">
-                  <div className="flex items-center justify-between py-3.5 text-[14px]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3.5 text-[14px]">
                     <div className="flex items-center gap-2.5">
                       {isHealthOk ? (
-                        <PiWifiHigh className="h-4 w-4 text-[#34D399]" />
+                        <PiWifiHigh className="h-4 w-4 text-[#34D399] shrink-0" />
                       ) : (
-                        <PiWifiSlash className="h-4 w-4 text-[#F87171]" />
+                        <PiWifiSlash className="h-4 w-4 text-[#F87171] shrink-0" />
                       )}
                       <span className="text-[#FAFAFA]">Express Engine (/health)</span>
                     </div>
                     <span
-                      className={`text-[13px] font-medium ${
+                      className={`text-[13px] font-medium pl-6 sm:pl-0 ${
                         isHealthOk ? 'text-[#34D399]' : 'text-[#A1A1AA]'
                       }`}
                     >
@@ -1977,13 +2186,13 @@ export default function Notifications() {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between py-3.5 text-[14px]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3.5 text-[14px]">
                     <div className="flex items-center gap-2.5">
-                      <PiDatabase className="h-4 w-4 text-[#A1A1AA]" />
+                      <PiDatabase className="h-4 w-4 text-[#A1A1AA] shrink-0" />
                       <span className="text-[#FAFAFA]">Redis Signal Cache</span>
                     </div>
                     <span
-                      className={`text-[13px] font-medium ${
+                      className={`text-[13px] font-medium pl-6 sm:pl-0 ${
                         isRedisOk ? 'text-[#34D399]' : 'text-[#F87171]'
                       }`}
                     >
@@ -1991,13 +2200,13 @@ export default function Notifications() {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between py-3.5 text-[14px]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3.5 text-[14px]">
                     <div className="flex items-center gap-2.5">
-                      <PiHardDrives className="h-4 w-4 text-[#A1A1AA]" />
+                      <PiHardDrives className="h-4 w-4 text-[#A1A1AA] shrink-0" />
                       <span className="text-[#FAFAFA]">Exness MT5 / MetaApi</span>
                     </div>
                     <span
-                      className={`text-[13px] font-mono tabular-nums ${
+                      className={`text-[13px] font-mono tabular-nums pl-6 sm:pl-0 ${
                         mt5Account?.connected ? 'text-[#34D399]' : 'text-[#A1A1AA]'
                       }`}
                     >
@@ -2011,12 +2220,12 @@ export default function Notifications() {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between py-3.5 text-[14px]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3.5 text-[14px]">
                     <div className="flex items-center gap-2.5">
-                      <PiLightning className="h-4 w-4 text-[#A1A1AA]" />
+                      <PiLightning className="h-4 w-4 text-[#A1A1AA] shrink-0" />
                       <span className="text-[#FAFAFA]">TwelveData Key Pool</span>
                     </div>
-                    <span className="text-[13px] font-mono tabular-nums text-[#FAFAFA]">
+                    <span className="text-[13px] font-mono tabular-nums text-[#FAFAFA] pl-6 sm:pl-0">
                       {healthData
                         ? `${tdAvailable} / ${tdKeys.length || tdAvailable} available`
                         : '—'}
@@ -2046,8 +2255,8 @@ export default function Notifications() {
             </div>
 
             {/* Row 2: Adaptive Strategy Optimizer + Core Constants */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <section className="lg:col-span-2 rounded-2xl bg-[#111113] border border-white/[0.07] p-6 space-y-5">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
+              <section className="lg:col-span-2 rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-6 space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="space-y-1">
                     <h2 className="text-[15px] font-medium text-[#FAFAFA]">
@@ -2057,7 +2266,7 @@ export default function Notifications() {
                       Loss-feedback engine dynamically tuning score, confidence, SL buffer, and cooldowns.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
                     <button
                       type="button"
                       disabled={optimizerLoading || !optimizerStatus}
@@ -2065,7 +2274,7 @@ export default function Notifications() {
                         optimizerStatus &&
                         toggleFeedbackEngine(!optimizerStatus.isFeedbackEngineEnabled)
                       }
-                      className={`px-3.5 py-2 rounded-xl text-[13px] font-medium transition-colors ${
+                      className={`min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl text-[13px] font-medium transition-colors ${
                         optimizerStatus?.isFeedbackEngineEnabled
                           ? 'bg-[#34D399]/10 text-[#34D399]'
                           : 'bg-[#18181B] text-[#A1A1AA]'
@@ -2077,9 +2286,9 @@ export default function Notifications() {
                       type="button"
                       disabled={optimizerLoading || !optimizerStatus}
                       onClick={resetToFactory}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                      className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
                     >
-                      <PiArrowCounterClockwise className="h-4 w-4" />
+                      <PiArrowCounterClockwise className="h-4 w-4 shrink-0" />
                       <span>Reset Defaults</span>
                     </button>
                   </div>
@@ -2127,9 +2336,9 @@ export default function Notifications() {
                     </div>
 
                     <div className="space-y-2.5">
-                      <div className="flex items-center justify-between text-[13px] text-[#71717A]">
+                      <div className="flex items-center justify-between gap-2 text-[13px] text-[#71717A]">
                         <span>Recent Optimizer Adjustments</span>
-                        <span className="font-mono tabular-nums">
+                        <span className="font-mono tabular-nums shrink-0">
                           {optimizerStatus.totalLossesAnalyzed} losses analyzed
                         </span>
                       </div>
@@ -2138,7 +2347,7 @@ export default function Notifications() {
                           No automated parameter shifts recorded yet.
                         </div>
                       ) : (
-                        <div className="divide-y divide-white/[0.05] rounded-xl bg-[#161619] max-h-48 overflow-y-auto">
+                        <div className="divide-y divide-white/[0.05] rounded-xl bg-[#161619] max-h-56 overflow-y-auto">
                           {optimizerStatus.history.slice(0, 8).map((item, idx) => {
                             const summary =
                               item.changes && item.changes.length > 0
@@ -2149,9 +2358,9 @@ export default function Notifications() {
                             return (
                               <div
                                 key={`${item.timestamp}-${idx}`}
-                                className="px-4 py-2.5 text-[13px] flex items-center justify-between gap-3"
+                                className="px-4 py-2.5 text-[13px] flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3"
                               >
-                                <div className="min-w-0 truncate">
+                                <div className="min-w-0 sm:truncate break-words">
                                   <span className="font-medium text-[#FAFAFA]">
                                     {item.symbol || strategyDisplayName(item.strategyId)}
                                   </span>{' '}
@@ -2177,15 +2386,15 @@ export default function Notifications() {
               </section>
 
               {/* Engine Constants */}
-              <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <PiSlidersHorizontal className="h-5 w-5 text-[#FAFAFA]" />
-                    <h2 className="text-[15px] font-medium text-[#FAFAFA]">Engine Constants</h2>
+              <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-6 space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <PiSlidersHorizontal className="h-5 w-5 text-[#FAFAFA] shrink-0" />
+                    <h2 className="text-[15px] font-medium text-[#FAFAFA] truncate">Engine Constants</h2>
                   </div>
                   <Link
                     to="/admin/signals"
-                    className="inline-flex items-center gap-1 text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA]"
+                    className="inline-flex items-center gap-1 text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] shrink-0"
                   >
                     <span>Archive</span>
                     <PiArrowUpRight className="h-4 w-4" />
@@ -2193,47 +2402,47 @@ export default function Notifications() {
                 </div>
 
                 <div className="divide-y divide-white/[0.06] text-[13px]">
-                  <div className="flex justify-between py-3">
+                  <div className="flex justify-between gap-3 py-3">
                     <span className="text-[#71717A]">Min Score (P/S/A)</span>
-                    <span className="font-mono tabular-nums text-[#FAFAFA]">
+                    <span className="font-mono tabular-nums text-[#FAFAFA] text-right">
                       {ALG_CONFIG.minScore.prime}/{ALG_CONFIG.minScore.standard}/
                       {ALG_CONFIG.minScore.aggressive}
                     </span>
                   </div>
-                  <div className="flex justify-between py-3">
+                  <div className="flex justify-between gap-3 py-3">
                     <span className="text-[#71717A]">Min Conf (P/S/A)</span>
-                    <span className="font-mono tabular-nums text-[#FAFAFA]">
+                    <span className="font-mono tabular-nums text-[#FAFAFA] text-right">
                       {ALG_CONFIG.minConfidence.prime}%/{ALG_CONFIG.minConfidence.standard}%/
                       {ALG_CONFIG.minConfidence.aggressive}%
                     </span>
                   </div>
-                  <div className="flex justify-between py-3">
+                  <div className="flex justify-between gap-3 py-3">
                     <span className="text-[#71717A]">SL Buffer (FX)</span>
-                    <span className="font-mono tabular-nums text-[#FAFAFA]">
+                    <span className="font-mono tabular-nums text-[#FAFAFA] text-right">
                       {ALG_CONFIG.slBuffer.primeForex}
                     </span>
                   </div>
-                  <div className="flex justify-between py-3">
+                  <div className="flex justify-between gap-3 py-3">
                     <span className="text-[#71717A]">Slippage (FX/Crypto)</span>
-                    <span className="font-mono tabular-nums text-[#FAFAFA]">
+                    <span className="font-mono tabular-nums text-[#FAFAFA] text-right">
                       {ALG_CONFIG.defaultSlippage.forex} / {ALG_CONFIG.defaultSlippage.crypto}
                     </span>
                   </div>
-                  <div className="flex justify-between py-3">
+                  <div className="flex justify-between gap-3 py-3">
                     <span className="text-[#71717A]">Fallback R:R</span>
-                    <span className="font-mono tabular-nums text-[#FAFAFA]">
+                    <span className="font-mono tabular-nums text-[#FAFAFA] text-right">
                       {ALG_CONFIG.rrFallback.tp1} / {ALG_CONFIG.rrFallback.tp2}
                     </span>
                   </div>
-                  <div className="flex justify-between py-3">
+                  <div className="flex justify-between gap-3 py-3">
                     <span className="text-[#71717A]">OB / Swing Lookback</span>
-                    <span className="font-mono tabular-nums text-[#FAFAFA]">
+                    <span className="font-mono tabular-nums text-[#FAFAFA] text-right">
                       {ALG_CONFIG.obLookback} / {ALG_CONFIG.swingLookback}
                     </span>
                   </div>
-                  <div className="flex justify-between py-3">
+                  <div className="flex justify-between gap-3 py-3">
                     <span className="text-[#71717A]">I2E Min Distance</span>
-                    <span className="font-mono tabular-nums text-[#FAFAFA]">0.8R</span>
+                    <span className="font-mono tabular-nums text-[#FAFAFA] text-right">0.8R</span>
                   </div>
                 </div>
               </section>

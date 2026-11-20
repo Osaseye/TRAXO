@@ -129,6 +129,9 @@ function isCrypto(assetType: WickRejectionAssetType) {
  */
 function slBuffer(assetType: WickRejectionAssetType, tier: WickRejectionTier, atr14: number) {
   const base = tier === 'prime' ? 0.75 : 1.0
+  if (assetType === 'COMMODITY') {
+    return atr14 * Math.max(1.35, base)
+  }
   const multiplier = assetType === 'CRYPTO' ? base * 1.5 : base
   return atr14 * multiplier
 }
@@ -266,7 +269,7 @@ function stopLoss(assetType: WickRejectionAssetType, candle: WickRejectionCandle
 }
 
 function sessionBonus(session?: WickRejectionSession) {
-  if (session === 'london_ny_overlap') return 1
+  if (session === 'london_ny_overlap' || session === 'london_open') return 1
   if (session === 'opening_bell') return -3
   if (session === 'off_hours') return -1
   return 0

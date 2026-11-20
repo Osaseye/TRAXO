@@ -1,16 +1,15 @@
-export type StrategyId =
-  | 'wick-rejection'
-  | 'breakout'
-  | 'order-block'
-  | 'supply-demand'
-  | 'trend-following'
+import type { LegacyStrategyCatalogId, TraxoCatalogStrategyId } from '@/lib/traxoStrategies'
+
+export type StrategyId = LegacyStrategyCatalogId | TraxoCatalogStrategyId
 
 /**
- * Normalizes any legacy/non-canonical strategy ids to the canonical ids used across the app.
+ * Normalizes any legacy/non-canonical strategy ids to the canonical kebab-case ids used across the app.
  */
 export function normalizeStrategyId(id: string): string {
-  if (id === 'supply_demand') return 'supply-demand'
-  return id
+  return String(id || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
 }
 
 export function isSupplyDemandStrategyId(id: string): boolean {

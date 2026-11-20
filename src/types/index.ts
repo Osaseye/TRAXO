@@ -18,7 +18,32 @@ export interface Signal {
 }
 
 // Strategy types
-export type StrategyId = 'wick_rejection' | 'breakout' | 'trend_following' | 'supply_demand' | 'scalping' | 'order_block'
+export type LegacyStrategyId =
+  | 'wick_rejection'
+  | 'breakout'
+  | 'trend_following'
+  | 'supply_demand'
+  | 'scalping'
+  | 'order_block'
+
+export type TraxoStrategyId =
+  | 'traxo_london_apex'
+  | 'traxo_tokyo_yield'
+  | 'traxo_sovereign_fix'
+  | 'traxo_barrier_grid'
+  | 'traxo_macro_vector'
+  | 'traxo_aurum_sweep'
+  | 'traxo_bullion_strike'
+  | 'traxo_ny_bullet'
+  | 'traxo_aurum_fix'
+  | 'traxo_kinetic_nr7'
+  | 'traxo_globex_sweep'
+  | 'traxo_velocity_orb'
+  | 'traxo_initial_balance'
+  | 'traxo_mean_equilibrium'
+  | 'traxo_power_hour_moc'
+
+export type StrategyId = LegacyStrategyId | TraxoStrategyId
 
 export interface Strategy {
   id: StrategyId

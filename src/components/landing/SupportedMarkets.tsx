@@ -87,15 +87,15 @@ export function SupportedMarkets() {
   return (
     <section
       aria-label="Live Market Liquidity Feed"
-      className="relative border-y border-white/[0.06] bg-[#09090B] py-3.5 overflow-hidden select-none"
+      className="relative border-y border-white/[0.06] bg-[#09090B] py-3 sm:py-3.5 overflow-hidden select-none"
     >
       {/* Edge gradient fade masks */}
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-20 sm:w-32 z-10 bg-gradient-to-r from-[#09090B] to-transparent" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-20 sm:w-32 z-10 bg-gradient-to-l from-[#09090B] to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-10 sm:w-28 z-10 bg-gradient-to-r from-[#09090B] to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-10 sm:w-28 z-10 bg-gradient-to-l from-[#09090B] to-transparent" />
 
       {/* Infinite ticker stream */}
       <div className="flex w-max animate-marquee hover:[animation-play-state:paused]">
-        <div className="flex items-center gap-8 sm:gap-12 pr-8 sm:pr-12">
+        <div className="flex items-center gap-6 sm:gap-12 pr-6 sm:pr-12">
           {MARKETS.concat(MARKETS).map((item, idx) => (
             <div
               key={`${item.symbol}-${idx}`}

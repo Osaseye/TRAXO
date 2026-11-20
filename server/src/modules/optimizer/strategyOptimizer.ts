@@ -6,7 +6,50 @@ export type StrategyId =
   | 'breakout'
   | 'order_block'
   | 'supply_demand'
-  | 'trend_following';
+  | 'trend_following'
+  | 'traxo_london_apex'
+  | 'traxo_tokyo_yield'
+  | 'traxo_sovereign_fix'
+  | 'traxo_barrier_grid'
+  | 'traxo_macro_vector'
+  | 'traxo_aurum_sweep'
+  | 'traxo_bullion_strike'
+  | 'traxo_ny_bullet'
+  | 'traxo_aurum_fix'
+  | 'traxo_kinetic_nr7'
+  | 'traxo_globex_sweep'
+  | 'traxo_velocity_orb'
+  | 'traxo_initial_balance'
+  | 'traxo_mean_equilibrium'
+  | 'traxo_power_hour_moc';
+
+export const TRAXO_STRATEGY_IDS: readonly StrategyId[] = [
+  'traxo_london_apex',
+  'traxo_tokyo_yield',
+  'traxo_sovereign_fix',
+  'traxo_barrier_grid',
+  'traxo_macro_vector',
+  'traxo_aurum_sweep',
+  'traxo_bullion_strike',
+  'traxo_ny_bullet',
+  'traxo_aurum_fix',
+  'traxo_kinetic_nr7',
+  'traxo_globex_sweep',
+  'traxo_velocity_orb',
+  'traxo_initial_balance',
+  'traxo_mean_equilibrium',
+  'traxo_power_hour_moc',
+];
+
+const TRAXO_DEFAULT_PARAMS = (): Record<string, number> => ({
+  atrSlPadding: 1.0,
+  minConfidence: 50,
+});
+
+const TRAXO_DEFAULT_BOUNDS = (): Record<string, ParameterBounds> => ({
+  atrSlPadding: { min: 0.85, max: 1.8, decimals: 2 },
+  minConfidence: { min: 45, max: 80, decimals: 0 },
+});
 
 export interface ParameterBounds {
   min: number;
@@ -53,6 +96,21 @@ export const FACTORY_DEFAULTS: Record<StrategyId, Record<string, number>> = {
     pullbackDepth: 0.382,
     minConfidence: 50,
   },
+  traxo_london_apex: TRAXO_DEFAULT_PARAMS(),
+  traxo_tokyo_yield: TRAXO_DEFAULT_PARAMS(),
+  traxo_sovereign_fix: TRAXO_DEFAULT_PARAMS(),
+  traxo_barrier_grid: TRAXO_DEFAULT_PARAMS(),
+  traxo_macro_vector: TRAXO_DEFAULT_PARAMS(),
+  traxo_aurum_sweep: TRAXO_DEFAULT_PARAMS(),
+  traxo_bullion_strike: TRAXO_DEFAULT_PARAMS(),
+  traxo_ny_bullet: TRAXO_DEFAULT_PARAMS(),
+  traxo_aurum_fix: TRAXO_DEFAULT_PARAMS(),
+  traxo_kinetic_nr7: TRAXO_DEFAULT_PARAMS(),
+  traxo_globex_sweep: TRAXO_DEFAULT_PARAMS(),
+  traxo_velocity_orb: TRAXO_DEFAULT_PARAMS(),
+  traxo_initial_balance: TRAXO_DEFAULT_PARAMS(),
+  traxo_mean_equilibrium: TRAXO_DEFAULT_PARAMS(),
+  traxo_power_hour_moc: TRAXO_DEFAULT_PARAMS(),
 };
 
 export const PARAMETER_BOUNDS: Record<StrategyId, Record<string, ParameterBounds>> = {
@@ -78,6 +136,21 @@ export const PARAMETER_BOUNDS: Record<StrategyId, Record<string, ParameterBounds
     pullbackDepth: { min: 0.236, max: 0.618, decimals: 3 },
     minConfidence: { min: 45, max: 75, decimals: 0 },
   },
+  traxo_london_apex: TRAXO_DEFAULT_BOUNDS(),
+  traxo_tokyo_yield: TRAXO_DEFAULT_BOUNDS(),
+  traxo_sovereign_fix: TRAXO_DEFAULT_BOUNDS(),
+  traxo_barrier_grid: TRAXO_DEFAULT_BOUNDS(),
+  traxo_macro_vector: TRAXO_DEFAULT_BOUNDS(),
+  traxo_aurum_sweep: TRAXO_DEFAULT_BOUNDS(),
+  traxo_bullion_strike: TRAXO_DEFAULT_BOUNDS(),
+  traxo_ny_bullet: TRAXO_DEFAULT_BOUNDS(),
+  traxo_aurum_fix: TRAXO_DEFAULT_BOUNDS(),
+  traxo_kinetic_nr7: TRAXO_DEFAULT_BOUNDS(),
+  traxo_globex_sweep: TRAXO_DEFAULT_BOUNDS(),
+  traxo_velocity_orb: TRAXO_DEFAULT_BOUNDS(),
+  traxo_initial_balance: TRAXO_DEFAULT_BOUNDS(),
+  traxo_mean_equilibrium: TRAXO_DEFAULT_BOUNDS(),
+  traxo_power_hour_moc: TRAXO_DEFAULT_BOUNDS(),
 };
 
 let isFeedbackEngineEnabled = false;
@@ -95,12 +168,15 @@ function clampBounded(strategyId: StrategyId, param: string, value: number): num
 
 export function normalizeStrategyId(id?: string): StrategyId {
   if (!id) return 'wick_rejection';
-  const lower = String(id).toLowerCase().trim();
-  if (lower.includes('wick')) return 'wick_rejection';
-  if (lower.includes('breakout')) return 'breakout';
-  if (lower.includes('order')) return 'order_block';
-  if (lower.includes('supply') || lower.includes('demand')) return 'supply_demand';
-  if (lower.includes('trend')) return 'trend_following';
+  const normalized = String(id).toLowerCase().trim().replace(/[\s-]+/g, '_');
+  if (Object.prototype.hasOwnProperty.call(FACTORY_DEFAULTS, normalized)) {
+    return normalized as StrategyId;
+  }
+  if (normalized.includes('wick')) return 'wick_rejection';
+  if (normalized.includes('breakout')) return 'breakout';
+  if (normalized.includes('order')) return 'order_block';
+  if (normalized.includes('supply') || normalized.includes('demand')) return 'supply_demand';
+  if (normalized.includes('trend')) return 'trend_following';
   return 'wick_rejection';
 }
 
@@ -356,6 +432,23 @@ export async function processResolvedLoss(signal: any): Promise<Record<string, a
       'Raised minimum confidence threshold after trend-following loss',
       changes
     );
+  } else if (stratId.startsWith('traxo_')) {
+    applyParamStep(
+      stratId,
+      currentParams,
+      'minConfidence',
+      2,
+      `Increased minimum confidence threshold for ${stratId} after loss`,
+      changes
+    );
+    applyParamStep(
+      stratId,
+      currentParams,
+      'atrSlPadding',
+      0.1,
+      `Expanded Stop-Loss ATR padding for ${stratId} (with R:R-preserving TP scaling)`,
+      changes
+    );
   }
 
   learnedParameters[stratId] = currentParams;
@@ -484,6 +577,23 @@ export async function processResolvedWin(signal: any): Promise<Record<string, an
       'minConfidence',
       -1,
       'Relaxed minimum confidence threshold slightly after confirmed trend win',
+      changes
+    );
+  } else if (stratId.startsWith('traxo_')) {
+    applyParamStep(
+      stratId,
+      currentParams,
+      'minConfidence',
+      -1,
+      `Relaxed minimum confidence threshold for ${stratId} after confirmed TP win`,
+      changes
+    );
+    applyParamStep(
+      stratId,
+      currentParams,
+      'atrSlPadding',
+      -0.05,
+      `Normalized Stop-Loss ATR padding for ${stratId} after clean TP win`,
       changes
     );
   }

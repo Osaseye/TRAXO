@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 interface PreviewTab {
   id: 'terminal' | 'signals' | 'journal'
   label: string
+  shortLabel: string
   caption: string
   image: string
   alt: string
@@ -15,6 +16,7 @@ const PREVIEW_TABS: PreviewTab[] = [
   {
     id: 'terminal',
     label: 'Execution Desk',
+    shortLabel: 'Desk',
     caption: 'Live multi-timeframe order flow, interactive order builder, and sub-40ms Exness MT5 bridge.',
     image: '/brand/landing-terminal.png',
     alt: 'TRAXO Execution Desk Terminal',
@@ -22,6 +24,7 @@ const PREVIEW_TABS: PreviewTab[] = [
   {
     id: 'signals',
     label: 'Signal Radar',
+    shortLabel: 'Radar',
     caption: 'High-density institutional signal feed showing active setups, confidence metrics, and R:R ratios.',
     image: '/brand/signal-radar-feed.png',
     alt: 'TRAXO Institutional Signal Stream',
@@ -29,6 +32,7 @@ const PREVIEW_TABS: PreviewTab[] = [
   {
     id: 'journal',
     label: 'Execution Ledger',
+    shortLabel: 'Ledger',
     caption: 'Automated quantitative trade journal with R-multiple equity curves, win rate meters, and session analytics.',
     image: '/brand/execution-ledger-journal.png',
     alt: 'TRAXO Automated Trading Journal',
@@ -46,7 +50,7 @@ export function ProductPreview() {
   const current = PREVIEW_TABS.find((t) => t.id === activeTab) ?? PREVIEW_TABS[0]
 
   return (
-    <section id="terminal" className="relative py-24 sm:py-32 px-4 sm:px-6 bg-[#09090B] overflow-hidden select-none font-sans">
+    <section id="terminal" className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 bg-[#09090B] overflow-hidden select-none font-sans">
       {/* ── Background Coordinate Grid ──────────────────────────────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
@@ -59,26 +63,26 @@ export function ProductPreview() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-gradient-to-tr from-[#34D399]/10 to-transparent blur-3xl rounded-full" />
       </div>
 
-      <div className="relative max-w-7xl mx-auto space-y-12">
+      <div className="relative max-w-7xl mx-auto space-y-8 sm:space-y-12">
         {/* Header directly on canvas */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-4 border-b border-white/[0.06]">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-5 sm:gap-6 pb-4 border-b border-white/[0.06]">
           <div className="max-w-xl space-y-2">
             <p className="text-[12px] font-semibold tracking-wider text-[#A1A1AA] uppercase">
               Terminal Architecture
             </p>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#FAFAFA]">
+            <h2 className="text-[28px] sm:text-4xl font-bold tracking-tight text-[#FAFAFA] leading-[1.12]">
               Obsidian surfaces built for long focus.
             </h2>
-            <p className="text-[14px] text-[#71717A] font-normal">
+            <p className="text-[14px] text-[#71717A] font-normal leading-relaxed">
               {current.caption}
             </p>
           </div>
 
-          {/* Tab Selector on open canvas */}
+          {/* Tab Selector: full-width 3-up pill segmented control on mobile, inline pill on md+ */}
           <div
             role="tablist"
             aria-label="Workspace preview tabs"
-            className="inline-flex items-center p-1 rounded-full bg-white/[0.03] border border-white/[0.08] self-start md:self-auto"
+            className="w-full md:w-auto grid grid-cols-3 md:inline-flex items-center p-1 rounded-full bg-white/[0.03] border border-white/[0.08] shrink-0"
           >
             {PREVIEW_TABS.map((tab) => {
               const Icon = TAB_ICONS[tab.id]
@@ -91,7 +95,7 @@ export function ProductPreview() {
                   aria-selected={isSelected}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    'relative inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-medium transition-colors cursor-pointer',
+                    'relative inline-flex items-center justify-center gap-1.5 sm:gap-2 min-h-[40px] sm:min-h-0 px-2.5 sm:px-4 py-2 rounded-full text-[12px] sm:text-[13px] font-medium transition-colors cursor-pointer',
                     isSelected ? 'text-[#09090B]' : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
                   )}
                 >
@@ -102,8 +106,9 @@ export function ProductPreview() {
                       className="absolute inset-0 bg-[#FAFAFA] rounded-full"
                     />
                   )}
-                  <Icon size={14} className="relative z-10" />
-                  <span className="relative z-10 font-semibold">{tab.label}</span>
+                  <Icon size={14} className="relative z-10 shrink-0" />
+                  <span className="relative z-10 font-semibold sm:hidden truncate">{tab.shortLabel}</span>
+                  <span className="relative z-10 font-semibold hidden sm:inline whitespace-nowrap">{tab.label}</span>
                 </button>
               )
             })}
@@ -112,7 +117,7 @@ export function ProductPreview() {
 
         {/* Visual Preview sitting directly on canvas (No boxed outer card) */}
         <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_32px_100px_rgba(0,0,0,0.85)]">
-          <div className="relative aspect-[16/9] bg-[#09090B]">
+          <div className="relative aspect-[16/10] sm:aspect-[16/9] bg-[#09090B]">
             <AnimatePresence mode="wait">
               <motion.img
                 key={current.id}
@@ -129,10 +134,10 @@ export function ProductPreview() {
           </div>
 
           {/* Clean status indicator */}
-          <div className="absolute bottom-4 left-4 inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#09090B]/85 backdrop-blur-md border border-white/[0.1] text-[12px] text-[#A1A1AA]">
-            <span className="text-[#FAFAFA] font-medium">{current.label}</span>
+          <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4 inline-flex items-center gap-2 sm:gap-2.5 max-w-[calc(100%-24px)] px-3 sm:px-3.5 py-1.5 rounded-full bg-[#09090B]/85 backdrop-blur-md border border-white/[0.1] text-[11px] sm:text-[12px] text-[#A1A1AA] truncate">
+            <span className="text-[#FAFAFA] font-medium truncate">{current.label}</span>
             <span>·</span>
-            <span>Exness Direct DMA</span>
+            <span className="shrink-0">Exness Direct DMA</span>
           </div>
         </div>
       </div>

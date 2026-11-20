@@ -46,7 +46,7 @@ export function CustomEngineSection() {
   const [activeModule, setActiveModule] = useState(MODULAR_RULES[0].id)
 
   return (
-    <section id="custom-engine" className="relative py-24 sm:py-32 px-4 sm:px-6 bg-[#09090B] overflow-hidden select-none font-sans">
+    <section id="custom-engine" className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 bg-[#09090B] overflow-hidden select-none font-sans">
       {/* ── Background Coordinate Grid ──────────────────────────────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
@@ -59,24 +59,24 @@ export function CustomEngineSection() {
         <div className="absolute top-1/2 right-1/4 w-[700px] h-[350px] bg-gradient-to-l from-[#34D399]/10 to-transparent blur-3xl rounded-full" />
       </div>
 
-      <div className="relative max-w-7xl mx-auto space-y-14">
+      <div className="relative max-w-7xl mx-auto space-y-10 sm:space-y-14">
         {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-5 sm:gap-6 pb-1 sm:pb-2">
           <div className="max-w-2xl space-y-3">
             <p className="text-[12px] font-semibold tracking-wider text-[#A1A1AA] uppercase">
               Engine Studio
             </p>
-            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-[#FAFAFA]">
+            <h2 className="text-[28px] sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#FAFAFA] leading-[1.12]">
               Create your own custom quantitative engines.
             </h2>
-            <p className="text-[15px] sm:text-[17px] text-[#A1A1AA] leading-relaxed font-normal">
+            <p className="text-[14.5px] sm:text-[17px] text-[#A1A1AA] leading-relaxed font-normal">
               Combine structural rules, liquidity filters, and ATR volatility parameters into your own automated execution models.
             </p>
           </div>
 
           <Link
             to="/strategies"
-            className="inline-flex items-center gap-2 h-11 px-6 rounded-full bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13.5px] font-semibold transition-all shadow-[0_0_24px_rgba(255,255,255,0.08)] self-start md:self-auto cursor-pointer"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 sm:h-11 px-6 rounded-full bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13.5px] font-semibold transition-all shadow-[0_0_24px_rgba(255,255,255,0.08)] sm:self-start md:self-auto cursor-pointer shrink-0"
           >
             <span>Launch Engine Studio</span>
             <PiArrowRight size={14} />
@@ -84,9 +84,9 @@ export function CustomEngineSection() {
         </div>
 
         {/* Studio Preview Showcase */}
-        <div className="grid lg:grid-cols-12 gap-10 items-center">
-          {/* Left Modular Rule Palette */}
-          <div className="lg:col-span-5 space-y-3">
+        <div className="grid lg:grid-cols-12 gap-8 lg:gap-10 items-center">
+          {/* Modular Rule Palette */}
+          <div className="order-2 lg:order-1 lg:col-span-5 space-y-2.5 sm:space-y-3">
             <div className="text-[12px] uppercase text-[#71717A] tracking-wider font-semibold mb-2">
               Confluence Rule Modules
             </div>
@@ -94,30 +94,31 @@ export function CustomEngineSection() {
             {MODULAR_RULES.map((mod) => {
               const isSelected = activeModule === mod.id
               return (
-                <div
+                <button
                   key={mod.id}
+                  type="button"
                   onClick={() => setActiveModule(mod.id)}
                   className={cn(
-                    'p-4 rounded-xl border transition-all cursor-pointer text-left',
+                    'w-full p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer text-left min-h-[44px]',
                     isSelected
                       ? 'bg-white/[0.06] border-white/30 shadow-[0_4px_20px_rgba(0,0,0,0.5)]'
                       : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.03]'
                   )}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="text-[14px] font-semibold text-[#FAFAFA]">{mod.label}</span>
-                    <span className="text-[11px] font-mono text-[#34D399] font-medium">{mod.weight}</span>
+                    <span className="text-[11px] font-mono text-[#34D399] font-medium shrink-0">{mod.weight}</span>
                   </div>
                   <p className="text-[12.5px] text-[#A1A1AA] mt-1 leading-relaxed">
                     {mod.description}
                   </p>
-                </div>
+                </button>
               )
             })}
           </div>
 
-          {/* Right Visual Interface */}
-          <div className="lg:col-span-7 relative">
+          {/* Visual Interface - Anchors the section first on mobile */}
+          <div className="order-1 lg:order-2 lg:col-span-7 relative">
             <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_32px_100px_rgba(0,0,0,0.85)]">
               <img
                 src="/brand/custom-engine-builder.png"

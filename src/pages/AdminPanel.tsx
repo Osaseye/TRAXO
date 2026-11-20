@@ -168,37 +168,37 @@ export default function AdminPanel() {
     | undefined
 
   return (
-    <div className="min-h-full bg-[#09090B] text-[#FAFAFA]">
-      <div className="max-w-[1360px] mx-auto px-6 sm:px-8 py-8 space-y-6">
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] font-sans overflow-x-hidden">
+      <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-5 sm:py-8 space-y-5 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div className="space-y-1.5">
             <p className="text-[12px] font-medium text-[#71717A]">System Diagnostics</p>
-            <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
+            <h1 className="text-[24px] sm:text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
               Operator Admin Desk
             </h1>
-            <p className="text-[14px] text-[#A1A1AA]">
+            <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA]">
               Live runtime telemetry, engine thresholds, and unified console shortcuts.
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <Link
-              to="/notifications?tab=telemetry"
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
-            >
-              <PiCpu className="h-4 w-4 text-[#A1A1AA]" />
-              <span>Signals &amp; Ops</span>
-            </Link>
+          <div className="grid grid-cols-2 sm:flex items-center gap-2.5 w-full sm:w-auto">
             <button
               type="button"
               onClick={handleManualScan}
               disabled={triggerBusy}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
+              className="col-span-2 sm:col-span-1 sm:order-2 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
             >
-              <PiPlay className="h-4 w-4" />
+              <PiPlay className="h-4 w-4 shrink-0" />
               <span>{triggerBusy ? 'Triggering...' : 'Manual Scan'}</span>
             </button>
+            <Link
+              to="/notifications?tab=telemetry"
+              className="sm:order-1 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+            >
+              <PiCpu className="h-4 w-4 text-[#A1A1AA] shrink-0" />
+              <span className="truncate">Signals &amp; Ops</span>
+            </Link>
             <button
               type="button"
               onClick={() => {
@@ -207,9 +207,9 @@ export default function AdminPanel() {
                 void refreshOptimizer()
               }}
               disabled={loading}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+              className="sm:order-3 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
             >
-              <PiArrowsClockwise className={`h-4 w-4 text-[#A1A1AA] ${loading ? 'animate-spin' : ''}`} />
+              <PiArrowsClockwise className={`h-4 w-4 text-[#A1A1AA] shrink-0 ${loading ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
             </button>
           </div>
@@ -222,23 +222,23 @@ export default function AdminPanel() {
         )}
 
         {/* Operator Identity Strip */}
-        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
+        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5 sm:gap-4 min-w-0">
             <div className="h-11 w-11 rounded-xl bg-[#161619] flex items-center justify-center shrink-0">
               <PiShieldCheck className="h-5 w-5 text-[#34D399]" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="text-[12px] font-medium text-[#71717A]">Authorized Operator Session</div>
-              <div className="text-[15px] font-medium text-[#FAFAFA] mt-0.5">
-                {user?.displayName || 'Traxo Operator'}{' '}
-                <span className="text-[13px] font-normal text-[#71717A]">
-                  ({user?.email || 'No email'} ·{' '}
-                  <span className="font-mono tabular-nums">{user?.id?.slice(0, 10) || '—'}</span>)
-                </span>
+              <div className="text-[15px] font-medium text-[#FAFAFA] mt-0.5 truncate">
+                {user?.displayName || 'Traxo Operator'}
+              </div>
+              <div className="text-[12.5px] font-normal text-[#71717A] break-all sm:break-normal mt-0.5">
+                {user?.email || 'No email'} ·{' '}
+                <span className="font-mono tabular-nums">{user?.id?.slice(0, 10) || '—'}</span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2.5 text-[13px] text-[#A1A1AA]">
+          <div className="flex items-center justify-between sm:justify-end gap-2.5 text-[13px] text-[#A1A1AA] pt-3 sm:pt-0 border-t sm:border-t-0 border-white/[0.06] shrink-0">
             <span>Active Strategies</span>
             <span className="px-3 py-1 rounded-full bg-[#161619] text-[#FAFAFA] font-mono tabular-nums font-medium">
               {activeStrategies.length}
@@ -247,10 +247,10 @@ export default function AdminPanel() {
         </section>
 
         {/* Unboxed 5-Metric Summary Strip */}
-        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] grid grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
-          <div className="p-5 space-y-1">
+        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] grid grid-cols-2 lg:grid-cols-5">
+          <div className="p-4 sm:p-5 space-y-1 border-r border-b lg:border-b-0 border-white/[0.06]">
             <div className="text-[12px] text-[#71717A]">Journal Entries</div>
-            <div className="text-[22px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+            <div className="text-[20px] sm:text-[22px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
               {journalStats.total}
             </div>
             <div className="text-[12px] font-mono tabular-nums text-[#71717A]">
@@ -258,9 +258,9 @@ export default function AdminPanel() {
             </div>
           </div>
 
-          <div className="p-5 space-y-1">
+          <div className="p-4 sm:p-5 space-y-1 border-b lg:border-b-0 lg:border-r border-white/[0.06]">
             <div className="text-[12px] text-[#71717A]">Win / Loss</div>
-            <div className="text-[22px] font-mono font-semibold tabular-nums">
+            <div className="text-[20px] sm:text-[22px] font-mono font-semibold tabular-nums">
               <span className="text-[#34D399]">{journalStats.wins}W</span>
               <span className="text-[#71717A] mx-1">/</span>
               <span className="text-[#F87171]">{journalStats.losses}L</span>
@@ -270,10 +270,10 @@ export default function AdminPanel() {
             </div>
           </div>
 
-          <div className="p-5 space-y-1">
+          <div className="p-4 sm:p-5 space-y-1 border-r border-b lg:border-b-0 border-white/[0.06]">
             <div className="text-[12px] text-[#71717A]">Taken Net P&amp;L</div>
             <div
-              className={`text-[22px] font-mono font-semibold tabular-nums ${
+              className={`text-[20px] sm:text-[22px] font-mono font-semibold tabular-nums ${
                 journalStats.netUsd > 0
                   ? 'text-[#34D399]'
                   : journalStats.netUsd < 0
@@ -286,15 +286,15 @@ export default function AdminPanel() {
             <div className="text-[12px] text-[#71717A]">Recorded risk P&amp;L</div>
           </div>
 
-          <div className="p-5 space-y-1">
+          <div className="p-4 sm:p-5 space-y-1 border-b lg:border-b-0 lg:border-r border-white/[0.06]">
             <div className="text-[12px] text-[#71717A]">TwelveData Keys</div>
-            <div className="text-[22px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+            <div className="text-[20px] sm:text-[22px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
               {health?.twelvedata?.availableKeys ?? '—'}
             </div>
             <div className="text-[12px] text-[#71717A]">Active key pool</div>
           </div>
 
-          <div className="p-5 space-y-1">
+          <div className="col-span-2 lg:col-span-1 p-4 sm:p-5 space-y-1">
             <div className="text-[12px] text-[#71717A]">Feedback Engine</div>
             <div
               className={`text-[18px] font-semibold mt-0.5 ${
@@ -314,11 +314,11 @@ export default function AdminPanel() {
         </section>
 
         {/* Runtime Matrix + Algorithm Constants */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 space-y-4">
-            <div className="flex items-center justify-between">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
+          <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
               <div className="flex items-center gap-2.5">
-                <PiHardDrives className="h-5 w-5 text-[#FAFAFA]" />
+                <PiHardDrives className="h-5 w-5 text-[#FAFAFA] shrink-0" />
                 <h2 className="text-[15px] font-medium text-[#FAFAFA]">
                   System &amp; Environment Matrix
                 </h2>
@@ -332,17 +332,20 @@ export default function AdminPanel() {
 
             <div className="divide-y divide-white/[0.06]">
               {envChecks.map((chk) => (
-                <div key={chk.label} className="flex items-center justify-between py-3.5 text-[14px]">
-                  <div className="flex items-center gap-2.5">
+                <div
+                  key={chk.label}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3.5 text-[14px]"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
                     {chk.ok ? (
-                      <PiWifiHigh className="h-4 w-4 text-[#34D399]" />
+                      <PiWifiHigh className="h-4 w-4 text-[#34D399] shrink-0" />
                     ) : (
-                      <PiWifiSlash className="h-4 w-4 text-[#F87171]" />
+                      <PiWifiSlash className="h-4 w-4 text-[#F87171] shrink-0" />
                     )}
                     <span className="text-[#FAFAFA]">{chk.label}</span>
                   </div>
                   <span
-                    className={`text-[13px] ${
+                    className={`text-[13px] pl-6 sm:pl-0 break-all sm:break-normal ${
                       chk.ok ? 'text-[#34D399]' : 'text-[#A1A1AA]'
                     }`}
                   >
@@ -357,57 +360,57 @@ export default function AdminPanel() {
             </div>
           </section>
 
-          <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 space-y-4">
-            <div className="flex items-center justify-between">
+          <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
-                <PiSlidersHorizontal className="h-5 w-5 text-[#FAFAFA]" />
+                <PiSlidersHorizontal className="h-5 w-5 text-[#FAFAFA] shrink-0" />
                 <h2 className="text-[15px] font-medium text-[#FAFAFA]">
                   Algorithm Constants
                 </h2>
               </div>
-              <span className="text-[12px] text-[#71717A]">Read-only baseline</span>
+              <span className="text-[12px] text-[#71717A] shrink-0">Read-only baseline</span>
             </div>
 
-            <div className="divide-y divide-white/[0.06] text-[13.5px]">
-              <div className="flex justify-between py-3">
+            <div className="divide-y divide-white/[0.06] text-[13px] sm:text-[13.5px]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3">
                 <span className="text-[#71717A]">Min Score (Prime / Std / Aggr)</span>
                 <span className="font-mono tabular-nums text-[#FAFAFA]">
                   {ALG_CONFIG.minScore.prime} / {ALG_CONFIG.minScore.standard} /{' '}
                   {ALG_CONFIG.minScore.aggressive}
                 </span>
               </div>
-              <div className="flex justify-between py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3">
                 <span className="text-[#71717A]">Min Confidence (Prime / Std / Aggr)</span>
                 <span className="font-mono tabular-nums text-[#FAFAFA]">
                   {ALG_CONFIG.minConfidence.prime}% / {ALG_CONFIG.minConfidence.standard}% /{' '}
                   {ALG_CONFIG.minConfidence.aggressive}%
                 </span>
               </div>
-              <div className="flex justify-between py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3">
                 <span className="text-[#71717A]">SL Buffer (FX / Crypto)</span>
                 <span className="font-mono tabular-nums text-[#FAFAFA]">
                   {ALG_CONFIG.slBuffer.primeForex} / {ALG_CONFIG.slBuffer.crypto}
                 </span>
               </div>
-              <div className="flex justify-between py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3">
                 <span className="text-[#71717A]">Default Slippage (FX / Crypto)</span>
                 <span className="font-mono tabular-nums text-[#FAFAFA]">
                   {ALG_CONFIG.defaultSlippage.forex} / {ALG_CONFIG.defaultSlippage.crypto}
                 </span>
               </div>
-              <div className="flex justify-between py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3">
                 <span className="text-[#71717A]">Fallback R:R Targets</span>
                 <span className="font-mono tabular-nums text-[#FAFAFA]">
                   {ALG_CONFIG.rrFallback.tp1} / {ALG_CONFIG.rrFallback.tp2}
                 </span>
               </div>
-              <div className="flex justify-between py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3">
                 <span className="text-[#71717A]">OB / Swing Lookback</span>
                 <span className="font-mono tabular-nums text-[#FAFAFA]">
                   {ALG_CONFIG.obLookback} · {ALG_CONFIG.swingLookback}
                 </span>
               </div>
-              <div className="flex justify-between py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3">
                 <span className="text-[#71717A]">Impulse-to-Entry Min R</span>
                 <span className="font-mono tabular-nums text-[#FAFAFA]">{ALG_CONFIG.i2eMinR}</span>
               </div>
@@ -416,7 +419,7 @@ export default function AdminPanel() {
         </div>
 
         {/* Quick Route Matrix */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
           {[
             {
               to: '/admin/signals',
@@ -448,7 +451,7 @@ export default function AdminPanel() {
               <Link
                 key={card.to}
                 to={card.to}
-                className="group rounded-2xl bg-[#111113] border border-white/[0.07] hover:border-white/[0.16] p-5 space-y-2 transition-colors"
+                className="group rounded-2xl bg-[#111113] border border-white/[0.07] hover:border-white/[0.16] p-4 sm:p-5 space-y-2 transition-colors"
               >
                 <div className="flex items-center justify-between">
                   <Icon className="h-5 w-5 text-[#A1A1AA] group-hover:text-[#FAFAFA]" />

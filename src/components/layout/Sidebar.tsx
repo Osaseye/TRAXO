@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { NavLink } from 'react-router'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   PiChartLineUp,
   PiChartLineUpBold,
@@ -16,6 +18,7 @@ import {
   PiUserCircleBold,
   PiCaretLeft,
   PiCaretRight,
+  PiX,
 } from 'react-icons/pi'
 import { cn } from '@/lib/utils'
 import { useNotificationStore } from '@/stores/useNotificationStore'
@@ -23,6 +26,8 @@ import { useNotificationStore } from '@/stores/useNotificationStore'
 interface SidebarProps {
   collapsed: boolean
   onToggle: () => void
+  mobileOpen?: boolean
+  onMobileClose?: () => void
 }
 
 const PRIMARY_NAV = [
@@ -38,18 +43,34 @@ const UTILITY_NAV = [
   { to: '/profile', icon: PiUserCircle, activeIcon: PiUserCircleBold, label: 'Profile' },
 ]
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({
+  collapsed,
+  onToggle,
+  mobileOpen = false,
+  onMobileClose,
+}: SidebarProps) {
   const unreadCount = useNotificationStore(
     (s) => s.notifications.filter((n) => !n.read).length,
   )
 
+  useEffect(() => {
+    if (!mobileOpen || !onMobileClose) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onMobileClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [mobileOpen, onMobileClose])
+
   return (
-    <aside
-      className={cn(
-        'hidden md:flex flex-col h-full bg-[#09090B] border-r border-white/[0.06] transition-[width] duration-150 shrink-0 select-none',
-        collapsed ? 'w-[64px]' : 'w-[220px]',
-      )}
-    >
+    <>
+      {/* Desktop Collapsible Sidebar */}
+      <aside
+        className={cn(
+          'hidden md:flex flex-col h-full bg-[#09090B] border-r border-white/[0.06] transition-[width] duration-150 shrink-0 select-none',
+          collapsed ? 'w-[64px]' : 'w-[220px]',
+        )}
+      >
       {/* Top 52px Brand Header aligned with Topbar */}
       <div
         className={cn(
@@ -182,5 +203,143 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
       </div>
     </aside>
+
+      {/* Mobile Slide-Over Navigation Drawer */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <div className="md:hidden fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Navigation menu">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              onClick={onMobileClose}
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+            />
+
+            {/* Drawer Panel */}
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', stiffness: 360, damping: 34 }}
+              className="relative z-10 flex flex-col w-[280px] max-w-[85vw] h-full bg-[#09090B] border-r border-white/[0.08] shadow-[16px_0_48px_rgba(0,0,0,0.75)] select-none"
+              style={{
+                paddingTop: 'env(safe-area-inset-top)',
+                paddingBottom: 'env(safe-area-inset-bottom)',
+              }}
+            >
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between h-[56px] px-4 border-b border-white/[0.06] shrink-0">
+                <NavLink
+                  to="/dashboard"
+                  onClick={onMobileClose}
+                  className="flex items-center gap-2.5 focus:outline-none min-h-[44px]"
+                >
+                  <div className="relative w-7 h-7 rounded-lg bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0">
+                    <img
+                      src="/brand/traxo-mark.png"
+                      onError={(e) => {
+                        e.currentTarget.src = '/TRAXO.png'
+                      }}
+                      alt="TRAXO"
+                      className="w-5 h-5 object-contain"
+                    />
+                  </div>
+                  <span className="text-[13px] font-bold tracking-[0.16em] uppercase text-[#FAFAFA] font-mono">
+                    TRAXO
+                  </span>
+                </NavLink>
+
+                <button
+                  type="button"
+                  onClick={onMobileClose}
+                  aria-label="Close navigation menu"
+                  className="w-11 h-11 -mr-1.5 rounded-xl flex items-center justify-center text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-white/[0.06] transition-colors"
+                >
+                  <PiX size={20} />
+                </button>
+              </div>
+
+              {/* Primary Workspace Links */}
+              <nav className="flex-1 py-3 px-3 space-y-1 overflow-y-auto" aria-label="Workspace">
+                {PRIMARY_NAV.map(({ to, icon: Icon, activeIcon: ActiveIcon, label }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    onClick={onMobileClose}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-3 px-3 min-h-[44px] rounded-xl text-[14px] font-medium transition-colors',
+                        isActive
+                          ? 'bg-white/[0.09] text-[#FAFAFA]'
+                          : 'text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-white/[0.04]',
+                      )
+                    }
+                  >
+                    {({ isActive }) => {
+                      const CurrentIcon = isActive ? ActiveIcon : Icon
+                      return (
+                        <>
+                          <CurrentIcon
+                            size={19}
+                            className={cn(
+                              'shrink-0',
+                              isActive ? 'text-[#FAFAFA]' : 'text-[#71717A]',
+                            )}
+                          />
+                          <span className="truncate">{label}</span>
+                          {label === 'Signals & Ops' && unreadCount > 0 && (
+                            <span className="ml-auto flex items-center justify-center rounded-full bg-[#34D399] text-[#09090B] font-mono font-bold text-[11px] px-2 min-w-5 h-5">
+                              {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                          )}
+                        </>
+                      )
+                    }}
+                  </NavLink>
+                ))}
+              </nav>
+
+              {/* Utility Links */}
+              <div className="p-3 border-t border-white/[0.06] space-y-1 shrink-0">
+                {UTILITY_NAV.map(({ to, icon: Icon, activeIcon: ActiveIcon, label }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    onClick={onMobileClose}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-3 px-3 min-h-[44px] rounded-xl text-[14px] font-medium transition-colors',
+                        isActive
+                          ? 'bg-white/[0.09] text-[#FAFAFA]'
+                          : 'text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-white/[0.04]',
+                      )
+                    }
+                  >
+                    {({ isActive }) => {
+                      const CurrentIcon = isActive ? ActiveIcon : Icon
+                      return (
+                        <>
+                          <CurrentIcon
+                            size={19}
+                            className={cn(
+                              'shrink-0',
+                              isActive ? 'text-[#FAFAFA]' : 'text-[#71717A]',
+                            )}
+                          />
+                          <span className="truncate">{label}</span>
+                        </>
+                      )
+                    }}
+                  </NavLink>
+                ))}
+              </div>
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   )
 }

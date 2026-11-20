@@ -77,7 +77,7 @@ const FX_JPY_SPEC = (
   scannable,
 });
 
-const STOCK_SPEC = (symbol: string): InstrumentSpec => ({
+const STOCK_SPEC = (symbol: string, scannable = false): InstrumentSpec => ({
   symbol,
   twelveDataSymbol: symbol,
   exnessSymbol: symbol,
@@ -91,7 +91,7 @@ const STOCK_SPEC = (symbol: string): InstrumentSpec => ({
   maxLots: 2.0,
   maxAllowedSpreadPips: 15.0,
   usdCorrelationSide: null,
-  scannable: true,
+  scannable,
 });
 
 const FUTURES_SPEC = (
@@ -102,6 +102,7 @@ const FUTURES_SPEC = (
   pointValue = 2.0,
   pipSize = 0.25,
   maxAllowedSpreadPips = 3.0,
+  scannable = true,
 ): InstrumentSpec => ({
   symbol,
   twelveDataSymbol,
@@ -116,29 +117,29 @@ const FUTURES_SPEC = (
   maxLots: 10.0,
   maxAllowedSpreadPips,
   usdCorrelationSide: null,
-  scannable: true,
+  scannable,
 });
 
 export const INSTRUMENTS: Record<string, InstrumentSpec> = {
-  // ── Forex (10) ──────────────────────────────────────────────────────────
-  EURUSD: FX_STANDARD_SPEC('EURUSD', 'EUR/USD', 'INVERSE_USD', 3.5),
-  GBPUSD: FX_STANDARD_SPEC('GBPUSD', 'GBP/USD', 'INVERSE_USD', 3.5),
-  AUDUSD: FX_STANDARD_SPEC('AUDUSD', 'AUD/USD', 'INVERSE_USD', 3.5),
-  NZDUSD: FX_STANDARD_SPEC('NZDUSD', 'NZD/USD', 'INVERSE_USD', 3.5),
-  USDCAD: FX_STANDARD_SPEC('USDCAD', 'USD/CAD', 'DIRECT_USD', 3.5),
-  USDCHF: FX_STANDARD_SPEC('USDCHF', 'USD/CHF', 'DIRECT_USD', 3.5),
-  USDJPY: FX_JPY_SPEC('USDJPY', 'USD/JPY', 'DIRECT_USD', 3.5),
-  EURJPY: FX_JPY_SPEC('EURJPY', 'EUR/JPY', null, 4.0),
-  GBPJPY: FX_JPY_SPEC('GBPJPY', 'GBP/JPY', null, 4.5),
-  EURGBP: FX_STANDARD_SPEC('EURGBP', 'EUR/GBP', null, 3.5),
+  // ── Forex Majors (5 Scannable Primary Pairs) & Liquid Crosses ───────────
+  EURUSD: FX_STANDARD_SPEC('EURUSD', 'EUR/USD', 'INVERSE_USD', 1.6, true),
+  GBPUSD: FX_STANDARD_SPEC('GBPUSD', 'GBP/USD', 'INVERSE_USD', 2.2, true),
+  AUDUSD: FX_STANDARD_SPEC('AUDUSD', 'AUD/USD', 'INVERSE_USD', 2.4, true),
+  NZDUSD: FX_STANDARD_SPEC('NZDUSD', 'NZD/USD', 'INVERSE_USD', 2.8, false),
+  USDCAD: FX_STANDARD_SPEC('USDCAD', 'USD/CAD', 'DIRECT_USD', 2.4, true),
+  USDCHF: FX_STANDARD_SPEC('USDCHF', 'USD/CHF', 'DIRECT_USD', 2.6, false),
+  USDJPY: FX_JPY_SPEC('USDJPY', 'USD/JPY', 'DIRECT_USD', 1.8, true),
+  EURJPY: FX_JPY_SPEC('EURJPY', 'EUR/JPY', null, 3.0, false),
+  GBPJPY: FX_JPY_SPEC('GBPJPY', 'GBP/JPY', null, 3.5, false),
+  EURGBP: FX_STANDARD_SPEC('EURGBP', 'EUR/GBP', null, 2.2, false),
 
-  // ── Metals ──────────────────────────────────────────────────────────────
+  // ── Commodities / Precious Metals ───────────────────────────────────────
   XAUUSD: {
     symbol: 'XAUUSD',
     twelveDataSymbol: 'XAU/USD',
     exnessSymbol: 'XAUUSD',
     exnessAliases: ['XAUUSD', 'XAUUSDm'],
-    assetType: 'FOREX',
+    assetType: 'COMMODITY',
     category: 'metals',
     digits: 2,
     pipSize: 0.1,
@@ -154,7 +155,7 @@ export const INSTRUMENTS: Record<string, InstrumentSpec> = {
     twelveDataSymbol: 'XAG/USD',
     exnessSymbol: 'XAGUSD',
     exnessAliases: ['XAGUSD', 'XAGUSDm'],
-    assetType: 'FOREX',
+    assetType: 'COMMODITY',
     category: 'metals',
     digits: 3,
     pipSize: 0.01,
@@ -166,7 +167,7 @@ export const INSTRUMENTS: Record<string, InstrumentSpec> = {
     scannable: false,
   },
 
-  // ── US Stocks (12) ──────────────────────────────────────────────────────
+  // ── US Stocks (12, non-scannable by default under Tri-Market focus) ─────
   AAPL: STOCK_SPEC('AAPL'),
   MSFT: STOCK_SPEC('MSFT'),
   NVDA: STOCK_SPEC('NVDA'),
@@ -180,9 +181,9 @@ export const INSTRUMENTS: Record<string, InstrumentSpec> = {
   MSTR: STOCK_SPEC('MSTR'),
   SMCI: STOCK_SPEC('SMCI'),
 
-  // ── Futures (MNQ / Micro E-mini Nasdaq) ──────────────────────────────────
-  MNQ: FUTURES_SPEC('MNQ', 'NQ', 'USTEC', ['USTEC', 'USTECm', 'NQ', 'MNQ'], 2.0, 0.25, 3.0),
-  USTEC: FUTURES_SPEC('USTEC', 'NQ', 'USTEC', ['USTEC', 'USTECm', 'NQ', 'MNQ'], 2.0, 0.25, 3.0),
+  // ── Index Futures (MNQ / Micro E-mini Nasdaq-100) ───────────────────────
+  MNQ: FUTURES_SPEC('MNQ', 'NQ', 'USTEC', ['USTEC', 'USTECm', 'NQ', 'MNQ'], 2.0, 0.25, 3.0, true),
+  USTEC: FUTURES_SPEC('USTEC', 'NQ', 'USTEC', ['USTEC', 'USTECm', 'NQ', 'MNQ'], 2.0, 0.25, 3.0, false),
 
   // ── Crypto / Indices / Energy Exness Mappings (non-scannable defaults) ─
   BTCUSD: {
@@ -230,22 +231,6 @@ export const INSTRUMENTS: Record<string, InstrumentSpec> = {
     riskPerUnitFactor: 1,
     maxLots: 5.0,
     maxAllowedSpreadPips: 10.0,
-    usdCorrelationSide: null,
-    scannable: false,
-  },
-  USTEC: {
-    symbol: 'USTEC',
-    twelveDataSymbol: 'NAS100',
-    exnessSymbol: 'USTEC',
-    exnessAliases: ['USTEC', 'USTECm', 'NAS100'],
-    assetType: 'STOCKS',
-    category: 'indices',
-    digits: 2,
-    pipSize: 0.1,
-    contractSize: 1,
-    riskPerUnitFactor: 1,
-    maxLots: 5.0,
-    maxAllowedSpreadPips: 15.0,
     usdCorrelationSide: null,
     scannable: false,
   },
@@ -306,6 +291,9 @@ const ALIAS_TO_CANONICAL: Record<string, string> = {
   BRENTUSD: 'UKOIL',
   SPX500: 'US500',
   NAS100: 'USTEC',
+  US100: 'USTEC',
+  NDX: 'USTEC',
+  NQ: 'MNQ',
   DE40: 'GER40',
   GOLD: 'XAUUSD',
   SILVER: 'XAGUSD',
@@ -326,7 +314,7 @@ export function normalizeSymbol(sym: string): string {
   if (s.endsWith('USDT')) {
     s = s.replace(/USDT$/, 'USD');
   }
-  if (s.length > 4 && s.endsWith('M') && INSTRUMENTS[s.slice(0, -1)]) {
+  if (s.length >= 4 && s.endsWith('M') && INSTRUMENTS[s.slice(0, -1)]) {
     s = s.slice(0, -1);
   }
   return ALIAS_TO_CANONICAL[s] || s;

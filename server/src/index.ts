@@ -2,9 +2,10 @@ import http from 'http';
 import cors from 'cors';
 import express from 'express';
 import { env } from './config/env';
-import { startNewsPoller, stopNewsPoller } from './services/news/newsEngine';
+import { getScannableInstruments } from './config/instruments';
+import { newsEngine, startNewsPoller, stopNewsPoller } from './services/news/newsEngine';
 import { startCron } from './modules/scanner/scannerCron';
-import { initWebSocketServer } from './modules/websocket/websocketManager';
+import { broadcast, initWebSocketServer } from './modules/websocket/websocketManager';
 import { registerRoutes } from './routes';
 
 export function createApp() {
@@ -33,6 +34,10 @@ export function bootstrapServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
     startCron();
+    newsEngine.setTransitionListener(
+      (evt) => broadcast({ type: evt.type, payload: evt }),
+      getScannableInstruments().map((i) => i.symbol)
+    );
     startNewsPoller();
   });
 

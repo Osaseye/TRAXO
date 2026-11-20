@@ -8,6 +8,7 @@ import newsRouter from './news';
 import newsV1Router from '../services/news/newsRoutes';
 import scannerRouter from './scanner';
 import signalsRouter from './signals';
+import strategiesRouter from './strategies';
 import strategyOptimizationRouter from './strategyOptimization';
 import tradingContextRouter from './tradingContext';
 
@@ -25,6 +26,7 @@ export function registerRoutes(app: any): void {
   app.use('/api/news', newsRouter);
   app.use('/api/v1/news', newsV1Router);
   app.use('/api/signals', signalsRouter);
+  app.use('/api/strategies', strategiesRouter);
   app.use('/api/candles', candlesRouter);
   app.use('/api/scanner', scannerRouter);
   app.use('/api/global-signals', globalSignalsRouter);

@@ -38,10 +38,21 @@ export function calculateLots(
   sl: number,
   riskAmount = 500
 ): number {
-  if (!Number.isFinite(riskAmount) || riskAmount <= 0) return 0.01;
-
   const spec = getInstrumentSpec(symbol);
+  if (!Number.isFinite(riskAmount) || riskAmount <= 0) {
+    return spec.assetType === 'FUTURES' ? 1 : 0.01;
+  }
+
   let riskDist = Math.abs(Number(entry) - Number(sl));
+
+  if (spec.assetType === 'FUTURES') {
+    const minDistance = Math.max(spec.pipSize, 0.25);
+    if (!riskDist || Number.isNaN(riskDist) || riskDist < minDistance) {
+      riskDist = minDistance;
+    }
+    const rawContracts = riskAmount / (riskDist * spec.riskPerUnitFactor);
+    return Math.max(1, Math.min(Math.floor(spec.maxLots), Math.floor(rawContracts)));
+  }
 
   const minDistance = Math.max(0.0001, (Number(entry) || 1) * 0.001);
   if (!riskDist || Number.isNaN(riskDist) || riskDist < minDistance) {

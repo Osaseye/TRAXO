@@ -60,6 +60,7 @@ import type { DashboardStats, Strategy, StrategyId } from '@/types'
 type TradeAction = 'BUY' | 'SELL'
 type InspectorTab = 'setups' | 'planner' | 'risk'
 type DockTab = 'positions' | 'orders'
+type MobileView = 'chart' | 'setups' | 'order' | 'risk' | 'positions'
 
 interface PendingOrder {
   id: string
@@ -144,6 +145,36 @@ const CANONICAL_KEBAB_MAP: Record<string, OnboardingStrategyId> = {
   'supply-demand': 'supply-demand',
   trend_following: 'trend-following',
   'trend-following': 'trend-following',
+  traxo_london_apex: 'traxo-london-apex',
+  'traxo-london-apex': 'traxo-london-apex',
+  traxo_tokyo_yield: 'traxo-tokyo-yield',
+  'traxo-tokyo-yield': 'traxo-tokyo-yield',
+  traxo_sovereign_fix: 'traxo-sovereign-fix',
+  'traxo-sovereign-fix': 'traxo-sovereign-fix',
+  traxo_barrier_grid: 'traxo-barrier-grid',
+  'traxo-barrier-grid': 'traxo-barrier-grid',
+  traxo_macro_vector: 'traxo-macro-vector',
+  'traxo-macro-vector': 'traxo-macro-vector',
+  traxo_aurum_sweep: 'traxo-aurum-sweep',
+  'traxo-aurum-sweep': 'traxo-aurum-sweep',
+  traxo_bullion_strike: 'traxo-bullion-strike',
+  'traxo-bullion-strike': 'traxo-bullion-strike',
+  traxo_ny_bullet: 'traxo-ny-bullet',
+  'traxo-ny-bullet': 'traxo-ny-bullet',
+  traxo_aurum_fix: 'traxo-aurum-fix',
+  'traxo-aurum-fix': 'traxo-aurum-fix',
+  traxo_kinetic_nr7: 'traxo-kinetic-nr7',
+  'traxo-kinetic-nr7': 'traxo-kinetic-nr7',
+  traxo_globex_sweep: 'traxo-globex-sweep',
+  'traxo-globex-sweep': 'traxo-globex-sweep',
+  traxo_velocity_orb: 'traxo-velocity-orb',
+  'traxo-velocity-orb': 'traxo-velocity-orb',
+  traxo_initial_balance: 'traxo-initial-balance',
+  'traxo-initial-balance': 'traxo-initial-balance',
+  traxo_mean_equilibrium: 'traxo-mean-equilibrium',
+  'traxo-mean-equilibrium': 'traxo-mean-equilibrium',
+  traxo_power_hour_moc: 'traxo-power-hour-moc',
+  'traxo-power-hour-moc': 'traxo-power-hour-moc',
 }
 
 function getCategoryForSymbol(sym: string): MarketCategory {
@@ -258,6 +289,24 @@ export default function Dashboard() {
   const [dockExpanded, setDockExpanded] = useState(true)
   const [dockTab, setDockTab] = useState<DockTab>('positions')
   const [signalScope, setSignalScope] = useState<'chart' | 'all'>('chart')
+  const [mobileView, setMobileView] = useState<MobileView>('chart')
+
+  const handleSelectMobileView = useCallback((view: MobileView) => {
+    setMobileView(view)
+    if (view === 'setups') {
+      setInspectorOpen(true)
+      setInspectorTab('setups')
+    } else if (view === 'order') {
+      setInspectorOpen(true)
+      setInspectorTab('planner')
+    } else if (view === 'risk') {
+      setInspectorOpen(true)
+      setInspectorTab('risk')
+    } else if (view === 'positions') {
+      setDockVisible(true)
+      setDockExpanded(true)
+    }
+  }, [])
 
   // Symbol selector dropdown state
   const [symbolPickerOpen, setSymbolPickerOpen] = useState(false)
@@ -867,6 +916,7 @@ export default function Dashboard() {
       setHoveredSignalId(raw.id)
       setFocusTime(targetTime)
       setFocusNonce((n) => n + 1)
+      setMobileView('chart')
     },
     [setSearchParams, setSymbol, setTimeframe, symbol, timeframe]
   )
@@ -1191,13 +1241,16 @@ export default function Dashboard() {
     effectiveSpreadPips != null && effectiveSpreadPips > autoTradeSpreadCapPips
   const activePositionsTotal = metaPositions.length + pendingOrders.length
 
+  const isMobileInspectorView =
+    mobileView === 'setups' || mobileView === 'order' || mobileView === 'risk'
+
   return (
-    <div className="h-full min-h-0 bg-[#09090B] text-[#FAFAFA] flex flex-col overflow-y-auto overflow-x-hidden lg:overflow-hidden">
+    <div className="h-full min-h-0 bg-[#09090B] text-[#FAFAFA] flex flex-col overflow-hidden">
       {/* 1. SLEEK CONTROL HEADER */}
-      <div className="min-h-[52px] px-3 sm:px-4 py-2 sm:py-1.5 bg-[#09090B] border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shrink-0 z-30">
-        {/* Left: Pill Symbol Picker + Segmented Timeframe Pill */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="relative" ref={symbolPickerRef}>
+      <div className="px-3 sm:px-4 py-2 lg:py-1.5 lg:min-h-[52px] bg-[#09090B] border-b border-white/[0.06] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 lg:gap-3 shrink-0 z-30">
+        {/* Top Row on Mobile / Left Cluster on Desktop: Symbol Picker + Mobile Scan + Desktop Timeframes */}
+        <div className="flex items-center justify-between lg:justify-start gap-2 sm:gap-2.5 min-w-0">
+          <div className="relative shrink-0" ref={symbolPickerRef}>
             <button
               type="button"
               onClick={() => {
@@ -1207,7 +1260,7 @@ export default function Dashboard() {
                 setSymbolPickerOpen((v) => !v)
               }}
               className={cn(
-                'rounded-full bg-[#141417] border px-3.5 py-1.5 text-[13px] font-medium flex items-center gap-2 transition-colors',
+                'h-10 lg:h-auto rounded-full bg-[#141417] border px-3.5 py-1.5 text-[13px] font-medium flex items-center gap-2 transition-colors',
                 symbolPickerOpen
                   ? 'border-white/[0.24] text-[#FAFAFA]'
                   : 'border-white/[0.08] text-[#FAFAFA] hover:border-white/[0.16]'
@@ -1227,7 +1280,7 @@ export default function Dashboard() {
             </button>
 
             {symbolPickerOpen && (
-              <div className="absolute top-11 left-0 w-[min(320px,calc(100vw-1.5rem))] sm:w-[360px] rounded-2xl bg-[#111113] border border-white/[0.08] p-3.5 z-50 space-y-3">
+              <div className="absolute top-12 lg:top-11 left-0 w-[min(340px,calc(100vw-1.5rem))] sm:w-[360px] rounded-2xl bg-[#111113] border border-white/[0.08] shadow-[0_16px_48px_rgba(0,0,0,0.75)] p-3.5 z-50 space-y-3">
                 <div className="relative">
                   <PiMagnifyingGlass
                     size={15}
@@ -1238,7 +1291,7 @@ export default function Dashboard() {
                     value={symbolSearch}
                     onChange={(e) => setSymbolSearch(e.target.value)}
                     placeholder="Search EURUSD, XAUUSD, NVDA..."
-                    className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#161619] border border-white/[0.06] text-[13px] text-[#FAFAFA] placeholder-[#71717A] focus:outline-none focus:border-white/[0.18]"
+                    className="w-full h-10 lg:h-9 pl-9 pr-3 rounded-xl bg-[#161619] border border-white/[0.06] text-[13px] text-[#FAFAFA] placeholder-[#71717A] focus:outline-none focus:border-white/[0.18]"
                     autoFocus
                   />
                 </div>
@@ -1251,7 +1304,7 @@ export default function Dashboard() {
                         type="button"
                         onClick={() => setPickerCategory(cat.id)}
                         className={cn(
-                          'py-1 rounded-full text-[12px] font-medium transition-colors',
+                          'min-h-[36px] lg:min-h-0 py-1 rounded-full text-[12px] font-medium transition-colors',
                           pickerCategory === cat.id
                             ? 'bg-white/[0.1] text-[#FAFAFA]'
                             : 'text-[#71717A] hover:text-[#A1A1AA]'
@@ -1263,7 +1316,7 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                <div className="max-h-56 overflow-y-auto grid grid-cols-3 gap-1.5">
+                <div className="max-h-60 overflow-y-auto grid grid-cols-3 gap-1.5">
                   {displayedSymbols.map((sym) => {
                     const active = sym === symbol
                     return (
@@ -1272,7 +1325,7 @@ export default function Dashboard() {
                         type="button"
                         onClick={() => handleSelectSymbol(sym)}
                         className={cn(
-                          'h-8 px-2.5 rounded-xl text-[13px] font-medium flex items-center justify-between transition-colors',
+                          'h-10 lg:h-8 px-2.5 rounded-xl text-[13px] font-medium flex items-center justify-between transition-colors',
                           active
                             ? 'bg-white/[0.1] text-[#FAFAFA]'
                             : 'text-[#A1A1AA] hover:bg-white/[0.05] hover:text-[#FAFAFA]'
@@ -1288,8 +1341,8 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Segmented Timeframe Pill */}
-          <div className="flex items-center gap-0.5 max-w-full overflow-x-auto rounded-full bg-[#141417] border border-white/[0.06] p-1">
+          {/* Desktop Segmented Timeframe Pill */}
+          <div className="hidden lg:flex items-center gap-0.5 rounded-full bg-[#141417] border border-white/[0.06] p-1">
             {TIMEFRAMES.map((tf) => (
               <button
                 key={tf}
@@ -1306,10 +1359,45 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+
+          {/* Mobile Scan Action (aligned on Row 1 with Symbol Picker) */}
+          <button
+            type="button"
+            disabled={scanning}
+            onClick={() => void handleManualScan()}
+            className="lg:hidden h-10 rounded-full bg-[#141417] border border-white/[0.08] hover:border-white/[0.18] px-3.5 text-[13px] font-medium text-[#FAFAFA] flex items-center gap-1.5 transition-colors disabled:opacity-50 shrink-0"
+            title="Run multi-strategy scan & refresh MT5"
+          >
+            {scanning ? (
+              <PiSpinnerGap size={15} className="animate-spin text-[#FAFAFA]" />
+            ) : (
+              <PiBroadcast size={15} className="text-[#A1A1AA]" />
+            )}
+            <span>{scanning ? 'Scanning...' : 'Scan'}</span>
+          </button>
         </div>
 
-        {/* Center: Bare Inline Bid / Ask / Spread & Equity Telemetry (zero boxes) */}
-        <div className="hidden md:flex items-center gap-5 flex-wrap">
+        {/* Mobile Row 2: Touch-Friendly Full-Width Timeframe Strip */}
+        <div className="lg:hidden grid grid-cols-6 gap-1 rounded-full bg-[#141417] border border-white/[0.06] p-1">
+          {TIMEFRAMES.map((tf) => (
+            <button
+              key={tf}
+              type="button"
+              onClick={() => handleSelectTimeframe(tf)}
+              className={cn(
+                'h-8 rounded-full text-[12px] font-medium transition-colors text-center',
+                timeframe === tf
+                  ? 'bg-white/[0.12] text-[#FAFAFA]'
+                  : 'text-[#71717A] hover:text-[#A1A1AA]'
+              )}
+            >
+              {tf}
+            </button>
+          ))}
+        </div>
+
+        {/* Center: Bare Inline Bid / Ask / Spread & Equity Telemetry (desktop) */}
+        <div className="hidden lg:flex items-center gap-5 flex-wrap">
           <div className="flex items-center gap-4 text-[13px]">
             <span
               className="flex items-center gap-1.5"
@@ -1369,8 +1457,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Right: Clean Pill Actions */}
-        <div className="flex items-center gap-2">
+        {/* Right: Clean Pill Actions (desktop) */}
+        <div className="hidden lg:flex items-center gap-2">
           <button
             type="button"
             disabled={scanning}
@@ -1398,7 +1486,7 @@ export default function Dashboard() {
             title="Toggle Positions & Orders drawer"
           >
             <PiRows size={15} />
-            <span className="hidden sm:inline">Positions</span>
+            <span>Positions</span>
             <span className="rounded-full bg-white/[0.08] px-1.5 py-0.5 text-[12px] font-mono tabular-nums leading-none text-[#FAFAFA]">
               {activePositionsTotal}
             </span>
@@ -1416,78 +1504,176 @@ export default function Dashboard() {
             title="Toggle right inspector drawer"
           >
             <PiSidebarSimple size={15} />
-            <span className="hidden sm:inline">Inspector</span>
+            <span>Inspector</span>
           </button>
         </div>
       </div>
 
-      {/* 2. CHART-FIRST CANVAS + CALM 340px INSPECTOR DRAWER */}
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:overflow-hidden">
-        {/* LEFT: Chart Canvas */}
-        <div className="flex-1 min-w-0 min-h-[380px] lg:min-h-0 relative bg-[#09090B] flex flex-col">
-          {candles.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center p-6">
-              {loading ? (
-                <div className="w-full max-w-2xl rounded-2xl bg-[#111113] border border-white/[0.07] h-[340px] flex items-center justify-center">
-                  <div className="flex items-center gap-2.5 text-[13px] text-[#A1A1AA]">
-                    <PiSpinnerGap size={16} className="animate-spin text-[#FAFAFA]" />
-                    <span>
-                      Loading {symbol} {timeframe} market data...
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center space-y-3 rounded-2xl bg-[#111113] border border-white/[0.07] px-8 py-7 max-w-md">
-                  <p className="text-[14px] font-medium text-[#FAFAFA]">
-                    No candle data available for {symbol} ({timeframe})
-                  </p>
-                  <p className="text-[13px] text-[#71717A]">
-                    Reconnect or run a manual scan to refresh the feed.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void handleManualScan()}
-                    className="h-9 px-4 rounded-full bg-[#161619] border border-white/[0.08] hover:border-white/[0.18] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center gap-2 transition-colors"
-                  >
-                    <PiArrowsClockwise size={15} />
-                    <span>Retry feed</span>
-                  </button>
-                </div>
+      {/* MOBILE WORKSPACE VIEW SWITCHER (< lg) */}
+      <div className="lg:hidden px-3 py-2 bg-[#09090B] border-b border-white/[0.06] shrink-0 z-20">
+        <div className="grid grid-cols-5 gap-1 rounded-xl bg-[#111113] border border-white/[0.06] p-1">
+          {(
+            [
+              { id: 'chart', label: 'Chart', count: 0, dot: false },
+              { id: 'setups', label: 'Setups', count: chartSignals.length, dot: false },
+              { id: 'order', label: 'Order', count: 0, dot: manualPlanner.activeOnChart },
+              { id: 'risk', label: 'Risk', count: 0, dot: riskNotices.some((n) => n.critical) },
+              { id: 'positions', label: 'Book', count: activePositionsTotal, dot: false },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => handleSelectMobileView(tab.id)}
+              className={cn(
+                'relative min-h-[38px] px-1 rounded-lg text-[12px] font-medium transition-colors flex items-center justify-center gap-1 truncate',
+                mobileView === tab.id
+                  ? 'bg-white/[0.11] text-[#FAFAFA]'
+                  : 'text-[#71717A] hover:text-[#A1A1AA]'
               )}
-            </div>
-          ) : (
-            <ChartPanel
-              hideHeader
-              symbol={symbol}
-              timeframe={timeframe}
-              candles={candles}
-              markers={chartMarkers}
-              activeSignal={chartActiveSignal}
-              manualSetup={chartManualSetup}
-              onCrosshairMove={handleCrosshairMove}
-              onChartClick={handleChartClick}
-              onTimeframeChange={handleSelectTimeframe}
-              onExecuteActiveSignal={handleExecuteChartSignal}
-              onExecuteManualSetup={handleExecutePlanner}
-              onClearSelection={() => {
-                setLockedSignalId(null)
-                setHoveredSignalId(null)
-                setManualPlanner((prev) => ({ ...prev, activeOnChart: false }))
-              }}
-              executingSetup={executingChartSignal || executingTrade}
-              livePrice={effectiveBid}
-              focusTime={focusTime}
-              focusNonce={focusNonce}
-              loading={loading || scanning}
-            />
+            >
+              <span className="truncate">{tab.label}</span>
+              {tab.count > 0 && (
+                <span className="font-mono text-[10px] tabular-nums px-1 py-0.5 rounded-full bg-white/[0.1] text-[#FAFAFA] leading-none">
+                  {tab.count > 99 ? '99+' : tab.count}
+                </span>
+              )}
+              {tab.dot && tab.count === 0 && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shrink-0" />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 2. CHART-FIRST CANVAS + CALM 340px INSPECTOR DRAWER */}
+      <div
+        className={cn(
+          'flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden',
+          mobileView === 'positions' && 'hidden lg:flex'
+        )}
+      >
+        {/* LEFT: Chart Canvas */}
+        <div
+          className={cn(
+            'flex-1 min-w-0 relative bg-[#09090B] flex flex-col min-h-0',
+            mobileView === 'chart' ? 'flex' : 'hidden lg:flex'
           )}
+        >
+          {/* Mobile Compact Live Quote & Equity Telemetry Bar */}
+          <div className="lg:hidden flex items-center justify-between gap-3 px-3 py-2 border-b border-white/[0.05] bg-[#0D0D10] text-[11.5px] overflow-x-auto shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="flex items-center gap-1.5">
+                <span
+                  className={cn(
+                    'w-1.5 h-1.5 rounded-full shrink-0',
+                    liveQuote.source === 'mt5' ? 'bg-[#34D399]' : 'bg-[#71717A]'
+                  )}
+                />
+                <span className="text-[#71717A]">Bid</span>
+                <span className="font-mono tabular-nums text-[#FAFAFA]">
+                  {effectiveBid != null ? formatPrice(effectiveBid, undefined, symbol) : '—'}
+                </span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="text-[#71717A]">Ask</span>
+                <span className="font-mono tabular-nums text-[#FAFAFA]">
+                  {effectiveAsk != null ? formatPrice(effectiveAsk, undefined, symbol) : '—'}
+                </span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="text-[#71717A]">Spd</span>
+                <span
+                  className={cn(
+                    'font-mono tabular-nums',
+                    spreadAlert ? 'text-[#F87171]' : 'text-[#A1A1AA]'
+                  )}
+                >
+                  {effectiveSpreadPips != null ? `${effectiveSpreadPips.toFixed(1)}p` : '—'}
+                </span>
+              </span>
+            </div>
+            <span
+              className={cn(
+                'font-mono tabular-nums font-medium shrink-0',
+                liveEquity < liveBalance ? 'text-[#F87171]' : 'text-[#FAFAFA]'
+              )}
+            >
+              ${liveEquity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+
+          <div className="flex-1 min-h-[340px] lg:min-h-0 relative flex flex-col">
+            {candles.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
+                {loading ? (
+                  <div className="w-full max-w-2xl rounded-2xl bg-[#111113] border border-white/[0.07] h-[300px] sm:h-[340px] flex items-center justify-center">
+                    <div className="flex items-center gap-2.5 text-[13px] text-[#A1A1AA]">
+                      <PiSpinnerGap size={16} className="animate-spin text-[#FAFAFA]" />
+                      <span>
+                        Loading {symbol} {timeframe} market data...
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center space-y-3 rounded-2xl bg-[#111113] border border-white/[0.07] px-6 sm:px-8 py-7 max-w-md">
+                    <p className="text-[14px] font-medium text-[#FAFAFA]">
+                      No candle data available for {symbol} ({timeframe})
+                    </p>
+                    <p className="text-[13px] text-[#71717A]">
+                      Reconnect or run a manual scan to refresh the feed.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleManualScan()}
+                      className="h-10 lg:h-9 px-4 rounded-full bg-[#161619] border border-white/[0.08] hover:border-white/[0.18] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center gap-2 transition-colors"
+                    >
+                      <PiArrowsClockwise size={15} />
+                      <span>Retry feed</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <ChartPanel
+                hideHeader
+                symbol={symbol}
+                timeframe={timeframe}
+                candles={candles}
+                markers={chartMarkers}
+                activeSignal={chartActiveSignal}
+                manualSetup={chartManualSetup}
+                onCrosshairMove={handleCrosshairMove}
+                onChartClick={handleChartClick}
+                onTimeframeChange={handleSelectTimeframe}
+                onExecuteActiveSignal={handleExecuteChartSignal}
+                onExecuteManualSetup={handleExecutePlanner}
+                onClearSelection={() => {
+                  setLockedSignalId(null)
+                  setHoveredSignalId(null)
+                  setManualPlanner((prev) => ({ ...prev, activeOnChart: false }))
+                }}
+                executingSetup={executingChartSignal || executingTrade}
+                livePrice={effectiveBid}
+                focusTime={focusTime}
+                focusNonce={focusNonce}
+                loading={loading || scanning}
+              />
+            )}
+          </div>
         </div>
 
-        {/* RIGHT: Calm 340px Collapsible Inspector Drawer */}
-        {inspectorOpen && (
-          <aside className="w-full lg:w-[340px] shrink-0 border-t lg:border-t-0 lg:border-l border-white/[0.07] bg-[#111113] flex flex-col min-h-0">
-            {/* Clean Pill Tab Switcher */}
-            <div className="p-3 border-b border-white/[0.06] shrink-0">
+        {/* RIGHT: Calm 340px Collapsible Inspector Drawer (Full-Pane on Mobile) */}
+        {(inspectorOpen || isMobileInspectorView) && (
+          <aside
+            className={cn(
+              'w-full lg:w-[340px] lg:shrink-0 lg:border-l border-white/[0.07] bg-[#111113] flex-col min-h-0',
+              isMobileInspectorView ? 'flex flex-1 lg:flex-none' : 'hidden lg:flex',
+              !inspectorOpen && 'lg:hidden'
+            )}
+          >
+            {/* Clean Pill Tab Switcher (Desktop only — mobile uses top view switcher) */}
+            <div className="hidden lg:block p-3 border-b border-white/[0.06] shrink-0">
               <div className="grid grid-cols-3 rounded-full bg-[#161619] p-1">
                 {(
                   [
@@ -1680,7 +1866,7 @@ export default function Dashboard() {
                           }))
                         }}
                         className={cn(
-                          'h-9 rounded-xl border text-[13px] font-semibold transition-colors',
+                          'h-11 lg:h-9 rounded-xl border text-[13px] font-semibold transition-colors',
                           active
                             ? side === 'BUY'
                               ? 'bg-[#34D399]/15 border-[#34D399]/40 text-[#34D399]'
@@ -1893,7 +2079,7 @@ export default function Dashboard() {
                     disabled={!plannerValid || executingTrade}
                     onClick={() => void handleExecutePlanner()}
                     className={cn(
-                      'w-full h-10 rounded-xl border text-[13px] font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50',
+                      'w-full h-11 lg:h-10 rounded-xl border text-[13px] font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50',
                       manualPlanner.action === 'BUY'
                         ? 'bg-[#34D399]/15 border-[#34D399]/30 text-[#34D399] hover:bg-[#34D399]/25'
                         : 'bg-[#F87171]/15 border-[#F87171]/30 text-[#F87171] hover:bg-[#F87171]/25'
@@ -2036,12 +2222,18 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* 3. COLLAPSIBLE BOTTOM POSITIONS & PENDING ORDERS SHEET */}
-      {dockVisible && (
-        <section className="border-t border-white/[0.07] bg-[#111113] shrink-0 z-20">
+      {/* 3. COLLAPSIBLE BOTTOM POSITIONS & PENDING ORDERS SHEET (Full-Pane Book on Mobile) */}
+      {(dockVisible || mobileView === 'positions') && (
+        <section
+          className={cn(
+            'lg:border-t border-white/[0.07] bg-[#111113] lg:shrink-0 z-20 flex-col min-h-0',
+            mobileView === 'positions' ? 'flex flex-1 lg:flex-none' : 'hidden lg:flex',
+            !dockVisible && 'lg:hidden'
+          )}
+        >
           {/* Sheet Header */}
-          <div className="h-11 px-4 flex items-center justify-between gap-3 border-b border-white/[0.06]">
-            <div className="flex items-center gap-3 min-w-0">
+          <div className="min-h-[48px] lg:h-11 px-3 sm:px-4 py-2 lg:py-0 flex items-center justify-between gap-2 sm:gap-3 border-b border-white/[0.06] shrink-0">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
               <div className="hidden sm:flex items-center gap-2">
                 <span
                   className={cn(
@@ -2052,7 +2244,7 @@ export default function Dashboard() {
                 <span className="text-[13px] font-medium text-[#A1A1AA]">Exness MT5</span>
               </div>
 
-              <div className="flex items-center gap-1 rounded-full bg-[#161619] p-0.5">
+              <div className="flex items-center gap-1 rounded-full bg-[#161619] p-0.5 max-w-full overflow-x-auto">
                 <button
                   type="button"
                   onClick={() => {
@@ -2060,13 +2252,13 @@ export default function Dashboard() {
                     setDockExpanded(true)
                   }}
                   className={cn(
-                    'h-7 px-3 rounded-full text-[12px] font-medium transition-colors flex items-center gap-1.5',
+                    'h-8 lg:h-7 px-3 rounded-full text-[12px] font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0',
                     dockTab === 'positions'
                       ? 'bg-white/[0.1] text-[#FAFAFA]'
                       : 'text-[#71717A] hover:text-[#A1A1AA]'
                   )}
                 >
-                  <span>Open positions</span>
+                  <span>Positions</span>
                   <span className="font-mono tabular-nums text-[#A1A1AA]">
                     {metaPositions.length}
                   </span>
@@ -2078,13 +2270,13 @@ export default function Dashboard() {
                     setDockExpanded(true)
                   }}
                   className={cn(
-                    'h-7 px-3 rounded-full text-[12px] font-medium transition-colors flex items-center gap-1.5',
+                    'h-8 lg:h-7 px-3 rounded-full text-[12px] font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0',
                     dockTab === 'orders'
                       ? 'bg-white/[0.1] text-[#FAFAFA]'
                       : 'text-[#71717A] hover:text-[#A1A1AA]'
                   )}
                 >
-                  <span>Pending orders</span>
+                  <span>Orders</span>
                   <span className="font-mono tabular-nums text-[#A1A1AA]">
                     {pendingOrders.length}
                   </span>
@@ -2092,7 +2284,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <div className="flex items-center gap-2 text-[13px]">
                 <span className="text-[12px] text-[#71717A] hidden sm:inline">Net P&L</span>
                 <span
@@ -2112,7 +2304,7 @@ export default function Dashboard() {
                   void refreshAccount()
                   void fetchPendingOrders()
                 }}
-                className="p-1.5 rounded-lg text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.05] transition-colors"
+                className="w-9 h-9 lg:w-auto lg:h-auto lg:p-1.5 rounded-lg flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.05] transition-colors"
                 title="Refresh MT5 positions & orders"
               >
                 <PiArrowsClockwise size={15} className={cn(metaLoading && 'animate-spin')} />
@@ -2121,7 +2313,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => setDockExpanded((v) => !v)}
-                className="p-1.5 rounded-lg text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.05] transition-colors"
+                className="hidden lg:flex p-1.5 rounded-lg text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.05] transition-colors"
                 title={dockExpanded ? 'Collapse sheet' : 'Expand sheet'}
               >
                 {dockExpanded ? <PiCaretDown size={16} /> : <PiCaretUp size={16} />}
@@ -2129,16 +2321,125 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Sheet Table Body */}
-          {dockExpanded && (
-            <div className="max-h-48 overflow-auto">
+          {/* Sheet Body */}
+          {(dockExpanded || mobileView === 'positions') && (
+            <div className="flex-1 lg:flex-none lg:max-h-48 overflow-auto">
               {dockTab === 'positions' ? (
                 metaPositions.length === 0 ? (
-                  <div className="py-6 text-center text-[13px] text-[#71717A]">
+                  <div className="py-10 lg:py-6 text-center text-[13px] text-[#71717A]">
                     No open positions on MT5
                   </div>
                 ) : (
-                  <table className="w-full text-left border-collapse text-[13px]">
+                  <>
+                    {/* Mobile Position Cards (< md) */}
+                    <div className="md:hidden p-3 space-y-2.5">
+                      {metaPositions.map((pos) => {
+                        const isBuy = pos.type.toUpperCase().includes('BUY')
+                        const isCurrent = pos.symbol === symbol
+                        return (
+                          <div
+                            key={pos.id}
+                            onClick={() => {
+                              setSymbol(pos.symbol as ChartSymbol)
+                              setSearchParams({ symbol: pos.symbol, timeframe }, { replace: true })
+                              setMobileView('chart')
+                            }}
+                            className={cn(
+                              'rounded-xl border p-3.5 space-y-3 transition-colors',
+                              isCurrent
+                                ? 'bg-white/[0.04] border-white/[0.14]'
+                                : 'bg-[#161619] border-white/[0.06]'
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-[14px] font-semibold text-[#FAFAFA]">
+                                  {pos.symbol}
+                                </span>
+                                <span
+                                  className={cn(
+                                    'px-2 py-0.5 rounded-md text-[11px] font-semibold',
+                                    isBuy
+                                      ? 'bg-[#34D399]/10 text-[#34D399]'
+                                      : 'bg-[#F87171]/10 text-[#F87171]'
+                                  )}
+                                >
+                                  {isBuy ? 'BUY' : 'SELL'}
+                                </span>
+                                <span className="text-[12px] font-mono tabular-nums text-[#A1A1AA]">
+                                  {pos.volume.toFixed(2)}L
+                                </span>
+                              </div>
+                              <span
+                                className={cn(
+                                  'text-[14px] font-mono font-semibold tabular-nums',
+                                  pos.profit >= 0 ? 'text-[#34D399]' : 'text-[#F87171]'
+                                )}
+                              >
+                                {pos.profit >= 0 ? '+' : '-'}${Math.abs(pos.profit).toFixed(2)}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 text-[12px] pt-2 border-t border-white/[0.06]">
+                              <div>
+                                <span className="block text-[11px] text-[#71717A]">Entry</span>
+                                <span className="font-mono tabular-nums text-[#FAFAFA]">
+                                  {formatPrice(pos.openPrice, undefined, pos.symbol)}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="block text-[11px] text-[#71717A]">Current</span>
+                                <span className="font-mono tabular-nums text-[#FAFAFA]">
+                                  {formatPrice(pos.currentPrice, undefined, pos.symbol)}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="block text-[11px] text-[#71717A]">SL / TP</span>
+                                <span className="font-mono tabular-nums text-[#A1A1AA] truncate block">
+                                  {pos.sl ? formatPrice(pos.sl, undefined, pos.symbol) : '—'} /{' '}
+                                  {pos.tp ? formatPrice(pos.tp, undefined, pos.symbol) : '—'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={closingPosId === pos.id}
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                try {
+                                  setClosingPosId(pos.id)
+                                  const res = await closeOpenPosition(pos.id)
+                                  if (res?.success) {
+                                    showToast(
+                                      'Position Closed',
+                                      `Closed ${pos.symbol} on Exness MT5`,
+                                      'success'
+                                    )
+                                    await refreshPositions()
+                                  } else {
+                                    showToast('Notice', res?.error || 'Failed to close position', 'info')
+                                  }
+                                } finally {
+                                  setClosingPosId(null)
+                                }
+                              }}
+                              className="w-full h-10 rounded-xl bg-[#111113] hover:bg-[#F87171]/15 border border-white/[0.08] hover:border-[#F87171]/40 text-[13px] font-medium text-[#F87171] inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                            >
+                              {closingPosId === pos.id ? (
+                                <PiSpinnerGap size={15} className="animate-spin" />
+                              ) : (
+                                <PiXCircle size={15} />
+                              )}
+                              <span>Close position</span>
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Desktop Position Table (>= md) */}
+                    <table className="hidden md:table w-full text-left border-collapse text-[13px]">
                     <thead className="bg-[#111113] border-b border-white/[0.06] text-[12px] font-medium text-[#71717A] sticky top-0">
                       <tr>
                         <th className="py-2.5 px-4 font-medium">Symbol</th>
@@ -2241,13 +2542,96 @@ export default function Dashboard() {
                       })}
                     </tbody>
                   </table>
+                  </>
                 )
               ) : pendingOrders.length === 0 ? (
-                <div className="py-6 text-center text-[13px] text-[#71717A]">
+                <div className="py-10 lg:py-6 text-center text-[13px] text-[#71717A]">
                   No pending MT5 limit or stop orders
                 </div>
               ) : (
-                <table className="w-full text-left border-collapse text-[13px]">
+                <>
+                  {/* Mobile Pending Order Cards (< md) */}
+                  <div className="md:hidden p-3 space-y-2.5">
+                    {pendingOrders.map((order) => {
+                      const isBuy = order.type.toUpperCase().includes('BUY')
+                      return (
+                        <div
+                          key={order.id}
+                          onClick={() => {
+                            setSymbol(order.symbol as ChartSymbol)
+                            setSearchParams({ symbol: order.symbol, timeframe }, { replace: true })
+                            setMobileView('chart')
+                          }}
+                          className="rounded-xl border border-white/[0.06] bg-[#161619] p-3.5 space-y-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-[14px] font-semibold text-[#FAFAFA]">
+                                {order.symbol}
+                              </span>
+                              <span
+                                className={cn(
+                                  'px-2 py-0.5 rounded-md text-[11px] font-semibold',
+                                  isBuy
+                                    ? 'bg-[#34D399]/10 text-[#34D399]'
+                                    : 'bg-[#F87171]/10 text-[#F87171]'
+                                )}
+                              >
+                                {order.type.replace('ORDER_TYPE_', '').replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                            <span className="text-[12px] font-mono tabular-nums text-[#A1A1AA]">
+                              {order.volume.toFixed(2)}L · {order.state ?? 'Placed'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 text-[12px] pt-2 border-t border-white/[0.06]">
+                            <div>
+                              <span className="block text-[11px] text-[#71717A]">Limit</span>
+                              <span className="font-mono tabular-nums text-[#FAFAFA]">
+                                {formatPrice(order.openPrice, undefined, order.symbol)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="block text-[11px] text-[#71717A]">Current</span>
+                              <span className="font-mono tabular-nums text-[#A1A1AA]">
+                                {order.currentPrice != null
+                                  ? formatPrice(order.currentPrice, undefined, order.symbol)
+                                  : '—'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="block text-[11px] text-[#71717A]">SL / TP</span>
+                              <span className="font-mono tabular-nums text-[#A1A1AA] truncate block">
+                                {order.sl ? formatPrice(order.sl, undefined, order.symbol) : '—'} /{' '}
+                                {order.tp ? formatPrice(order.tp, undefined, order.symbol) : '—'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={cancelingOrderId === order.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void handleCancelPendingOrder(order.id)
+                            }}
+                            className="w-full h-10 rounded-xl bg-[#111113] hover:bg-[#F87171]/15 border border-white/[0.08] hover:border-[#F87171]/40 text-[13px] font-medium text-[#F87171] inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                          >
+                            {cancelingOrderId === order.id ? (
+                              <PiSpinnerGap size={15} className="animate-spin" />
+                            ) : (
+                              <PiXCircle size={15} />
+                            )}
+                            <span>Cancel order</span>
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Desktop Pending Orders Table (>= md) */}
+                  <table className="hidden md:table w-full text-left border-collapse text-[13px]">
                   <thead className="bg-[#111113] border-b border-white/[0.06] text-[12px] font-medium text-[#71717A] sticky top-0">
                     <tr>
                       <th className="py-2.5 px-4 font-medium">Symbol</th>
@@ -2328,6 +2712,7 @@ export default function Dashboard() {
                     })}
                   </tbody>
                 </table>
+                </>
               )}
             </div>
           )}

@@ -2,9 +2,11 @@ import {
   TRAXO_FOREX_STRATEGIES,
   traxoLondonApex,
   traxoTokyoYield,
+  traxoSovereignFix,
   traxoBarrierGrid,
   traxoMacroVector,
   isTokyoGotobiDate,
+  isMonthEndFixWindow,
   findNearestBarrierLevel,
 } from '../server/algorithms/traxo/forex';
 import type { ITraxoStrategy, TraxoCandle } from '../server/algorithms/traxo/types';
@@ -22,7 +24,7 @@ function assertEqual<T>(actual: T, expected: T, msg: string) {
 // ---------------------------------------------------------------------------
 // 0. Contract & Registry Compliance
 // ---------------------------------------------------------------------------
-assertEqual(TRAXO_FOREX_STRATEGIES.length, 4, 'Should export 4 forex strategies');
+assertEqual(TRAXO_FOREX_STRATEGIES.length, 5, 'Should export 5 forex strategies');
 for (const strat of TRAXO_FOREX_STRATEGIES as ITraxoStrategy[]) {
   assert(typeof strat.id === 'string' && strat.id.length > 0, 'Strategy id present');
   assert(typeof strat.name === 'string' && strat.name.length > 0, 'Strategy name present');
@@ -419,6 +421,91 @@ for (const strat of TRAXO_FOREX_STRATEGIES as ITraxoStrategy[]) {
     }),
     null,
     'newsBlackout must suppress MacroVector signal'
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 5. traxoSovereignFix — London 16:00 UTC WM/Reuters Fix Snapback
+// ---------------------------------------------------------------------------
+{
+  // Month-end business day checks (May 2026: May 31 Sun, May 30 Sat -> last 2 bdays are May 28 & May 29)
+  assertEqual(isMonthEndFixWindow(new Date('2026-05-29T16:00:00Z')), true, 'May 29 2026 is final business day');
+  assertEqual(isMonthEndFixWindow(new Date('2026-05-28T16:00:00Z')), true, 'May 28 2026 is 2nd-to-last business day');
+  assertEqual(isMonthEndFixWindow(new Date('2026-05-12T16:00:00Z')), false, 'May 12 is mid-month');
+
+  function makeSovereignSeries(datePrefix: string, direction: 'BUY' | 'SELL'): TraxoCandle[] {
+    const list: TraxoCandle[] = [];
+    // 18 warmup bars from 10:30 to 14:45 UTC (range ~12 pips -> ATR ~0.0012)
+    const start = Date.parse(`${datePrefix}T10:30:00Z`);
+    for (let i = 0; i < 18; i++) {
+      list.push({
+        open: 1.0900,
+        high: 1.0906,
+        low: 1.0894,
+        close: 1.0900,
+        volume: 1000,
+        timestamp: new Date(start + i * 15 * 60_000).toISOString(),
+      });
+    }
+    if (direction === 'SELL') {
+      // Pre-fix 15:00-15:45 UTC surges upward >= 0.75 * ATR above equilibrium
+      list.push(
+        { open: 1.0900, high: 1.0905, low: 1.0898, close: 1.0903, volume: 1100, timestamp: `${datePrefix}T15:00:00Z` },
+        { open: 1.0903, high: 1.0910, low: 1.0902, close: 1.0909, volume: 1200, timestamp: `${datePrefix}T15:15:00Z` },
+        { open: 1.0909, high: 1.0922, low: 1.0908, close: 1.0920, volume: 1400, timestamp: `${datePrefix}T15:30:00Z` },
+        { open: 1.0920, high: 1.0938, low: 1.0918, close: 1.0934, volume: 1650, timestamp: `${datePrefix}T15:45:00Z` },
+        // 16:00 UTC Fix lock snapback reversal
+        { open: 1.0934, high: 1.0942, low: 1.0924, close: 1.0926, volume: 2100, timestamp: `${datePrefix}T16:00:00Z` }
+      );
+    } else {
+      // Pre-fix 15:00-15:45 UTC flushes downward >= 0.75 * ATR below equilibrium
+      list.push(
+        { open: 1.0900, high: 1.0902, low: 1.0895, close: 1.0897, volume: 1100, timestamp: `${datePrefix}T15:00:00Z` },
+        { open: 1.0897, high: 1.0898, low: 1.0889, close: 1.0891, volume: 1200, timestamp: `${datePrefix}T15:15:00Z` },
+        { open: 1.0891, high: 1.0892, low: 1.0878, close: 1.0880, volume: 1400, timestamp: `${datePrefix}T15:30:00Z` },
+        { open: 1.0880, high: 1.0882, low: 1.0862, close: 1.0866, volume: 1650, timestamp: `${datePrefix}T15:45:00Z` },
+        // 16:00 UTC Fix lock snapback reversal
+        { open: 1.0866, high: 1.0876, low: 1.0858, close: 1.0874, volume: 2100, timestamp: `${datePrefix}T16:00:00Z` }
+      );
+    }
+    return list;
+  }
+
+  const midMonthSell = traxoSovereignFix.evaluate({
+    symbol: 'EURUSD',
+    timeframe: '15m',
+    candles: makeSovereignSeries('2026-05-12', 'SELL'),
+  });
+  assert(midMonthSell !== null, 'SovereignFix should trigger SELL snapback after pre-fix upward stretch');
+  assertEqual(midMonthSell!.direction, 'SELL', 'SovereignFix direction SELL');
+  assertEqual(midMonthSell!.metrics?.monthEndWindow, false, 'Mid-month window false');
+
+  const monthEndBuy = traxoSovereignFix.evaluate({
+    symbol: 'GBPUSD',
+    timeframe: '15m',
+    candles: makeSovereignSeries('2026-05-29', 'BUY'),
+  });
+  assert(monthEndBuy !== null, 'SovereignFix should trigger BUY snapback on month-end fix');
+  assertEqual(monthEndBuy!.direction, 'BUY', 'SovereignFix direction BUY');
+  assertEqual(monthEndBuy!.metrics?.monthEndWindow, true, 'Month-end window true');
+
+  const midMonthBuy = traxoSovereignFix.evaluate({
+    symbol: 'GBPUSD',
+    timeframe: '15m',
+    candles: makeSovereignSeries('2026-05-12', 'BUY'),
+  });
+  assert(midMonthBuy !== null, 'Mid-month BUY setup valid for boost comparison');
+  assert(
+    monthEndBuy!.confidencePct > midMonthBuy!.confidencePct,
+    `Month-end fix (${monthEndBuy!.confidencePct}%) must have higher confidence than mid-month (${midMonthBuy!.confidencePct}%)`
+  );
+
+  // Outside fix window (e.g. 14:00 UTC) must return null
+  const outWindow = makeSovereignSeries('2026-05-12', 'BUY').slice(0, 14);
+  assertEqual(
+    traxoSovereignFix.evaluate({ symbol: 'EURUSD', timeframe: '15m', candles: outWindow }),
+    null,
+    'SovereignFix must return null outside 16:00-16:30 UTC window'
   );
 }
 

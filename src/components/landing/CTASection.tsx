@@ -3,7 +3,7 @@ import { PiArrowRight } from 'react-icons/pi'
 
 export function CTASection() {
   return (
-    <section className="relative py-28 sm:py-40 px-4 sm:px-6 bg-[#09090B] overflow-hidden select-none text-center font-sans">
+    <section className="relative py-20 sm:py-32 lg:py-40 px-4 sm:px-6 bg-[#09090B] overflow-hidden select-none text-center font-sans">
       {/* ── Bespoke Atmospheric Depth Background ────────────────────────────── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <img
@@ -15,25 +15,25 @@ export function CTASection() {
         <div className="absolute inset-0 bg-gradient-to-r from-[#09090B] via-transparent to-[#09090B]" />
       </div>
 
-      <div className="relative z-10 max-w-3xl mx-auto space-y-8">
-        <div className="space-y-4">
-          <h2 className="text-3xl sm:text-5xl lg:text-[54px] font-bold tracking-tight text-[#FAFAFA] leading-[1.08]">
+      <div className="relative z-10 max-w-3xl mx-auto space-y-6 sm:space-y-8">
+        <div className="space-y-3.5 sm:space-y-4">
+          <h2 className="text-[30px] sm:text-5xl lg:text-[54px] font-bold tracking-tight text-[#FAFAFA] leading-[1.12] sm:leading-[1.08]">
             Built for conviction.
             <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FAFAFA] via-[#D4D4D8] to-[#71717A]">
               Standing by for the next session.
             </span>
           </h2>
-          <p className="text-[15px] sm:text-[18px] text-[#A1A1AA] max-w-xl mx-auto leading-relaxed font-normal">
+          <p className="text-[14.5px] sm:text-[18px] text-[#A1A1AA] max-w-xl mx-auto leading-relaxed font-normal">
             Configure your risk parameters, connect your Exness MT5 bridge, and execute with institutional precision.
           </p>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-2 sm:pt-4">
           <Link
             to="/register"
-            className="w-full sm:w-auto h-12 px-8 rounded-full bg-[#FAFAFA] hover:bg-[#E4E4E7] active:scale-[0.99] text-[#09090B] text-[13.5px] font-semibold flex items-center justify-center gap-2.5 transition-all shadow-[0_0_32px_rgba(255,255,255,0.12)] cursor-pointer"
+            className="w-full sm:w-auto h-12 px-7 sm:px-8 rounded-full bg-[#FAFAFA] hover:bg-[#E4E4E7] active:scale-[0.99] text-[#09090B] text-[13.5px] font-semibold flex items-center justify-center gap-2.5 transition-all shadow-[0_0_32px_rgba(255,255,255,0.12)] cursor-pointer"
           >
             <span>Initialize Terminal Access</span>
             <PiArrowRight size={15} />

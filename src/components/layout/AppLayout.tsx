@@ -1,21 +1,7 @@
-import { useState } from 'react'
-import { Outlet, useLocation, NavLink } from 'react-router'
-import { motion } from 'framer-motion'
-import {
-  PiChartLineUp,
-  PiChartLineUpBold,
-  PiStack,
-  PiStackBold,
-  PiClockCounterClockwise,
-  PiClockCounterClockwiseBold,
-  PiBookOpen,
-  PiBookOpenBold,
-  PiBroadcast,
-  PiBroadcastBold,
-} from 'react-icons/pi'
+import { useEffect, useState } from 'react'
+import { Outlet, useLocation } from 'react-router'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
-import { cn } from '@/lib/utils'
 
 const SIDEBAR_STORAGE_KEY = 'traxo-sidebar-collapsed'
 
@@ -69,14 +55,6 @@ function resolvePageMeta(pathname: string): { title: string; subtitle?: string }
   return { title: 'Traxo' }
 }
 
-const MOBILE_NAV = [
-  { to: '/dashboard', icon: PiChartLineUp, activeIcon: PiChartLineUpBold, label: 'Terminal' },
-  { to: '/strategies', icon: PiStack, activeIcon: PiStackBold, label: 'Strategies' },
-  { to: '/backtesting', icon: PiClockCounterClockwise, activeIcon: PiClockCounterClockwiseBold, label: 'Backtest' },
-  { to: '/journal', icon: PiBookOpen, activeIcon: PiBookOpenBold, label: 'Journal' },
-  { to: '/notifications', icon: PiBroadcast, activeIcon: PiBroadcastBold, label: 'Ops' },
-]
-
 export function AppLayout() {
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -85,7 +63,12 @@ export function AppLayout() {
       return false
     }
   })
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const location = useLocation()
+
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [location.pathname])
 
   const handleToggle = () => {
     setCollapsed((prev) => {
@@ -102,51 +85,27 @@ export function AppLayout() {
   const meta = resolvePageMeta(location.pathname)
 
   return (
-    <div className="obsidian-shell flex h-screen bg-[#09090B] text-[#FAFAFA] overflow-hidden font-sans">
-      <Sidebar collapsed={collapsed} onToggle={handleToggle} />
+    <div className="obsidian-shell flex h-[100dvh] w-full bg-[#09090B] text-[#FAFAFA] overflow-hidden font-sans">
+      <Sidebar
+        collapsed={collapsed}
+        onToggle={handleToggle}
+        mobileOpen={mobileNavOpen}
+        onMobileClose={() => setMobileNavOpen(false)}
+      />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-[#09090B]">
-        <Topbar title={meta.title} subtitle={meta.subtitle} />
+        <Topbar
+          title={meta.title}
+          subtitle={meta.subtitle}
+          onMenuClick={() => setMobileNavOpen(true)}
+        />
 
-        <main className="flex-1 min-h-0 overflow-auto pb-24 md:pb-0 bg-[#09090B]">
+        <main
+          className="flex-1 min-h-0 overflow-auto bg-[#09090B]"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
           <Outlet />
         </main>
-
-        {/* Mobile floating glassmorphic pill nav */}
-        <nav
-          className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-[400px] h-14 px-2 rounded-full bg-[#111113]/75 backdrop-blur-2xl border border-white/[0.12] shadow-[0_12px_40px_rgba(0,0,0,0.65)] flex items-center justify-around z-50"
-          aria-label="Mobile workspace navigation"
-        >
-          {MOBILE_NAV.map(({ to, icon: Icon, activeIcon: ActiveIcon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                cn(
-                  'relative flex-1 flex flex-col items-center justify-center gap-0.5 h-10 rounded-full transition-colors duration-150',
-                  isActive ? 'text-[#FAFAFA]' : 'text-[#71717A] hover:text-[#A1A1AA]',
-                )
-              }
-            >
-              {({ isActive }) => {
-                const RouteIcon = isActive ? ActiveIcon : Icon
-                return (
-                  <>
-                    {isActive && (
-                      <motion.span
-                        layoutId="mobile-nav-pill"
-                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                        className="absolute inset-0 bg-white/[0.1] border border-white/[0.08] rounded-full"
-                      />
-                    )}
-                    <RouteIcon size={18} className="relative z-10" />
-                    <span className="relative z-10 text-[10px] font-medium leading-none">{label}</span>
-                  </>
-                )
-              }}
-            </NavLink>
-          ))}
-        </nav>
       </div>
     </div>
   )

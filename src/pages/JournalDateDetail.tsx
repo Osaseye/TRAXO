@@ -176,38 +176,58 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
   const effectiveSl = entry.currentSl ?? entry.sl
 
   return (
-    <article className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 space-y-6">
+    <article className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-6 space-y-5 sm:space-y-6">
       {/* Top Row */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-5 border-b border-white/[0.06]">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3.5 sm:gap-4 pb-4 sm:pb-5 border-b border-white/[0.06]">
+        <div className="flex items-start sm:items-center justify-between gap-2 lg:justify-start">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[11.5px] sm:text-[12px] font-medium ${
+                entry.action === 'BUY'
+                  ? 'bg-[#34D399]/10 text-[#34D399]'
+                  : 'bg-[#F87171]/10 text-[#F87171]'
+              }`}
+            >
+              {entry.action}
+            </span>
+            <span className="text-[15.5px] sm:text-[16px] font-semibold text-[#FAFAFA]">
+              {entry.symbol}
+            </span>
+            <span className="px-2 py-0.5 rounded-lg bg-[#161619] text-[11.5px] sm:text-[12px] text-[#A1A1AA]">
+              {entry.timeframe}
+            </span>
+            <span className="text-[13px] sm:text-[14px] text-[#A1A1AA]">{entry.strategy}</span>
+            <span className="text-[12px] font-mono tabular-nums text-[#71717A]">
+              {new Date(entry.createdAt).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              })}
+            </span>
+          </div>
+
           <span
-            className={`px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
-              entry.action === 'BUY'
-                ? 'bg-[#34D399]/10 text-[#34D399]'
-                : 'bg-[#F87171]/10 text-[#F87171]'
+            className={`lg:hidden text-[14px] font-mono font-semibold tabular-nums shrink-0 ${
+              entry.outcome === 'win'
+                ? 'text-[#34D399]'
+                : entry.outcome === 'loss'
+                  ? 'text-[#F87171]'
+                  : 'text-[#A1A1AA]'
             }`}
           >
-            {entry.action}
-          </span>
-          <span className="text-[16px] font-semibold text-[#FAFAFA]">
-            {entry.symbol}
-          </span>
-          <span className="px-2.5 py-0.5 rounded-lg bg-[#161619] text-[12px] text-[#A1A1AA]">
-            {entry.timeframe}
-          </span>
-          <span className="text-[14px] text-[#A1A1AA]">{entry.strategy}</span>
-          <span className="text-[12px] font-mono tabular-nums text-[#71717A]">
-            {new Date(entry.createdAt).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            })}
+            {entry.outcome === 'pending' || entry.outcome === 'skipped'
+              ? entry.outcome === 'pending'
+                ? 'Pending'
+                : 'Skipped'
+              : entry.riskAmount > 0
+                ? formatSignedUsd(pnlUsd)
+                : `${pnlR >= 0 ? '+' : ''}${pnlR.toFixed(2)}R`}
           </span>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
           <span
-            className={`text-[15px] font-mono font-semibold tabular-nums mr-1 ${
+            className={`hidden lg:inline text-[15px] font-mono font-semibold tabular-nums mr-1 ${
               entry.outcome === 'win'
                 ? 'text-[#34D399]'
                 : entry.outcome === 'loss'
@@ -228,7 +248,7 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
             value={entry.outcome}
             onChange={(e) => handleOutcomeSelect(e.target.value as JournalOutcome)}
             aria-label="Trade outcome"
-            className="px-3 py-1.5 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] focus:border-white/[0.2] focus:outline-none"
+            className="h-9 flex-1 sm:flex-none px-3 py-1.5 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] focus:border-white/[0.2] focus:outline-none"
           >
             <option value="pending">Pending</option>
             <option value="win">Win</option>
@@ -240,7 +260,7 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
           <button
             type="button"
             onClick={() => onEdit(entry.id, { taken: !entry.taken })}
-            className={`px-3 py-1.5 rounded-xl text-[13px] font-medium transition-colors ${
+            className={`h-9 px-3 py-1.5 rounded-xl text-[13px] font-medium transition-colors whitespace-nowrap ${
               entry.taken
                 ? 'bg-[#FAFAFA] text-[#09090B]'
                 : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]'
@@ -254,15 +274,16 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
               type="button"
               onClick={() => onBreakEven(entry.id)}
               title="Move Stop Loss to Break-Even"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+              className="h-9 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[12.5px] sm:text-[13px] font-medium text-[#FAFAFA] transition-colors whitespace-nowrap"
             >
               <PiShield className="h-4 w-4 text-[#34D399]" />
-              <span>Move SL to BE</span>
+              <span className="sm:hidden">SL to BE</span>
+              <span className="hidden sm:inline">Move SL to BE</span>
             </button>
           )}
 
           {entry.breakEvenTriggered && (
-            <span className="px-2.5 py-1 rounded-xl bg-[#161619] text-[12px] font-medium text-[#34D399]">
+            <span className="h-9 inline-flex items-center px-2.5 rounded-xl bg-[#161619] text-[12px] font-medium text-[#34D399]">
               BE Locked
             </span>
           )}
@@ -271,7 +292,7 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
             type="button"
             onClick={() => onDelete(entry.id)}
             title="Delete trade entry"
-            className="p-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#71717A] hover:text-[#F87171] transition-colors"
+            className="h-9 w-9 inline-flex items-center justify-center rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#71717A] hover:text-[#F87171] transition-colors shrink-0"
           >
             <PiTrash className="h-4 w-4" />
           </button>
@@ -279,48 +300,48 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
       </div>
 
       {/* Borderless Price Levels & Risk Sizing Tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
-          <div className="text-[12px] text-[#71717A]">Entry</div>
-          <div className="text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA]">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+        <div className="rounded-xl bg-[#161619] p-3 sm:p-4 space-y-1">
+          <div className="text-[11.5px] sm:text-[12px] text-[#71717A]">Entry</div>
+          <div className="text-[14.5px] sm:text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA]">
             {formatPrice(entry.entry)}
           </div>
         </div>
-        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
-          <div className="text-[12px] text-[#71717A]">
+        <div className="rounded-xl bg-[#161619] p-3 sm:p-4 space-y-1">
+          <div className="text-[11.5px] sm:text-[12px] text-[#71717A]">
             {entry.breakEvenTriggered ? 'Active SL (BE)' : 'Stop Loss'}
           </div>
-          <div className="text-[15px] font-mono font-medium tabular-nums text-[#F87171]">
+          <div className="text-[14.5px] sm:text-[15px] font-mono font-medium tabular-nums text-[#F87171]">
             {formatPrice(effectiveSl)}
           </div>
         </div>
-        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
-          <div className="text-[12px] text-[#71717A]">Take Profit</div>
-          <div className="text-[15px] font-mono font-medium tabular-nums text-[#34D399]">
+        <div className="rounded-xl bg-[#161619] p-3 sm:p-4 space-y-1">
+          <div className="text-[11.5px] sm:text-[12px] text-[#71717A]">Take Profit</div>
+          <div className="text-[14.5px] sm:text-[15px] font-mono font-medium tabular-nums text-[#34D399]">
             {formatPrice(entry.tp)}
           </div>
         </div>
-        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
-          <div className="text-[12px] text-[#71717A]">Planned R:R</div>
-          <div className="text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA]">
+        <div className="rounded-xl bg-[#161619] p-3 sm:p-4 space-y-1">
+          <div className="text-[11.5px] sm:text-[12px] text-[#71717A]">Planned R:R</div>
+          <div className="text-[14.5px] sm:text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA]">
             {rr.toFixed(2)}R
           </div>
         </div>
-        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
-          <div className="text-[12px] text-[#71717A]">Confidence</div>
-          <div className="text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA]">
+        <div className="rounded-xl bg-[#161619] p-3 sm:p-4 space-y-1">
+          <div className="text-[11.5px] sm:text-[12px] text-[#71717A]">Confidence</div>
+          <div className="text-[14.5px] sm:text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA]">
             {entry.confidence}%
           </div>
         </div>
-        <div className="rounded-xl bg-[#161619] p-4 space-y-1">
-          <label className="block text-[12px] text-[#71717A]">Risk ($)</label>
+        <div className="rounded-xl bg-[#161619] p-3 sm:p-4 space-y-1">
+          <label className="block text-[11.5px] sm:text-[12px] text-[#71717A]">Risk ($)</label>
           <input
             type="number"
             min="0"
             step="1"
             value={riskDraft}
             onChange={(e) => setRiskDraft(e.target.value)}
-            className="w-full bg-transparent text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA] focus:outline-none border-b border-transparent focus:border-white/[0.2]"
+            className="w-full bg-transparent text-[14.5px] sm:text-[15px] font-mono font-medium tabular-nums text-[#FAFAFA] focus:outline-none border-b border-white/[0.12] sm:border-transparent focus:border-white/[0.25]"
           />
         </div>
       </div>
@@ -328,14 +349,14 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
       {/* Interactive Tags & Trade Reflection Notes */}
       <div className="space-y-4">
         <div className="space-y-2.5">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
             <span className="inline-flex items-center gap-2 text-[13px] font-medium text-[#A1A1AA]">
               <PiTag className="h-4 w-4 text-[#71717A]" />
               Setup &amp; Mistake Tags
             </span>
 
-            <div className="flex items-center gap-2">
-              <div className="relative">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-none">
                 <PiHash className="h-3.5 w-3.5 text-[#71717A] absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
@@ -348,13 +369,13 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
                     }
                   }}
                   placeholder="Custom tag"
-                  className="pl-8 pr-3 py-1.5 rounded-xl bg-[#18181B] border border-white/[0.07] text-[12px] text-[#FAFAFA] placeholder:text-[#71717A] focus:border-white/[0.2] focus:outline-none w-32"
+                  className="h-9 sm:h-auto pl-8 pr-3 py-1.5 rounded-xl bg-[#18181B] border border-white/[0.07] text-[12.5px] sm:text-[12px] text-[#FAFAFA] placeholder:text-[#71717A] focus:border-white/[0.2] focus:outline-none w-full sm:w-32"
                 />
               </div>
               <button
                 type="button"
                 onClick={handleAddCustomTag}
-                className="p-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#FAFAFA] transition-colors"
+                className="h-9 w-9 sm:h-auto sm:w-auto p-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#FAFAFA] transition-colors inline-flex items-center justify-center shrink-0"
                 aria-label="Add tag"
               >
                 <PiPlus className="h-4 w-4" />
@@ -362,7 +383,7 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {Array.from(new Set([...PRESET_TAGS, ...tagsDraft])).map((tag) => {
               const active = tagsDraft.includes(tag)
               return (
@@ -370,7 +391,7 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
                   key={tag}
                   type="button"
                   onClick={() => toggleTag(tag)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-1 rounded-full text-[12px] font-medium transition-colors ${
                     active
                       ? 'bg-[#FAFAFA] text-[#09090B]'
                       : 'bg-[#161619] text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-[#1D1D22]'
@@ -384,19 +405,19 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
+        <div className="space-y-2.5 sm:space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
             <label className="text-[13px] font-medium text-[#A1A1AA]">
               Execution Notes &amp; Post-Trade Review
             </label>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between sm:justify-end gap-3">
               {savedNotice && (
                 <span className="text-[12px] font-medium text-[#34D399]">Saved</span>
               )}
               <button
                 type="button"
                 onClick={handleSaveNotesAndRisk}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-medium transition-colors"
+                className="h-9 sm:h-auto w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-medium transition-colors"
               >
                 <PiFloppyDisk className="h-4 w-4" />
                 <span>Save Notes &amp; Risk</span>
@@ -408,7 +429,7 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
             value={notesDraft}
             onChange={(e) => setNotesDraft(e.target.value)}
             placeholder="Record entry reasoning, market structure context, emotional discipline, or execution slippage..."
-            className="w-full px-4 py-3 rounded-xl bg-[#18181B] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-[14px] text-[#FAFAFA] placeholder:text-[#71717A] resize-y"
+            className="w-full px-3.5 sm:px-4 py-3 rounded-xl bg-[#18181B] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-[14px] text-[#FAFAFA] placeholder:text-[#71717A] resize-y"
           />
         </div>
       </div>
@@ -467,10 +488,10 @@ export default function JournalDateDetail() {
 
   return (
     <div className="min-h-full bg-[#09090B] text-[#FAFAFA] overflow-x-hidden">
-      <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-8">
+      <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-5 sm:py-8 space-y-6 sm:space-y-8">
         {/* Header Bar */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Link
               to="/journal"
               className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
@@ -478,52 +499,52 @@ export default function JournalDateDetail() {
               <PiArrowLeft className="h-4 w-4" />
               <span>Back to calendar</span>
             </Link>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
+            <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+              <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
                 {formatHumanDate(activeDateKey)}
               </h1>
-              <span className="px-3 py-1 rounded-full bg-[#161619] text-[13px] font-mono tabular-nums text-[#A1A1AA]">
+              <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#161619] text-[12px] sm:text-[13px] font-mono tabular-nums text-[#A1A1AA]">
                 {activeDateKey}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto shrink-0">
             <button
               type="button"
               onClick={() => navigate(`/journal/${shiftDateKey(activeDateKey, -1)}`)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+              className="h-10 sm:h-auto inline-flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[12.5px] sm:text-[13px] font-medium text-[#FAFAFA] transition-colors whitespace-nowrap"
             >
-              <PiCaretLeft className="h-4 w-4 text-[#A1A1AA]" />
+              <PiCaretLeft className="h-4 w-4 text-[#A1A1AA] shrink-0" />
               <span>Previous Day</span>
             </button>
             <button
               type="button"
               onClick={() => navigate(`/journal/${shiftDateKey(activeDateKey, 1)}`)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+              className="h-10 sm:h-auto inline-flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[12.5px] sm:text-[13px] font-medium text-[#FAFAFA] transition-colors whitespace-nowrap"
             >
               <span>Next Day</span>
-              <PiCaretRight className="h-4 w-4 text-[#A1A1AA]" />
+              <PiCaretRight className="h-4 w-4 text-[#A1A1AA] shrink-0" />
             </button>
           </div>
         </div>
 
         {/* Daily Review Card */}
-        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
           <div className="space-y-1">
-            <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+            <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
               Daily Review
             </h2>
-            <p className="text-[14px] text-[#A1A1AA]">
+            <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA]">
               Price levels, risk sizing, execution notes, and realized outcome for this date.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:min-w-[540px]">
-            <div className="rounded-xl bg-[#161619] p-4 space-y-1">
-              <div className="text-[12px] text-[#71717A]">Net P&amp;L</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 lg:min-w-[540px]">
+            <div className="rounded-xl bg-[#161619] p-3 sm:p-4 space-y-1 min-w-0">
+              <div className="text-[11.5px] sm:text-[12px] text-[#71717A]">Net P&amp;L</div>
               <div
-                className={`text-[18px] font-mono font-semibold tabular-nums ${
+                className={`text-[16px] sm:text-[18px] font-mono font-semibold tabular-nums truncate ${
                   dayStats.netUsd > 0 || (dayStats.netUsd === 0 && dayStats.netR > 0)
                     ? 'text-[#34D399]'
                     : dayStats.netUsd < 0 || (dayStats.netUsd === 0 && dayStats.netR < 0)
@@ -537,10 +558,10 @@ export default function JournalDateDetail() {
               </div>
             </div>
 
-            <div className="rounded-xl bg-[#161619] p-4 space-y-1">
-              <div className="text-[12px] text-[#71717A]">R Multiple</div>
+            <div className="rounded-xl bg-[#161619] p-3 sm:p-4 space-y-1 min-w-0">
+              <div className="text-[11.5px] sm:text-[12px] text-[#71717A]">R Multiple</div>
               <div
-                className={`text-[18px] font-mono font-semibold tabular-nums ${
+                className={`text-[16px] sm:text-[18px] font-mono font-semibold tabular-nums ${
                   dayStats.netR > 0
                     ? 'text-[#34D399]'
                     : dayStats.netR < 0
@@ -553,23 +574,23 @@ export default function JournalDateDetail() {
               </div>
             </div>
 
-            <div className="rounded-xl bg-[#161619] p-4 space-y-1">
-              <div className="text-[12px] text-[#71717A]">Win Rate</div>
-              <div className="text-[18px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+            <div className="rounded-xl bg-[#161619] p-3 sm:p-4 space-y-1 min-w-0">
+              <div className="text-[11.5px] sm:text-[12px] text-[#71717A]">Win Rate</div>
+              <div className="text-[16px] sm:text-[18px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
                 {dayStats.winRate.toFixed(0)}%
               </div>
-              <div className="text-[12px] font-mono tabular-nums text-[#71717A]">
+              <div className="text-[11.5px] sm:text-[12px] font-mono tabular-nums text-[#71717A]">
                 <span className="text-[#34D399]">{dayStats.wins}W</span> /{' '}
                 <span className="text-[#F87171]">{dayStats.losses}L</span>
               </div>
             </div>
 
-            <div className="rounded-xl bg-[#161619] p-4 space-y-1">
-              <div className="text-[12px] text-[#71717A]">Entries</div>
-              <div className="text-[18px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+            <div className="rounded-xl bg-[#161619] p-3 sm:p-4 space-y-1 min-w-0">
+              <div className="text-[11.5px] sm:text-[12px] text-[#71717A]">Entries</div>
+              <div className="text-[16px] sm:text-[18px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
                 {dayStats.totalCount}
               </div>
-              <div className="text-[12px] font-mono tabular-nums text-[#71717A]">
+              <div className="text-[11.5px] sm:text-[12px] font-mono tabular-nums text-[#71717A]">
                 {takenEntries.length} taken · {systemEntries.length} sys
               </div>
             </div>
@@ -577,24 +598,24 @@ export default function JournalDateDetail() {
         </section>
 
         {dayEntries.length === 0 ? (
-          <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-12 text-center space-y-4">
+          <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-6 sm:p-12 text-center space-y-4">
             <img
               src="/brand/empty-journal.png"
               alt="No journal entries for this date"
-              className="w-full max-w-[260px] mx-auto rounded-xl object-cover opacity-90"
+              className="w-full max-w-[220px] sm:max-w-[260px] mx-auto rounded-xl object-cover opacity-90"
             />
             <div className="space-y-1.5">
               <p className="text-[15px] font-medium text-[#FAFAFA]">
                 No trades or signals logged for {activeDateKey}
               </p>
-              <p className="text-[14px] text-[#A1A1AA]">
+              <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA]">
                 Navigate to another trading day or return to the monthly P&amp;L calendar.
               </p>
             </div>
             <div>
               <Link
                 to="/journal"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+                className="inline-flex h-10 sm:h-auto items-center gap-2 px-4 py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
               >
                 <PiArrowLeft className="h-4 w-4" />
                 <span>Return to Calendar</span>
@@ -602,11 +623,11 @@ export default function JournalDateDetail() {
             </div>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8">
             {takenEntries.length > 0 && (
-              <section className="space-y-4">
+              <section className="space-y-3.5 sm:space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+                  <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
                     Taken Executions{' '}
                     <span className="text-[14px] font-mono tabular-nums font-normal text-[#71717A]">
                       ({takenEntries.length})
@@ -628,9 +649,9 @@ export default function JournalDateDetail() {
             )}
 
             {systemEntries.length > 0 && (
-              <section className="space-y-4">
+              <section className="space-y-3.5 sm:space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#A1A1AA]">
+                  <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#A1A1AA]">
                     System Detected Signals{' '}
                     <span className="text-[14px] font-mono tabular-nums font-normal text-[#71717A]">
                       ({systemEntries.length})

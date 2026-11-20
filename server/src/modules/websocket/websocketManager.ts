@@ -28,7 +28,14 @@ export function initWebSocketServer(server: http.Server): Server {
 }
 
 export interface BroadcastMessage {
-  type: 'NEW_SIGNAL' | 'NEW_CANDLE' | 'SIGNAL_UPDATED' | string;
+  type:
+    | 'NEW_SIGNAL'
+    | 'NEW_CANDLE'
+    | 'SIGNAL_UPDATED'
+    | 'NEWS_FREEZE_ENTER'
+    | 'NEWS_RELEASED'
+    | 'NEWS_FREEZE_EXIT'
+    | string;
   payload?: any;
 }
 
@@ -42,6 +49,9 @@ export function broadcast(message: BroadcastMessage): void {
     NEW_SIGNAL: ['new-signal', 'signal'],
     NEW_CANDLE: ['new-candle'],
     SIGNAL_UPDATED: ['signal-updated'],
+    NEWS_FREEZE_ENTER: ['news-freeze-enter'],
+    NEWS_RELEASED: ['news-released'],
+    NEWS_FREEZE_EXIT: ['news-freeze-exit'],
   };
 
   const events = EVENT_MAP[message.type];

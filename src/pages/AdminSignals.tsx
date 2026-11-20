@@ -390,94 +390,96 @@ export default function AdminSignals() {
   }
 
   return (
-    <div className="min-h-full bg-[#09090B] text-[#FAFAFA]">
-      <div className="max-w-[1360px] mx-auto px-6 sm:px-8 py-8 space-y-6">
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] font-sans overflow-x-hidden">
+      <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-5 sm:py-8 space-y-5 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div className="space-y-1.5">
             <p className="text-[12px] font-medium text-[#71717A]">Admin Archive</p>
-            <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
+            <h1 className="text-[24px] sm:text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
               Signal &amp; Rejection Archive
             </h1>
-            <p className="text-[14px] text-[#A1A1AA]">
+            <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA]">
               Raw scanner output ledger and guardrail rejection inspection log.
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="grid grid-cols-2 sm:flex items-center gap-2.5 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={loading}
+              className="col-span-2 sm:col-span-1 sm:order-3 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
+            >
+              <PiArrowsClockwise className={`h-4 w-4 shrink-0 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
             <Link
               to="/notifications"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
+              className="sm:order-1 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] transition-colors"
             >
-              <span>Signals &amp; Ops</span>
-              <PiArrowUpRight className="h-4 w-4 text-[#A1A1AA]" />
+              <span className="truncate">Signals &amp; Ops</span>
+              <PiArrowUpRight className="h-4 w-4 text-[#A1A1AA] shrink-0" />
             </Link>
             <button
               type="button"
               onClick={exportCsv}
               disabled={filteredSignals.length === 0}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] disabled:opacity-40 text-[13px] font-medium text-[#FAFAFA] transition-colors"
+              className="sm:order-2 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] disabled:opacity-40 text-[13px] font-medium text-[#FAFAFA] transition-colors"
             >
-              <PiDownloadSimple className="h-4 w-4 text-[#A1A1AA]" />
+              <PiDownloadSimple className="h-4 w-4 text-[#A1A1AA] shrink-0" />
               <span>Export CSV</span>
-            </button>
-            <button
-              type="button"
-              onClick={loadData}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
-            >
-              <PiArrowsClockwise className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
             </button>
           </div>
         </div>
 
         {/* Sleek Rounded-Full Tab Switcher */}
-        <div className="inline-flex items-center gap-1 rounded-full bg-[#111113] border border-white/[0.07] p-1.5">
-          <button
-            type="button"
-            onClick={() => setTab('signals')}
-            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
-              tab === 'signals'
-                ? 'bg-[#FAFAFA] text-[#09090B]'
-                : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
-            }`}
-          >
-            <PiGauge className="h-4 w-4" />
-            <span>Signals Table</span>
-            <span
-              className={`text-[12px] font-mono tabular-nums ${
-                tab === 'signals' ? 'text-[#52525B]' : 'text-[#71717A]'
+        <div className="-mx-4 px-4 sm:mx-0 sm:px-0 flex items-center overflow-x-auto pb-1">
+          <div className="inline-flex items-center gap-1 rounded-full bg-[#111113] border border-white/[0.07] p-1 sm:p-1.5">
+            <button
+              type="button"
+              onClick={() => setTab('signals')}
+              className={`min-h-[44px] sm:min-h-0 inline-flex items-center gap-2 px-4 py-2 sm:py-1.5 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${
+                tab === 'signals'
+                  ? 'bg-[#FAFAFA] text-[#09090B]'
+                  : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
               }`}
             >
-              {signals.length}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('rejects')}
-            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
-              tab === 'rejects'
-                ? 'bg-[#FAFAFA] text-[#09090B]'
-                : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
-            }`}
-          >
-            <PiShieldCheck className="h-4 w-4" />
-            <span>Scan Rejects</span>
-            <span
-              className={`text-[12px] font-mono tabular-nums ${
-                tab === 'rejects' ? 'text-[#52525B]' : 'text-[#71717A]'
+              <PiGauge className="h-4 w-4" />
+              <span>Signals Table</span>
+              <span
+                className={`text-[12px] font-mono tabular-nums ${
+                  tab === 'signals' ? 'text-[#52525B]' : 'text-[#71717A]'
+                }`}
+              >
+                {signals.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('rejects')}
+              className={`min-h-[44px] sm:min-h-0 inline-flex items-center gap-2 px-4 py-2 sm:py-1.5 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${
+                tab === 'rejects'
+                  ? 'bg-[#FAFAFA] text-[#09090B]'
+                  : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
               }`}
             >
-              {rejects.length}
-            </span>
-          </button>
+              <PiShieldCheck className="h-4 w-4" />
+              <span>Scan Rejects</span>
+              <span
+                className={`text-[12px] font-mono tabular-nums ${
+                  tab === 'rejects' ? 'text-[#52525B]' : 'text-[#71717A]'
+                }`}
+              >
+                {rejects.length}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Filter Bar */}
         <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-0">
             <PiMagnifyingGlass className="h-4 w-4 text-[#71717A] absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -491,12 +493,12 @@ export default function AdminSignals() {
                   ? 'Search symbol, strategy, ID...'
                   : 'Search rejection reason, symbol, strategy...'
               }
-              className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-[13px] text-[#FAFAFA] placeholder:text-[#71717A]"
+              className="w-full min-h-[44px] sm:min-h-0 pl-9 pr-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-[13px] text-[#FAFAFA] placeholder:text-[#71717A]"
             />
           </div>
 
           {tab === 'signals' && (
-            <div className="flex items-center gap-2.5">
+            <div className="grid grid-cols-2 sm:flex items-center gap-2.5">
               <select
                 value={directionFilter}
                 onChange={(e) => {
@@ -504,7 +506,7 @@ export default function AdminSignals() {
                   setPage(1)
                 }}
                 aria-label="Direction filter"
-                className="px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
+                className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
               >
                 <option value="ALL">All sides</option>
                 <option value="BUY">Buy</option>
@@ -518,7 +520,7 @@ export default function AdminSignals() {
                   setPage(1)
                 }}
                 aria-label="Status filter"
-                className="px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
+                className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
               >
                 <option value="ALL">All status</option>
                 <option value="LIVE">Live</option>
@@ -526,6 +528,30 @@ export default function AdminSignals() {
                 <option value="LOSS">Loss</option>
                 <option value="EXPIRED">Expired</option>
               </select>
+
+              <div className="col-span-2 md:hidden flex items-center gap-2">
+                <select
+                  value={sortKey}
+                  onChange={(e) => setSortKey(e.target.value as SortKey)}
+                  aria-label="Sort signals by"
+                  className="flex-1 min-h-[44px] px-3 py-2.5 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA]"
+                >
+                  <option value="timestampMs">Sort: Time</option>
+                  <option value="symbol">Sort: Symbol</option>
+                  <option value="rr">Sort: R:R</option>
+                  <option value="confidence">Sort: Confidence</option>
+                  <option value="status">Sort: Status</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setSortAsc((p) => !p)}
+                  aria-label="Toggle sort order"
+                  className="min-h-[44px] px-3.5 rounded-xl bg-[#18181B] border border-white/[0.07] text-[12.5px] font-medium text-[#FAFAFA] inline-flex items-center gap-1.5 shrink-0"
+                >
+                  <PiArrowsDownUp className="h-4 w-4 text-[#A1A1AA]" />
+                  <span>{sortAsc ? 'Asc' : 'Desc'}</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -534,7 +560,7 @@ export default function AdminSignals() {
         {tab === 'signals' ? (
           <div className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden">
             {filteredSignals.length === 0 ? (
-              <div className="p-12 text-center space-y-3">
+              <div className="p-8 sm:p-12 text-center space-y-3">
                 <img
                   src="/brand/empty-signals.png"
                   alt="No archived signals"
@@ -545,87 +571,21 @@ export default function AdminSignals() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/[0.06] text-[12px] font-medium text-[#71717A]">
-                      <th className="py-3.5 px-4">
-                        <button
-                          type="button"
-                          onClick={() => toggleSort('timestampMs')}
-                          className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
-                        >
-                          <span>Time</span>
-                          <PiArrowsDownUp className="h-3.5 w-3.5" />
-                        </button>
-                      </th>
-                      <th className="py-3.5 px-4">
-                        <button
-                          type="button"
-                          onClick={() => toggleSort('symbol')}
-                          className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
-                        >
-                          <span>Symbol</span>
-                          <PiArrowsDownUp className="h-3.5 w-3.5" />
-                        </button>
-                      </th>
-                      <th className="py-3.5 px-4">Strategy</th>
-                      <th className="py-3.5 px-4">Side</th>
-                      <th className="py-3.5 px-4 text-right">Entry</th>
-                      <th className="py-3.5 px-4 text-right">SL</th>
-                      <th className="py-3.5 px-4 text-right">TP</th>
-                      <th className="py-3.5 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => toggleSort('rr')}
-                          className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
-                        >
-                          <span>R:R</span>
-                          <PiArrowsDownUp className="h-3.5 w-3.5" />
-                        </button>
-                      </th>
-                      <th className="py-3.5 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => toggleSort('confidence')}
-                          className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
-                        >
-                          <span>Conf</span>
-                          <PiArrowsDownUp className="h-3.5 w-3.5" />
-                        </button>
-                      </th>
-                      <th className="py-3.5 px-4">
-                        <button
-                          type="button"
-                          onClick={() => toggleSort('status')}
-                          className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
-                        >
-                          <span>Status</span>
-                          <PiArrowsDownUp className="h-3.5 w-3.5" />
-                        </button>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
-                    {paginatedSignals.map((s) => (
-                      <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="py-3.5 px-4 font-mono tabular-nums text-[#71717A] whitespace-nowrap">
-                          {new Date(s.timestampMs).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: false,
-                          })}
-                        </td>
-                        <td className="py-3.5 px-4 whitespace-nowrap">
-                          <span className="font-medium text-[#FAFAFA]">{s.symbol}</span>{' '}
-                          <span className="text-[12px] text-[#71717A]">{s.timeframe}</span>
-                        </td>
-                        <td className="py-3.5 px-4 text-[#A1A1AA]">{s.strategyLabel}</td>
-                        <td className="py-3.5 px-4">
+              <>
+                {/* Mobile Stacked Card Rows (< 768px) */}
+                <div className="md:hidden divide-y divide-white/[0.06]">
+                  {paginatedSignals.map((s) => (
+                    <div key={s.id} className="p-4 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <span className="text-[15px] font-semibold text-[#FAFAFA]">
+                            {s.symbol}
+                          </span>
+                          <span className="text-[12px] font-mono text-[#71717A]">
+                            {s.timeframe}
+                          </span>
                           <span
-                            className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+                            className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
                               s.direction === 'BUY'
                                 ? 'bg-[#34D399]/10 text-[#34D399]'
                                 : 'bg-[#F87171]/10 text-[#F87171]'
@@ -633,55 +593,203 @@ export default function AdminSignals() {
                           >
                             {s.direction}
                           </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#FAFAFA]">
-                          {formatPrice(s.entry)}
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#F87171]">
-                          {formatPrice(s.sl)}
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#34D399]">
-                          {formatPrice(s.tp)}
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
-                          {s.rr.toFixed(2)}R
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#FAFAFA]">
-                          {s.confidence}%
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span
-                            className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
-                              s.status === 'WIN'
-                                ? 'bg-[#34D399]/10 text-[#34D399]'
-                                : s.status === 'LOSS'
-                                  ? 'bg-[#F87171]/10 text-[#F87171]'
-                                  : s.status === 'LIVE'
-                                    ? 'bg-[#18181B] text-[#FAFAFA]'
-                                    : 'bg-[#161619] text-[#71717A]'
-                            }`}
+                        </div>
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${
+                            s.status === 'WIN'
+                              ? 'bg-[#34D399]/10 text-[#34D399]'
+                              : s.status === 'LOSS'
+                                ? 'bg-[#F87171]/10 text-[#F87171]'
+                                : s.status === 'LIVE'
+                                  ? 'bg-[#18181B] text-[#FAFAFA]'
+                                  : 'bg-[#161619] text-[#71717A]'
+                          }`}
+                        >
+                          {s.status}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 text-[12px] text-[#A1A1AA]">
+                        <span className="truncate">{s.strategyLabel}</span>
+                        <span className="font-mono tabular-nums text-[#71717A] shrink-0">
+                          {new Date(s.timestampMs).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false,
+                          })}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 rounded-xl bg-[#161619] p-2.5 text-[12px]">
+                        <div>
+                          <div className="text-[10.5px] text-[#71717A]">Entry</div>
+                          <div className="font-mono tabular-nums text-[#FAFAFA] mt-0.5">
+                            {formatPrice(s.entry)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10.5px] text-[#71717A]">Stop Loss</div>
+                          <div className="font-mono tabular-nums text-[#F87171] mt-0.5">
+                            {formatPrice(s.sl)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10.5px] text-[#71717A]">Take Profit</div>
+                          <div className="font-mono tabular-nums text-[#34D399] mt-0.5">
+                            {formatPrice(s.tp)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[12px] font-mono tabular-nums text-[#A1A1AA]">
+                        <span>R:R {s.rr.toFixed(2)}R</span>
+                        <span className="text-[#FAFAFA]">Conf {s.confidence}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table (>= 768px) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/[0.06] text-[12px] font-medium text-[#71717A]">
+                        <th className="py-3.5 px-4">
+                          <button
+                            type="button"
+                            onClick={() => toggleSort('timestampMs')}
+                            className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
                           >
-                            {s.status}
-                          </span>
-                        </td>
+                            <span>Time</span>
+                            <PiArrowsDownUp className="h-3.5 w-3.5" />
+                          </button>
+                        </th>
+                        <th className="py-3.5 px-4">
+                          <button
+                            type="button"
+                            onClick={() => toggleSort('symbol')}
+                            className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
+                          >
+                            <span>Symbol</span>
+                            <PiArrowsDownUp className="h-3.5 w-3.5" />
+                          </button>
+                        </th>
+                        <th className="py-3.5 px-4">Strategy</th>
+                        <th className="py-3.5 px-4">Side</th>
+                        <th className="py-3.5 px-4 text-right">Entry</th>
+                        <th className="py-3.5 px-4 text-right">SL</th>
+                        <th className="py-3.5 px-4 text-right">TP</th>
+                        <th className="py-3.5 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => toggleSort('rr')}
+                            className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
+                          >
+                            <span>R:R</span>
+                            <PiArrowsDownUp className="h-3.5 w-3.5" />
+                          </button>
+                        </th>
+                        <th className="py-3.5 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => toggleSort('confidence')}
+                            className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
+                          >
+                            <span>Conf</span>
+                            <PiArrowsDownUp className="h-3.5 w-3.5" />
+                          </button>
+                        </th>
+                        <th className="py-3.5 px-4">
+                          <button
+                            type="button"
+                            onClick={() => toggleSort('status')}
+                            className="inline-flex items-center gap-1 hover:text-[#FAFAFA]"
+                          >
+                            <span>Status</span>
+                            <PiArrowsDownUp className="h-3.5 w-3.5" />
+                          </button>
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
+                      {paginatedSignals.map((s) => (
+                        <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3.5 px-4 font-mono tabular-nums text-[#71717A] whitespace-nowrap">
+                            {new Date(s.timestampMs).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: false,
+                            })}
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span className="font-medium text-[#FAFAFA]">{s.symbol}</span>{' '}
+                            <span className="text-[12px] text-[#71717A]">{s.timeframe}</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-[#A1A1AA]">{s.strategyLabel}</td>
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+                                s.direction === 'BUY'
+                                  ? 'bg-[#34D399]/10 text-[#34D399]'
+                                  : 'bg-[#F87171]/10 text-[#F87171]'
+                              }`}
+                            >
+                              {s.direction}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#FAFAFA]">
+                            {formatPrice(s.entry)}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#F87171]">
+                            {formatPrice(s.sl)}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#34D399]">
+                            {formatPrice(s.tp)}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
+                            {s.rr.toFixed(2)}R
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#FAFAFA]">
+                            {s.confidence}%
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+                                s.status === 'WIN'
+                                  ? 'bg-[#34D399]/10 text-[#34D399]'
+                                  : s.status === 'LOSS'
+                                    ? 'bg-[#F87171]/10 text-[#F87171]'
+                                    : s.status === 'LIVE'
+                                      ? 'bg-[#18181B] text-[#FAFAFA]'
+                                      : 'bg-[#161619] text-[#71717A]'
+                              }`}
+                            >
+                              {s.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
 
             {filteredSignals.length > PAGE_SIZE && (
-              <div className="flex items-center justify-between px-5 py-3.5 border-t border-white/[0.06] text-[13px] text-[#A1A1AA]">
-                <span className="font-mono tabular-nums">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3.5 border-t border-white/[0.06] text-[13px] text-[#A1A1AA]">
+                <span className="font-mono tabular-nums text-center sm:text-left">
                   Page {page} / {totalPages} ({filteredSignals.length} records)
                 </span>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 sm:flex gap-2">
                   <button
                     type="button"
                     disabled={page <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#FAFAFA]"
+                    className="min-h-[44px] sm:min-h-0 px-3 py-2 sm:py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#FAFAFA]"
                   >
                     Previous
                   </button>
@@ -689,7 +797,7 @@ export default function AdminSignals() {
                     type="button"
                     disabled={page >= totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    className="px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#FAFAFA]"
+                    className="min-h-[44px] sm:min-h-0 px-3 py-2 sm:py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] disabled:opacity-40 text-[12px] font-medium text-[#FAFAFA]"
                   >
                     Next
                   </button>
@@ -700,7 +808,7 @@ export default function AdminSignals() {
         ) : (
           <div className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden">
             {filteredRejects.length === 0 ? (
-              <div className="p-12 text-center space-y-3">
+              <div className="p-8 sm:p-12 text-center space-y-3">
                 <img
                   src="/brand/empty-signals.png"
                   alt="No scan rejections"
@@ -711,37 +819,80 @@ export default function AdminSignals() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/[0.06] text-[12px] font-medium text-[#71717A]">
-                      <th className="py-3.5 px-4">Symbol</th>
-                      <th className="py-3.5 px-4">Strategy</th>
-                      <th className="py-3.5 px-4">Rejection Reason</th>
-                      <th className="py-3.5 px-4 text-right">Conf</th>
-                      <th className="py-3.5 px-4 text-right">Spread</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
-                    {filteredRejects.map((r) => (
-                      <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="py-3.5 px-4 whitespace-nowrap">
-                          <span className="font-medium text-[#FAFAFA]">{r.symbol}</span>{' '}
-                          <span className="text-[12px] text-[#71717A]">{r.timeframe}</span>
-                        </td>
-                        <td className="py-3.5 px-4 text-[#A1A1AA]">{strategyName(r.strategy)}</td>
-                        <td className="py-3.5 px-4 text-[#FAFAFA]">{r.reason}</td>
-                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
-                          {r.confidence ?? '—'}
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
-                          {r.spread ?? '—'}
-                        </td>
+              <>
+                {/* Mobile Stacked Rejection Cards (< 768px) */}
+                <div className="md:hidden divide-y divide-white/[0.06]">
+                  {filteredRejects.map((r) => (
+                    <div key={r.id} className="p-4 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[14.5px] font-semibold text-[#FAFAFA]">
+                            {r.symbol}
+                          </span>
+                          <span className="text-[12px] font-mono text-[#71717A]">
+                            {r.timeframe}
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-lg bg-[#161619] text-[11.5px] text-[#A1A1AA] truncate max-w-[170px]">
+                          {strategyName(r.strategy)}
+                        </span>
+                      </div>
+
+                      <p className="text-[13px] text-[#FAFAFA] leading-relaxed break-words">
+                        {r.reason}
+                      </p>
+
+                      {(r.confidence || r.spread) && (
+                        <div className="flex flex-wrap items-center gap-2 text-[12px] font-mono tabular-nums text-[#A1A1AA]">
+                          {r.confidence && (
+                            <span className="px-2.5 py-0.5 rounded-lg bg-[#161619]">
+                              Conf: {r.confidence}
+                            </span>
+                          )}
+                          {r.spread && (
+                            <span className="px-2.5 py-0.5 rounded-lg bg-[#161619]">
+                              Spread: {r.spread}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table (>= 768px) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/[0.06] text-[12px] font-medium text-[#71717A]">
+                        <th className="py-3.5 px-4">Symbol</th>
+                        <th className="py-3.5 px-4">Strategy</th>
+                        <th className="py-3.5 px-4">Rejection Reason</th>
+                        <th className="py-3.5 px-4 text-right">Conf</th>
+                        <th className="py-3.5 px-4 text-right">Spread</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
+                      {filteredRejects.map((r) => (
+                        <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span className="font-medium text-[#FAFAFA]">{r.symbol}</span>{' '}
+                            <span className="text-[12px] text-[#71717A]">{r.timeframe}</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-[#A1A1AA]">{strategyName(r.strategy)}</td>
+                          <td className="py-3.5 px-4 text-[#FAFAFA]">{r.reason}</td>
+                          <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
+                            {r.confidence ?? '—'}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA]">
+                            {r.spread ?? '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         )}

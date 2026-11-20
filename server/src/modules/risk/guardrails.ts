@@ -245,9 +245,11 @@ export function evaluatePreTradeGuardrails(
 
   // C.9 Spread Cap
   const spec = getInstrumentSpec(input.signal.symbol);
-  const effectiveSpreadCap = Number.isFinite(cfg.maxSpreadPips)
-    ? cfg.maxSpreadPips
-    : spec.maxAllowedSpreadPips;
+  const callerSpreadCap = input.config?.maxSpreadPips;
+  const effectiveSpreadCap =
+    typeof callerSpreadCap === 'number' && Number.isFinite(callerSpreadCap)
+      ? callerSpreadCap
+      : spec.maxAllowedSpreadPips;
   const passC9 = spreadPips === null || spreadPips <= effectiveSpreadCap;
   checks.push({
     code: 'C.9',
@@ -260,17 +262,23 @@ export function evaluatePreTradeGuardrails(
       : `[C.9] Live spread ${spreadPips?.toFixed(2)} pips exceeds cap ${effectiveSpreadCap} pips`,
   });
 
-  // C.10 Session Window
-  const passC10 = checkSessionWindow(cfg.sessionFilter, now);
+  // C.10 Session Window (+ XAUUSD 21:00-23:00 UTC Rollover Quarantine)
+  const utcHour = now.getUTCHours();
+  const inGoldRolloverQuarantine =
+    spec.symbol === 'XAUUSD' && utcHour >= 21 && utcHour < 23;
+  const passSessionFilter = checkSessionWindow(cfg.sessionFilter, now);
+  const passC10 = passSessionFilter && !inGoldRolloverQuarantine;
   checks.push({
     code: 'C.10',
     name: 'Session Window',
     passed: passC10,
-    actual: `${now.getUTCHours()}:00 UTC`,
-    limit: cfg.sessionFilter,
+    actual: `${utcHour}:00 UTC`,
+    limit: inGoldRolloverQuarantine ? 'XAUUSD rollover quarantine (21:00-23:00 UTC)' : cfg.sessionFilter,
     reason: passC10
       ? undefined
-      : `[C.10] Outside allowed trading session (${cfg.sessionFilter}) at ${now.getUTCHours()}:00 UTC`,
+      : inGoldRolloverQuarantine
+        ? `[C.10] XAUUSD rollover quarantine active (21:00-23:00 UTC) at ${utcHour}:00 UTC`
+        : `[C.10] Outside allowed trading session (${cfg.sessionFilter}) at ${utcHour}:00 UTC`,
   });
 
   // D.1 Daily Loss Cap

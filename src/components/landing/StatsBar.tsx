@@ -25,8 +25,8 @@ const TELEMETRY_STATS = [
 
 export function StatsBar() {
   return (
-    <section className="py-16 sm:py-20 px-4 sm:px-6 border-y border-white/[0.06] bg-[#09090B] select-none">
-      <div className="max-w-7xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-12">
+    <section className="py-12 sm:py-20 px-4 sm:px-6 border-y border-white/[0.06] bg-[#09090B] select-none font-sans">
+      <div className="max-w-7xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-7 sm:gap-12">
         {TELEMETRY_STATS.map((stat, idx) => (
           <motion.div
             key={stat.label}
@@ -37,12 +37,12 @@ export function StatsBar() {
               duration: 0.45,
               delay: idx * 0.08,
             }}
-            className="space-y-1.5"
+            className="space-y-1 sm:space-y-1.5"
           >
-            <div className="font-mono text-3xl sm:text-4xl font-bold tracking-tight text-[#FAFAFA] tabular-nums">
+            <div className="font-mono text-[26px] sm:text-4xl font-bold tracking-tight text-[#FAFAFA] tabular-nums">
               {stat.value}
             </div>
-            <div className="text-[14px] font-semibold text-[#FAFAFA]">{stat.label}</div>
+            <div className="text-[13.5px] sm:text-[14px] font-semibold text-[#FAFAFA]">{stat.label}</div>
             <div className="text-[12px] text-[#71717A] leading-relaxed">{stat.detail}</div>
           </motion.div>
         ))}

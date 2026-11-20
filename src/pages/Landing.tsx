@@ -1,5 +1,3 @@
-import { Link } from 'react-router'
-import { PiArrowRight } from 'react-icons/pi'
 import { LandingNav } from '@/components/landing/LandingNav'
 import { LandingBackgroundAnimation } from '@/components/landing/LandingBackgroundAnimation'
 import { HeroSection } from '@/components/landing/HeroSection'
@@ -20,7 +18,7 @@ export default function Landing() {
       <LandingBackgroundAnimation />
 
       <LandingNav />
-      <main className="relative z-10 pb-16 md:pb-0">
+      <main className="relative z-10">
         <HeroSection />
         <SupportedMarkets />
         <HowItWorks />
@@ -32,35 +30,6 @@ export default function Landing() {
         <CTASection />
       </main>
       <LandingFooter />
-
-      {/* ── Mobile Floating Glassmorphism Pill (NO BOX ON ICON) ─────────────── */}
-      <div className="md:hidden fixed bottom-5 inset-x-0 z-50 px-4 pointer-events-none flex justify-center font-sans">
-        <nav
-          aria-label="Mobile quick actions"
-          className="pointer-events-auto h-12 px-4 rounded-full bg-[#09090B]/85 backdrop-blur-2xl border border-white/[0.12] shadow-[0_16px_48px_rgba(0,0,0,0.8)] flex items-center justify-between gap-4 w-full max-w-[340px]"
-        >
-          <Link to="/" className="flex items-center gap-2">
-            <img src="/brand/traxo-mark.png" alt="TRAXO" className="w-5 h-5 object-contain" />
-            <span className="text-[11.5px] font-bold tracking-wider uppercase text-[#FAFAFA]">TRAXO</span>
-          </Link>
-
-          <div className="flex items-center gap-2">
-            <Link
-              to="/login"
-              className="text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] px-2.5 py-1"
-            >
-              Sign in
-            </Link>
-            <Link
-              to="/register"
-              className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-[#FAFAFA] text-[#09090B] text-[12px] font-semibold hover:bg-[#E4E4E7] transition-colors"
-            >
-              <span>Launch</span>
-              <PiArrowRight size={12} />
-            </Link>
-          </div>
-        </nav>
-      </div>
     </div>
   )
 }

@@ -27,20 +27,25 @@ function StepperHeader({ current, total }: { current: number; total: number }) {
   ]
 
   return (
-    <div className="w-full max-w-2xl mx-auto flex items-center justify-between pb-6 mb-8 border-b border-white/[0.06] font-sans">
-      <div className="flex items-center gap-3">
-        <img src="/brand/traxo-mark.png" className="w-5 h-5 object-contain" alt="TRAXO" />
-        <div>
-          <span className="text-[12px] font-bold tracking-[0.2em] uppercase text-[#FAFAFA]">
-            TRAXO SETUP
-          </span>
-          <span className="hidden sm:inline-block text-[12px] text-[#71717A] ml-2">
-            · {steps[current] ?? 'Configuration'}
+    <div className="w-full max-w-2xl mx-auto flex items-center justify-between gap-3 pb-4 mb-5 sm:pb-6 sm:mb-8 border-b border-white/[0.06] font-sans">
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+        <img src="/brand/traxo-mark.png" className="w-5 h-5 object-contain shrink-0" alt="TRAXO" />
+        <div className="min-w-0">
+          <div className="flex items-center flex-wrap gap-x-2">
+            <span className="text-[11.5px] sm:text-[12px] font-bold tracking-[0.18em] sm:tracking-[0.2em] uppercase text-[#FAFAFA] whitespace-nowrap">
+              TRAXO SETUP
+            </span>
+            <span className="hidden sm:inline-block text-[12px] text-[#71717A]">
+              · {steps[current] ?? 'Configuration'}
+            </span>
+          </div>
+          <span className="block sm:hidden text-[11px] text-[#71717A] truncate mt-0.5">
+            {steps[current] ?? 'Configuration'}
           </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         <div className="flex items-center gap-1">
           {Array.from({ length: total }).map((_, i) => (
             <div
@@ -48,15 +53,15 @@ function StepperHeader({ current, total }: { current: number; total: number }) {
               className={cn(
                 'h-1 rounded-full transition-all duration-300',
                 i === current
-                  ? 'w-6 bg-[#34D399]'
+                  ? 'w-4 sm:w-6 bg-[#34D399]'
                   : i < current
-                  ? 'w-2 bg-white/40'
-                  : 'w-2 bg-white/10'
+                  ? 'w-1.5 sm:w-2 bg-white/40'
+                  : 'w-1.5 sm:w-2 bg-white/10'
               )}
             />
           ))}
         </div>
-        <span className="text-[11px] font-mono text-[#71717A] ml-2 tabular-nums">
+        <span className="text-[11px] font-mono text-[#71717A] ml-1 sm:ml-2 tabular-nums whitespace-nowrap">
           0{current + 1} / 0{total}
         </span>
       </div>
@@ -81,23 +86,23 @@ function NavRow({
   showBack?: boolean
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 pt-8 mt-8 border-t border-white/[0.06]">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 pt-6 mt-6 sm:pt-8 sm:mt-8 border-t border-white/[0.06]">
+      <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 w-full sm:w-auto">
         {showBack && onBack && (
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex items-center gap-2 h-10 px-4 text-[12.5px] font-mono text-[#A1A1AA] hover:text-[#FAFAFA] rounded-lg hover:bg-white/[0.04] transition-colors cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 min-h-[44px] sm:h-10 px-4 text-[12.5px] font-mono text-[#A1A1AA] hover:text-[#FAFAFA] rounded-xl sm:rounded-lg bg-white/[0.03] sm:bg-transparent hover:bg-white/[0.06] transition-colors cursor-pointer"
           >
             <PiArrowLeft size={14} />
-            BACK
+            <span>BACK</span>
           </button>
         )}
         {onSkip && (
           <button
             type="button"
             onClick={onSkip}
-            className="h-10 px-3 text-[11px] font-mono text-[#71717A] hover:text-[#A1A1AA] transition-colors cursor-pointer"
+            className="min-h-[44px] sm:h-10 px-3 text-[11px] font-mono text-[#71717A] hover:text-[#A1A1AA] transition-colors cursor-pointer ml-auto sm:ml-0"
           >
             SKIP SETUP
           </button>
@@ -108,7 +113,7 @@ function NavRow({
         type="button"
         onClick={onNext}
         disabled={nextDisabled}
-        className="inline-flex items-center justify-center gap-2 h-11 px-6 bg-[#FAFAFA] hover:bg-[#E4E4E7] active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed text-[#09090B] text-[13px] font-semibold rounded-xl transition-all shadow-[0_0_20px_rgba(255,255,255,0.08)] cursor-pointer"
+        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 min-h-[48px] sm:h-11 px-6 bg-[#FAFAFA] hover:bg-[#E4E4E7] active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed text-[#09090B] text-[13px] font-semibold rounded-xl transition-all shadow-[0_0_20px_rgba(255,255,255,0.08)] cursor-pointer"
       >
         <span>{nextLabel}</span>
         <PiArrowRight size={15} />
@@ -120,11 +125,11 @@ function NavRow({
 // ─── Step 0: Welcome ────────────────────────────────────────────────────────
 function StepWelcome({ onNext }: { onNext: () => void }) {
   return (
-    <div className="space-y-9 text-center max-w-xl mx-auto font-sans">
+    <div className="space-y-6 sm:space-y-9 text-center max-w-xl mx-auto font-sans">
       {/* Floating Mark directly on canvas with ambient glow */}
-      <div className="relative inline-block mx-auto pt-4">
+      <div className="relative inline-block mx-auto pt-2 sm:pt-4">
         <div className="absolute inset-0 rounded-full bg-[#34D399]/15 blur-2xl pointer-events-none" />
-        <img src="/brand/traxo-mark.png" className="w-14 h-14 object-contain mx-auto relative z-10" alt="TRAXO" />
+        <img src="/brand/traxo-mark.png" className="w-12 h-12 sm:w-14 sm:h-14 object-contain mx-auto relative z-10" alt="TRAXO" />
       </div>
 
       {/* Typography directly on canvas */}
@@ -133,16 +138,16 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
           <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
           <span>INSTITUTIONAL QUANT SUITE</span>
         </div>
-        <h1 className="text-[32px] sm:text-[38px] font-bold text-[#FAFAFA] tracking-tight leading-tight">
+        <h1 className="text-[26px] sm:text-[38px] font-bold text-[#FAFAFA] tracking-tight leading-tight">
           Welcome to the Terminal.
         </h1>
-        <p className="text-[14px] text-[#A1A1AA] leading-relaxed max-w-md mx-auto">
+        <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA] leading-relaxed max-w-md mx-auto">
           Every alert is computed with mathematically proven confluence, exact entry, stop-loss, take-profit, and structural institutional reasoning.
         </p>
       </div>
 
       {/* Feature telemetry rows - open architecture, not boxed cards */}
-      <div className="grid grid-cols-1 divide-y divide-white/[0.06] text-left pt-2 border-y border-white/[0.06]">
+      <div className="grid grid-cols-1 divide-y divide-white/[0.06] text-left pt-1 sm:pt-2 border-y border-white/[0.06]">
         {[
           {
             icon: <PiStack size={18} className="text-[#34D399]" />,
@@ -160,9 +165,9 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
             sub: 'Instant audit trail detailing liquidity sweeps, order blocks, and session timing.',
           },
         ].map(({ icon, label, sub }, idx) => (
-          <div key={idx} className="flex items-start gap-4 py-4 group">
+          <div key={idx} className="flex items-start gap-3.5 sm:gap-4 py-3.5 sm:py-4 group">
             <div className="mt-0.5 shrink-0">{icon}</div>
-            <div>
+            <div className="min-w-0">
               <div className="text-[13.5px] font-semibold text-[#FAFAFA]">{label}</div>
               <div className="text-[12.5px] text-[#71717A] mt-0.5 leading-relaxed">{sub}</div>
             </div>
@@ -173,7 +178,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
       <button
         type="button"
         onClick={onNext}
-        className="w-full h-12 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13.5px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_0_24px_rgba(255,255,255,0.1)] cursor-pointer"
+        className="w-full min-h-[48px] h-12 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13.5px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_0_24px_rgba(255,255,255,0.1)] cursor-pointer"
       >
         <span>Configure Station Parameters</span>
         <PiArrowRight size={16} />
@@ -479,29 +484,29 @@ function StepStrategies({ onNext, onBack }: { onNext: () => void; onBack: () => 
           Activate algorithmic engines
         </h2>
         <p className="text-[13px] text-[#71717A] mt-1">
-          All 5 quantitative models are fully calibrated. Toggle engines live for your terminal feed.
+          All {ONBOARDING_STRATEGIES.length} proprietary quantitative models are calibrated across Forex, Gold &amp; MNQ. Toggle engines live for your terminal feed.
         </p>
       </div>
 
       {/* Engines List - open architecture rows */}
-      <div className="divide-y divide-white/[0.05] border-y border-white/[0.06]">
+      <div className="divide-y divide-white/[0.05] border-y border-white/[0.06] max-h-[340px] overflow-y-auto pr-1">
         {ONBOARDING_STRATEGIES.map((s) => {
           const active = selectedStrategyIds.includes(s.id as OnboardingStrategyId)
           return (
             <div
               key={s.id}
-              className="flex items-center justify-between py-3.5 px-2 hover:bg-white/[0.02] transition-colors"
+              className="flex items-center justify-between gap-3 py-3.5 px-1 sm:px-2 hover:bg-white/[0.02] transition-colors"
             >
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
                 <span
                   className={cn(
                     'w-2 h-2 rounded-full shrink-0 transition-colors',
                     active ? 'bg-[#34D399] shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-[#52525B]'
                   )}
                 />
-                <div>
-                  <div className="text-[13.5px] font-semibold text-[#FAFAFA]">{s.name}</div>
-                  <div className="flex items-center gap-3 mt-0.5 text-[11px] font-mono text-[#71717A]">
+                <div className="min-w-0">
+                  <div className="text-[13.5px] font-semibold text-[#FAFAFA] truncate">{s.name}</div>
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-0.5 text-[11px] font-mono text-[#71717A]">
                     <span className="text-[#34D399] font-medium">{s.winRate} Win Rate</span>
                     <span>·</span>
                     <span>~{s.signalsPerDay} setups/session</span>
@@ -509,28 +514,32 @@ function StepStrategies({ onNext, onBack }: { onNext: () => void; onBack: () => 
                 </div>
               </div>
 
-              {/* Robust, non-clipped switch toggle */}
+              {/* Robust, accessible >= 44px touch switch toggle */}
               <button
                 type="button"
                 role="switch"
                 aria-checked={active}
                 onClick={() => toggleSelectedStrategy(s.id as OnboardingStrategyId)}
-                className={cn(
-                  'relative inline-flex items-center shrink-0 w-8 h-[18px] p-[2px] rounded-full transition-colors duration-200 focus:outline-none cursor-pointer',
-                  active
-                    ? 'bg-[#064E3B] border border-[#34D399]/40'
-                    : 'bg-[#18181B] border border-white/10'
-                )}
+                className="inline-flex items-center justify-end min-w-[44px] min-h-[44px] shrink-0 focus:outline-none cursor-pointer"
                 title={active ? `Disable ${s.name}` : `Enable ${s.name}`}
               >
                 <span
                   className={cn(
-                    'w-3.5 h-3.5 rounded-full transition-transform duration-200 pointer-events-none block shadow-sm',
+                    'relative inline-flex items-center shrink-0 w-10 h-6 sm:w-8 sm:h-[18px] p-[3px] sm:p-[2px] rounded-full transition-colors duration-200',
                     active
-                      ? 'translate-x-[12px] bg-[#34D399] shadow-[0_0_8px_rgba(52,211,153,0.7)]'
-                      : 'translate-x-0 bg-[#71717A]'
+                      ? 'bg-[#064E3B] border border-[#34D399]/40'
+                      : 'bg-[#18181B] border border-white/10'
                   )}
-                />
+                >
+                  <span
+                    className={cn(
+                      'w-4 h-4 sm:w-3.5 sm:h-3.5 rounded-full transition-transform duration-200 pointer-events-none block shadow-sm',
+                      active
+                        ? 'translate-x-4 sm:translate-x-[12px] bg-[#34D399] shadow-[0_0_8px_rgba(52,211,153,0.7)]'
+                        : 'translate-x-0 bg-[#71717A]'
+                    )}
+                  />
+                </span>
               </button>
             </div>
           )
@@ -569,19 +578,20 @@ function RiskSlider({
   color: string
 }) {
   const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100))
+  const isPercent = display.includes('%')
 
   return (
-    <div className="space-y-2.5">
-      <div className="flex items-center justify-between text-[12px]">
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-[12px]">
         <span className="text-[#A1A1AA] font-medium">{label}</span>
-        <span className="font-mono font-bold tabular-nums text-[13px]" style={{ color }}>
+        <span className="font-mono font-bold tabular-nums text-[13px] shrink-0" style={{ color }}>
           {display}
         </span>
       </div>
 
-      {/* Bounded track wrapper: thumb cannot escape or clip */}
-      <div className="relative h-6 flex items-center">
-        <div className="w-full h-1.5 rounded-full bg-[#18181B] relative overflow-hidden">
+      {/* Bounded >= 44px touch track wrapper: thumb cannot escape or clip */}
+      <div className="relative h-11 flex items-center">
+        <div className="w-full h-2 sm:h-1.5 rounded-full bg-[#18181B] relative overflow-hidden">
           <div
             className="absolute left-0 top-0 h-full rounded-full transition-all duration-75"
             style={{ width: `${pct}%`, background: color }}
@@ -596,14 +606,15 @@ function RiskSlider({
           step={step}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
+          aria-label={label}
           className="absolute inset-0 w-full opacity-0 cursor-pointer h-full z-10"
         />
 
         {/* Visual thumb bounded within 0%..100% */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FAFAFA] border-2 shadow-md pointer-events-none transition-all duration-75"
+          className="absolute top-1/2 -translate-y-1/2 w-5 h-5 sm:w-4 sm:h-4 rounded-full bg-[#FAFAFA] border-2 shadow-md pointer-events-none transition-all duration-75"
           style={{
-            left: `calc(${pct}% * (1 - 16px / 100%) + 0px)`,
+            left: `calc(${pct}% - ${(pct / 100) * 18}px)`,
             borderColor: color,
             boxShadow: `0 0 10px ${color}40`,
           }}
@@ -611,8 +622,8 @@ function RiskSlider({
       </div>
 
       <div className="flex justify-between text-[10px] font-mono text-[#52525B]">
-        <span>{min}{label.includes('trades') ? '' : '%'}</span>
-        <span>{max}{label.includes('trades') ? '' : '%'}</span>
+        <span>{min}{isPercent ? '%' : ''}</span>
+        <span>{max}{isPercent ? '%' : ''}</span>
       </div>
     </div>
   )
@@ -701,10 +712,10 @@ function StepComplete() {
   }
 
   return (
-    <div className="space-y-8 max-w-xl mx-auto text-center">
-      {/* Ready Icon with Glowing Pulse */}
-      <div className="relative inline-block mx-auto pt-3">
-        <div className="absolute inset-0 rounded-full bg-[#34D399]/20 blur-xl animate-pulse" />
+    <div className="space-y-6 sm:space-y-8 max-w-xl mx-auto text-center">
+      {/* Ready Icon with Calm Ambient Glow */}
+      <div className="relative inline-block mx-auto pt-2 sm:pt-3">
+        <div className="absolute inset-0 rounded-full bg-[#34D399]/20 blur-xl" />
         <div className="relative w-16 h-16 rounded-full bg-[#34D399]/15 border border-[#34D399]/40 flex items-center justify-center text-[#34D399] mx-auto shadow-xl">
           <PiShieldCheck size={32} />
         </div>
@@ -714,7 +725,7 @@ function StepComplete() {
         <div className="inline-flex items-center gap-2 text-[11px] font-medium tracking-wider text-[#34D399] uppercase">
           <span>STATION ONLINE · ALL SYSTEMS GO</span>
         </div>
-        <h2 className="text-[28px] sm:text-[32px] font-semibold text-[#FAFAFA] tracking-tight">
+        <h2 className="text-[24px] sm:text-[32px] font-semibold text-[#FAFAFA] tracking-tight">
           Terminal ready for live feed.
         </h2>
         <p className="text-[13px] text-[#71717A] max-w-md mx-auto">
@@ -722,27 +733,27 @@ function StepComplete() {
         </p>
       </div>
 
-      {/* Summary telemetry list - open layout */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-4 border-y border-white/[0.06] text-left font-sans">
-        <div>
+      {/* Summary telemetry list - crisp 2x2 on mobile, 4-col on desktop */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 py-4 border-y border-white/[0.06] text-left font-sans">
+        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] sm:bg-transparent sm:border-0 sm:p-0">
           <div className="text-[11px] font-medium text-[#71717A] uppercase tracking-wider">Experience</div>
-          <div className="text-[13px] font-semibold text-[#FAFAFA] capitalize mt-0.5">
+          <div className="text-[13px] font-semibold text-[#FAFAFA] capitalize mt-0.5 truncate">
             {experienceLevel || 'Standard'}
           </div>
         </div>
-        <div>
+        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] sm:bg-transparent sm:border-0 sm:p-0">
           <div className="text-[11px] font-medium text-[#71717A] uppercase tracking-wider">Engines Active</div>
           <div className="text-[13px] font-semibold text-[#34D399] mt-0.5 tabular-nums">
-            {selectedStrategyIds.length} / 5 Running
+            {selectedStrategyIds.length} / {ONBOARDING_STRATEGIES.length} Running
           </div>
         </div>
-        <div>
+        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] sm:bg-transparent sm:border-0 sm:p-0">
           <div className="text-[11px] font-medium text-[#71717A] uppercase tracking-wider">Risk / Setup</div>
           <div className="text-[13px] font-semibold text-[#FAFAFA] mt-0.5 tabular-nums">
             {riskPerTrade}%
           </div>
         </div>
-        <div>
+        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] sm:bg-transparent sm:border-0 sm:p-0">
           <div className="text-[11px] font-medium text-[#71717A] uppercase tracking-wider">Max Drawdown</div>
           <div className="text-[13px] font-semibold text-[#F87171] mt-0.5 tabular-nums">
             {maxDailyLoss}%
@@ -753,7 +764,7 @@ function StepComplete() {
       <button
         type="button"
         onClick={handleEnter}
-        className="w-full h-12 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] active:scale-[0.99] text-[#09090B] text-[14px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_0_28px_rgba(255,255,255,0.12)] cursor-pointer"
+        className="w-full min-h-[48px] h-12 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] active:scale-[0.99] text-[#09090B] text-[14px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_0_28px_rgba(255,255,255,0.12)] cursor-pointer"
       >
         <span>Initialize Live Terminal</span>
         <PiArrowRight size={16} />
@@ -769,7 +780,7 @@ export default function Onboarding() {
   const { step, nextStep, prevStep } = useOnboardingStore()
 
   return (
-    <div className="relative min-h-[100dvh] w-full bg-[#09090B] text-[#FAFAFA] flex flex-col justify-between p-5 sm:p-10 overflow-x-hidden select-none">
+    <div className="relative min-h-[100dvh] w-full bg-[#09090B] text-[#FAFAFA] font-sans flex flex-col justify-between p-4 sm:p-10 overflow-x-hidden select-none">
       {/* ── Ambient Background Canvas: Candlesticks & Micro-Ticks ───────────── */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div
@@ -788,7 +799,7 @@ export default function Onboarding() {
         >
           <line x1="0" y1="35%" x2="100%" y2="35%" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 6" />
           <line x1="0" y1="65%" x2="100%" y2="65%" stroke="rgba(52,211,153,0.12)" strokeDasharray="3 8" />
-          <g className="animate-pulse" style={{ animationDuration: '6s' }}>
+          <g>
             <line x1="8%" y1="20%" x2="8%" y2="50%" stroke="#34D399" strokeWidth="1" />
             <rect x="calc(8% - 3px)" y="25%" width="6" height="15%" fill="#34D399" rx="1" opacity="0.4" />
             <line x1="92%" y1="40%" x2="92%" y2="70%" stroke="#34D399" strokeWidth="1" />
@@ -803,7 +814,7 @@ export default function Onboarding() {
       </header>
 
       {/* ── Center Open Canvas: Elements sit directly on screen (No Boxed Card) ─ */}
-      <main className="relative z-10 flex-1 flex flex-col justify-center items-center w-full py-4">
+      <main className="relative z-10 flex-1 flex flex-col justify-center items-center w-full py-2 sm:py-4">
         <div className="w-full">
           <AnimatePresence mode="wait">
             <motion.div
@@ -825,7 +836,7 @@ export default function Onboarding() {
       </main>
 
       {/* ── Minimalist Bottom Telemetry ─────────────────────────────────────── */}
-      <footer className="relative z-10 pt-6 text-center text-[11px] font-sans text-[#71717A]">
+      <footer className="relative z-10 pt-5 sm:pt-6 px-2 text-center text-[10.5px] sm:text-[11px] font-sans text-[#71717A] leading-relaxed">
         <span>TRAXO ORCHESTRATOR v4.2 · ZERO-SLIPPAGE MT5 INTEGRATION PROTOCOL</span>
       </footer>
     </div>

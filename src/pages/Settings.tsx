@@ -123,20 +123,34 @@ function TogglePill({
       disabled={disabled}
       onClick={onToggle}
       aria-label={label}
-      className={cn(
-        'relative inline-flex h-6 w-11 shrink-0 items-center overflow-hidden rounded-full p-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
-        enabled ? 'bg-[#34D399]/25' : 'bg-[#18181B]',
-      )}
+      className="inline-flex min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 items-center justify-end sm:justify-center shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
     >
       <span
         className={cn(
-          'inline-block h-4 w-4 rounded-full transition-transform duration-150',
-          enabled ? 'translate-x-5 bg-[#34D399]' : 'translate-x-0 bg-[#71717A]',
+          'relative inline-flex h-7 w-12 sm:h-6 sm:w-11 shrink-0 items-center overflow-hidden rounded-full p-1 transition-colors',
+          enabled ? 'bg-[#34D399]/25' : 'bg-[#18181B]',
         )}
-      />
+      >
+        <span
+          className={cn(
+            'inline-block h-5 w-5 sm:h-4 sm:w-4 rounded-full transition-transform duration-150',
+            enabled ? 'translate-x-5 bg-[#34D399]' : 'translate-x-0 bg-[#71717A]',
+          )}
+        />
+      </span>
     </button>
   )
 }
+
+type SettingsSectionTab = 'all' | 'broker' | 'risk' | 'engines' | 'alerts'
+
+const SETTINGS_MOBILE_TABS: Array<{ id: SettingsSectionTab; label: string }> = [
+  { id: 'all', label: 'All Settings' },
+  { id: 'broker', label: 'Exness MT5' },
+  { id: 'risk', label: 'Risk Guardrails' },
+  { id: 'engines', label: 'Engines' },
+  { id: 'alerts', label: 'Alerts & Audio' },
+]
 
 export default function Settings() {
   const selectedStrategyId = useOnboardingStore((s) => s.selectedStrategyId)
@@ -208,6 +222,7 @@ export default function Settings() {
   const [maxConsecutiveLossCap, setMaxConsecutiveLossCap] = useState<number>(3)
   const [brokerConfig, setBrokerConfig] = useState<BrokerDeskConfig>(loadBrokerDeskConfig)
   const [brokerSavedToast, setBrokerSavedToast] = useState(false)
+  const [mobileTab, setMobileTab] = useState<SettingsSectionTab>('all')
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -254,44 +269,77 @@ export default function Settings() {
   const activeIds =
     selectedStrategyIds && selectedStrategyIds.length > 0 ? selectedStrategyIds : [selectedStrategyId]
 
+  const showSection = (section: Exclude<SettingsSectionTab, 'all'>) =>
+    mobileTab === 'all' || mobileTab === section
+
   return (
-    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] overflow-x-hidden">
-      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-8">
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] font-sans overflow-x-hidden">
+      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-5 sm:py-8 space-y-6 sm:space-y-8">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div className="space-y-1.5">
             <p className="text-[12px] font-medium text-[#71717A]">Workspace Preferences</p>
-            <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
+            <h1 className="text-[24px] sm:text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
               Settings
             </h1>
-            <p className="text-[14px] text-[#A1A1AA]">
+            <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA]">
               Configure Exness MT5 connectivity, execution guardrails, active engines, and alert routing.
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="grid grid-cols-2 sm:flex items-center gap-2.5 w-full sm:w-auto">
             <Link
               to="/notifications?tab=telemetry"
-              className="px-3.5 py-2 rounded-xl border border-white/[0.07] bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors"
+              className="min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl border border-white/[0.07] bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center justify-center gap-1.5 transition-colors"
             >
-              <PiSlidersHorizontal className="h-4 w-4 text-[#A1A1AA]" />
-              <span>Engine Health</span>
+              <PiSlidersHorizontal className="h-4 w-4 text-[#A1A1AA] shrink-0" />
+              <span className="truncate">Engine Health</span>
             </Link>
             <Link
               to="/dashboard"
-              className="px-4 py-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors"
+              className="min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-medium inline-flex items-center justify-center gap-1.5 transition-colors"
             >
               <span>Terminal</span>
-              <PiArrowUpRight className="h-4 w-4" />
+              <PiArrowUpRight className="h-4 w-4 shrink-0" />
             </Link>
           </div>
         </div>
 
+        {/* Mobile Horizontally Scrollable Section Pill Tabs */}
+        <div className="md:hidden -mx-4 px-4 overflow-x-auto pb-1">
+          <div
+            role="tablist"
+            aria-label="Settings sections"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#111113] border border-white/[0.07] p-1"
+          >
+            {SETTINGS_MOBILE_TABS.map((tab) => {
+              const active = mobileTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setMobileTab(tab.id)}
+                  className={cn(
+                    'min-h-[44px] px-4 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors',
+                    active
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]',
+                  )}
+                >
+                  {tab.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* 1. Exness MT5 Connection */}
-        <section className="space-y-3">
+        <section className={cn('space-y-3', !showSection('broker') && 'hidden md:block')}>
           <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+            <div className="min-w-0">
+              <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
                 Exness MT5 Connection
               </h2>
               <p className="text-[13px] text-[#71717A]">
@@ -299,14 +347,14 @@ export default function Settings() {
               </p>
             </div>
             {brokerSavedToast && (
-              <span className="text-[12px] font-medium text-[#34D399]">Saved locally</span>
+              <span className="text-[12px] font-medium text-[#34D399] shrink-0">Saved locally</span>
             )}
           </div>
 
           <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
             {/* Bridge Master Row */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-2.5 sm:space-y-1 min-w-0">
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="text-[14px] font-medium text-[#FAFAFA]">
                     MetaApi Execution Bridge
@@ -322,31 +370,42 @@ export default function Settings() {
                     {metaAccount?.connected ? 'Connected' : metaAccount?.state || 'Disconnected'}
                   </span>
                 </div>
-                <p className="text-[13px] text-[#71717A]">
-                  Balance{' '}
-                  <span className="font-mono tabular-nums text-[#A1A1AA]">
-                    {formatCurrency(metaAccount?.balance ?? 0)}
-                  </span>
-                  {' · '}Equity{' '}
-                  <span className="font-mono tabular-nums text-[#A1A1AA]">
-                    {formatCurrency(metaAccount?.equity ?? 0)}
-                  </span>
-                  {' · '}Open{' '}
-                  <span className="font-mono tabular-nums text-[#A1A1AA]">
-                    {metaPositions.length}/{autoTradeMaxPositions}
-                  </span>
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-x-2 text-[12.5px] sm:text-[13px] text-[#71717A]">
+                  <div className="rounded-lg bg-[#161619] px-2.5 py-1.5 sm:bg-transparent sm:p-0">
+                    <span className="block sm:inline text-[11px] sm:text-[13px] text-[#71717A]">Balance </span>
+                    <span className="font-mono tabular-nums text-[#FAFAFA] sm:text-[#A1A1AA]">
+                      {formatCurrency(metaAccount?.balance ?? 0)}
+                    </span>
+                  </div>
+                  <span className="hidden sm:inline">·</span>
+                  <div className="rounded-lg bg-[#161619] px-2.5 py-1.5 sm:bg-transparent sm:p-0">
+                    <span className="block sm:inline text-[11px] sm:text-[13px] text-[#71717A]">Equity </span>
+                    <span className="font-mono tabular-nums text-[#FAFAFA] sm:text-[#A1A1AA]">
+                      {formatCurrency(metaAccount?.equity ?? 0)}
+                    </span>
+                  </div>
+                  <span className="hidden sm:inline">·</span>
+                  <div className="rounded-lg bg-[#161619] px-2.5 py-1.5 sm:bg-transparent sm:p-0">
+                    <span className="block sm:inline text-[11px] sm:text-[13px] text-[#71717A]">Open </span>
+                    <span className="font-mono tabular-nums text-[#FAFAFA] sm:text-[#A1A1AA]">
+                      {metaPositions.length}/{autoTradeMaxPositions}
+                    </span>
+                  </div>
                   {metaAccount?.leverage ? (
                     <>
-                      {' · '}
-                      <span className="font-mono tabular-nums text-[#A1A1AA]">
-                        1:{metaAccount.leverage}
-                      </span>
+                      <span className="hidden sm:inline">·</span>
+                      <div className="rounded-lg bg-[#161619] px-2.5 py-1.5 sm:bg-transparent sm:p-0">
+                        <span className="block sm:inline text-[11px] sm:text-[13px] text-[#71717A] sm:hidden">Leverage </span>
+                        <span className="font-mono tabular-nums text-[#FAFAFA] sm:text-[#A1A1AA]">
+                          1:{metaAccount.leverage}
+                        </span>
+                      </div>
                     </>
                   ) : null}
-                </p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2.5 shrink-0">
+              <div className="grid grid-cols-2 sm:flex items-center gap-2.5 w-full sm:w-auto shrink-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -354,7 +413,7 @@ export default function Settings() {
                     void refreshPositions()
                   }}
                   disabled={metaLoading}
-                  className="px-3 py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                  className="min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                 >
                   <PiArrowsClockwise className={cn('h-4 w-4 text-[#A1A1AA]', metaLoading && 'animate-spin')} />
                   <span>Sync</span>
@@ -365,20 +424,20 @@ export default function Settings() {
                   onClick={() => void toggleAutoTrade(!autoTradeEnabled)}
                   disabled={metaLoading}
                   className={cn(
-                    'px-3.5 py-2 rounded-xl text-[13px] font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-50',
+                    'min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl text-[13px] font-medium inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50',
                     autoTradeEnabled
                       ? 'bg-[#34D399]/15 text-[#34D399] hover:bg-[#34D399]/20'
                       : 'bg-[#F87171]/15 text-[#F87171] hover:bg-[#F87171]/20',
                   )}
                 >
-                  <PiPower className="h-4 w-4" />
-                  <span>{autoTradeEnabled ? 'Auto-Trade On' : 'Auto-Trade Off'}</span>
+                  <PiPower className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{autoTradeEnabled ? 'Auto-Trade On' : 'Auto-Trade Off'}</span>
                 </button>
               </div>
             </div>
 
             {/* Platform */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Broker Platform</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -391,7 +450,7 @@ export default function Settings() {
                   updateBrokerField('platform', e.target.value as BrokerDeskConfig['platform'])
                 }
                 aria-label="Broker Platform"
-                className="w-full sm:w-56 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] outline-none focus:border-white/[0.2]"
+                className="w-full sm:w-56 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] outline-none focus:border-white/[0.2]"
               >
                 <option value="exness-mt5">Exness MT5</option>
                 <option value="exness-mt4">Exness MT4</option>
@@ -400,7 +459,7 @@ export default function Settings() {
             </div>
 
             {/* Login ID */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Account Login ID</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -412,12 +471,12 @@ export default function Settings() {
                 value={brokerConfig.loginId}
                 onChange={(e) => updateBrokerField('loginId', e.target.value)}
                 placeholder="MT5 Login ID"
-                className="w-full sm:w-56 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
+                className="w-full sm:w-56 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
               />
             </div>
 
             {/* Broker Server */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Broker Server</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -429,13 +488,13 @@ export default function Settings() {
                 value={brokerConfig.serverName}
                 onChange={(e) => updateBrokerField('serverName', e.target.value)}
                 placeholder="e.g. Exness-MT5Real14"
-                className="w-full sm:w-56 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
+                className="w-full sm:w-56 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
               />
             </div>
 
             {/* Auto-Sync Balance */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="space-y-0.5">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-row items-center justify-between gap-4">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Auto-Sync Balance</div>
                 <div className="text-[13px] text-[#71717A]">
                   Continuously match sizing baseline to live Exness equity.
@@ -451,9 +510,9 @@ export default function Settings() {
         </section>
 
         {/* 2. Risk & Execution Guardrails */}
-        <section className="space-y-3">
+        <section className={cn('space-y-3', !showSection('risk') && 'hidden md:block')}>
           <div>
-            <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+            <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
               Risk &amp; Execution Guardrails
             </h2>
             <p className="text-[13px] text-[#71717A]">
@@ -463,19 +522,19 @@ export default function Settings() {
 
           <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
             {/* Position Sizing Mode */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Position Sizing Mode</div>
                 <div className="text-[13px] text-[#71717A]">
                   Calculate lot sizes from a fixed dollar risk or percentage of equity.
                 </div>
               </div>
-              <div className="inline-flex items-center rounded-xl bg-[#18181B] p-1 self-start sm:self-auto">
+              <div className="grid grid-cols-2 sm:inline-flex items-center rounded-xl bg-[#18181B] p-1 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setRiskMode('fixedAmount')}
                   className={cn(
-                    'px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors',
+                    'min-h-[40px] sm:min-h-0 px-3.5 py-2 sm:py-1.5 rounded-lg text-[13px] font-medium transition-colors',
                     riskMode === 'fixedAmount'
                       ? 'bg-[#FAFAFA] text-[#09090B]'
                       : 'text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -487,7 +546,7 @@ export default function Settings() {
                   type="button"
                   onClick={() => setRiskMode('percentage')}
                   className={cn(
-                    'px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors',
+                    'min-h-[40px] sm:min-h-0 px-3.5 py-2 sm:py-1.5 rounded-lg text-[13px] font-medium transition-colors',
                     riskMode === 'percentage'
                       ? 'bg-[#FAFAFA] text-[#09090B]'
                       : 'text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -499,7 +558,7 @@ export default function Settings() {
             </div>
 
             {/* Account Baseline */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Account Baseline ($)</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -526,12 +585,12 @@ export default function Settings() {
                 type="number"
                 value={accountBalance}
                 onChange={(e) => setAccountBalance(Number(e.target.value))}
-                className="w-full sm:w-44 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
+                className="w-full sm:w-44 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
               />
             </div>
 
             {/* Per-Trade Risk */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   {riskMode === 'fixedAmount' ? 'Fixed Risk Per Trade ($)' : 'Risk Per Trade (%)'}
@@ -545,7 +604,7 @@ export default function Settings() {
                 </div>
               </div>
               {riskMode === 'fixedAmount' ? (
-                <div className="flex flex-col sm:items-end gap-2">
+                <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
                   <input
                     type="number"
                     min={1}
@@ -556,16 +615,16 @@ export default function Settings() {
                       const val = e.target.value === '' ? 0 : parseFloat(e.target.value)
                       setFixedRiskAmount(Number.isNaN(val) ? 0 : val)
                     }}
-                    className="w-full sm:w-44 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
+                    className="w-full sm:w-44 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
                   />
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-1.5">
                     {[10, 25, 50, 100, 250, 500].map((amt) => (
                       <button
                         key={amt}
                         type="button"
                         onClick={() => setFixedRiskAmount(amt)}
                         className={cn(
-                          'px-2.5 py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
+                          'min-h-[38px] sm:min-h-0 px-2.5 py-1.5 sm:py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
                           fixedRiskAmount === amt
                             ? 'bg-[#FAFAFA] text-[#09090B] font-medium'
                             : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -584,13 +643,13 @@ export default function Settings() {
                   step={0.1}
                   value={riskPerTradePct}
                   onChange={(e) => setRiskPerTradePct(Number(e.target.value))}
-                  className="w-full sm:w-44 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
+                  className="w-full sm:w-44 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
                 />
               )}
             </div>
 
             {/* Rule D.1 Daily Loss Cap */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Daily Loss Cap (Rule D.1)</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -601,7 +660,7 @@ export default function Settings() {
                   .
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <input
                   type="number"
                   min={0.5}
@@ -609,14 +668,14 @@ export default function Settings() {
                   step={0.5}
                   value={maxDailyLossPct}
                   onChange={(e) => setMaxDailyLossPct(Number(e.target.value))}
-                  className="w-28 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
+                  className="flex-1 sm:flex-none sm:w-28 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
                 />
-                <span className="text-[13px] font-mono text-[#71717A]">%</span>
+                <span className="text-[13px] font-mono text-[#71717A] shrink-0">%</span>
               </div>
             </div>
 
             {/* Rule A.1 Min Confidence */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   Minimum Confidence (Rule A.1)
@@ -625,26 +684,26 @@ export default function Settings() {
                   Reject signals below this conviction score before MT5 order dispatch.
                 </div>
               </div>
-              <div className="flex flex-col sm:items-end gap-2">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                   <input
                     type="number"
                     min={50}
                     max={95}
                     value={autoTradeMinConfidence}
                     onChange={(e) => setAutoTradeMinConfidence(Number(e.target.value))}
-                    className="w-24 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
+                    className="flex-1 sm:flex-none sm:w-24 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
                   />
-                  <span className="text-[13px] font-mono text-[#71717A]">%</span>
+                  <span className="text-[13px] font-mono text-[#71717A] shrink-0">%</span>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="grid grid-cols-5 sm:flex sm:flex-wrap gap-1.5">
                   {[55, 65, 75, 80, 85].map((v) => (
                     <button
                       key={v}
                       type="button"
                       onClick={() => setAutoTradeMinConfidence(v)}
                       className={cn(
-                        'px-2.5 py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
+                        'min-h-[38px] sm:min-h-0 px-2.5 py-1.5 sm:py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
                         autoTradeMinConfidence === v
                           ? 'bg-[#FAFAFA] text-[#09090B] font-medium'
                           : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -658,7 +717,7 @@ export default function Settings() {
             </div>
 
             {/* Rule A.2 Min R:R */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   Minimum Risk:Reward (Rule A.2)
@@ -667,8 +726,8 @@ export default function Settings() {
                   Enforce asymmetric payoff floor and reject sub-threshold R:R setups.
                 </div>
               </div>
-              <div className="flex flex-col sm:items-end gap-2">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                   <input
                     type="number"
                     min={1.0}
@@ -676,18 +735,18 @@ export default function Settings() {
                     step={0.1}
                     value={autoTradeMinRR}
                     onChange={(e) => setAutoTradeMinRR(Number(e.target.value))}
-                    className="w-24 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
+                    className="flex-1 sm:flex-none sm:w-24 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
                   />
-                  <span className="text-[13px] font-mono text-[#71717A]">R</span>
+                  <span className="text-[13px] font-mono text-[#71717A] shrink-0">R</span>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="grid grid-cols-5 sm:flex sm:flex-wrap gap-1.5">
                   {[1.5, 1.8, 2.0, 2.5, 3.0].map((v) => (
                     <button
                       key={v}
                       type="button"
                       onClick={() => setAutoTradeMinRR(v)}
                       className={cn(
-                        'px-2.5 py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
+                        'min-h-[38px] sm:min-h-0 px-2 py-1.5 sm:px-2.5 sm:py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
                         Math.abs(autoTradeMinRR - v) < 0.05
                           ? 'bg-[#FAFAFA] text-[#09090B] font-medium'
                           : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -701,7 +760,7 @@ export default function Settings() {
             </div>
 
             {/* Rule B.4 Max Open Positions */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   Max Open Positions (Rule B.4)
@@ -710,7 +769,7 @@ export default function Settings() {
                   Hard cap on simultaneous open Exness MT5 positions across all pairs.
                 </div>
               </div>
-              <div className="flex flex-col sm:items-end gap-2">
+              <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
                 <input
                   type="number"
                   min={1}
@@ -720,16 +779,16 @@ export default function Settings() {
                     const val = parseInt(e.target.value, 10)
                     if (!Number.isNaN(val) && val >= 1) setAutoTradeMaxPositions(val)
                   }}
-                  className="w-24 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
+                  className="w-full sm:w-24 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
                 />
-                <div className="flex flex-wrap gap-1.5">
+                <div className="grid grid-cols-5 sm:flex sm:flex-wrap gap-1.5">
                   {[1, 3, 5, 10, 15].map((pos) => (
                     <button
                       key={pos}
                       type="button"
                       onClick={() => setAutoTradeMaxPositions(pos)}
                       className={cn(
-                        'px-2.5 py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
+                        'min-h-[38px] sm:min-h-0 px-2.5 py-1.5 sm:py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
                         autoTradeMaxPositions === pos
                           ? 'bg-[#FAFAFA] text-[#09090B] font-medium'
                           : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -743,7 +802,7 @@ export default function Settings() {
             </div>
 
             {/* Rule C.9 Max Spread Cap */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   Max Spread Cap (Rule C.9)
@@ -752,8 +811,8 @@ export default function Settings() {
                   Abort entry if live broker bid/ask spread exceeds this pip ceiling.
                 </div>
               </div>
-              <div className="flex flex-col sm:items-end gap-2">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                   <input
                     type="number"
                     min={0.5}
@@ -761,18 +820,18 @@ export default function Settings() {
                     step={0.5}
                     value={autoTradeSpreadCapPips}
                     onChange={(e) => setAutoTradeSpreadCapPips(Number(e.target.value))}
-                    className="w-24 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
+                    className="flex-1 sm:flex-none sm:w-24 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
                   />
-                  <span className="text-[13px] text-[#71717A]">pips</span>
+                  <span className="text-[13px] text-[#71717A] shrink-0">pips</span>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5">
                   {[1.5, 2.5, 3.5, 5.0].map((pips) => (
                     <button
                       key={pips}
                       type="button"
                       onClick={() => setAutoTradeSpreadCapPips(pips)}
                       className={cn(
-                        'px-2.5 py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
+                        'min-h-[38px] sm:min-h-0 px-2.5 py-1.5 sm:py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
                         autoTradeSpreadCapPips === pips
                           ? 'bg-[#FAFAFA] text-[#09090B] font-medium'
                           : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -786,7 +845,7 @@ export default function Settings() {
             </div>
 
             {/* Rule C.10 Session Window */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   Session Window (Rule C.10)
@@ -801,7 +860,7 @@ export default function Settings() {
                   setAutoTradeSessionFilter(e.target.value as 'all' | 'london_ny' | 'ny_only')
                 }
                 aria-label="Session Window"
-                className="w-full sm:w-56 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] outline-none focus:border-white/[0.2]"
+                className="w-full sm:w-56 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] outline-none focus:border-white/[0.2]"
               >
                 <option value="all">24/7 All Sessions</option>
                 <option value="london_ny">London + NY (07–20 UTC)</option>
@@ -810,7 +869,7 @@ export default function Settings() {
             </div>
 
             {/* Rule D.2 Loss Streak Cooldown */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   Loss Streak Cooldown (Rule D.2)
@@ -819,15 +878,15 @@ export default function Settings() {
                   Pause automated trading after consecutive resolved losses reach the ceiling.
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1">
+              <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                <div className="flex items-center gap-1.5">
                   {[2, 3, 4, 5].map((cap) => (
                     <button
                       key={cap}
                       type="button"
                       onClick={() => handleConsecLossChange(cap)}
                       className={cn(
-                        'w-8 h-8 rounded-xl text-[12px] font-mono tabular-nums transition-colors',
+                        'w-10 h-10 sm:w-8 sm:h-8 rounded-xl text-[12px] font-mono tabular-nums transition-colors',
                         maxConsecutiveLossCap === cap
                           ? 'bg-[#FAFAFA] text-[#09090B] font-medium'
                           : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -846,8 +905,8 @@ export default function Settings() {
             </div>
 
             {/* Rule B.7 USD Correlation Shield */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="space-y-0.5">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-row items-center justify-between gap-4">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   USD Correlation Shield (Rule B.7)
                 </div>
@@ -863,8 +922,8 @@ export default function Settings() {
             </div>
 
             {/* Rule D.3 Tier-1 News Freeze */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="space-y-0.5">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-row items-center justify-between gap-4">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   Tier-1 News Freeze (Rule D.3)
                 </div>
@@ -880,7 +939,7 @@ export default function Settings() {
             </div>
 
             {/* Execution Asset Universe */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">
                   Execution Asset Universe
@@ -898,7 +957,7 @@ export default function Settings() {
                       type="button"
                       onClick={() => toggleAutoTradeAllowedCategory(cat.id)}
                       className={cn(
-                        'px-3 py-1.5 rounded-xl text-[13px] font-medium transition-colors',
+                        'min-h-[40px] sm:min-h-0 px-3.5 py-2 sm:px-3 sm:py-1.5 rounded-xl text-[13px] font-medium transition-colors',
                         active
                           ? 'bg-[#FAFAFA] text-[#09090B]'
                           : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -914,10 +973,10 @@ export default function Settings() {
         </section>
 
         {/* 3. Active Strategy Engines */}
-        <section className="space-y-3">
+        <section className={cn('space-y-3', !showSection('engines') && 'hidden md:block')}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+              <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
                 Active Strategy Engines
               </h2>
               <p className="text-[13px] text-[#71717A]">
@@ -929,7 +988,7 @@ export default function Settings() {
               onClick={() =>
                 setSelectedStrategies(ONBOARDING_STRATEGIES.map((s) => s.id as OnboardingStrategyId))
               }
-              className="px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] self-start sm:self-auto transition-colors"
+              className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] text-center transition-colors"
             >
               Enable All 5 Engines
             </button>
@@ -941,16 +1000,16 @@ export default function Settings() {
               return (
                 <div
                   key={strategy.id}
-                  className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
+                  className="p-4 sm:p-5 sm:px-6 flex flex-row items-center justify-between gap-4"
                 >
-                  <div className="space-y-0.5">
+                  <div className="space-y-0.5 min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-medium text-[#FAFAFA]">
+                      <span className="text-[14px] font-medium text-[#FAFAFA] truncate">
                         {strategy.name}
                       </span>
-                      {isSelected && <PiCheck className="h-4 w-4 text-[#34D399]" />}
+                      {isSelected && <PiCheck className="h-4 w-4 text-[#34D399] shrink-0" />}
                     </div>
-                    <p className="text-[13px] text-[#71717A]">
+                    <p className="text-[12.5px] sm:text-[13px] text-[#71717A]">
                       Historical target{' '}
                       <span className="font-mono tabular-nums text-[#A1A1AA]">
                         {strategy.winRate}
@@ -963,10 +1022,10 @@ export default function Settings() {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
                     <span
                       className={cn(
-                        'text-[12px] font-medium',
+                        'hidden sm:inline text-[12px] font-medium',
                         isSelected ? 'text-[#34D399]' : 'text-[#71717A]',
                       )}
                     >
@@ -985,9 +1044,9 @@ export default function Settings() {
         </section>
 
         {/* 4. Alerts & Audio */}
-        <section className="space-y-3">
+        <section className={cn('space-y-3', !showSection('alerts') && 'hidden md:block')}>
           <div>
-            <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+            <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
               Alerts &amp; Audio
             </h2>
             <p className="text-[13px] text-[#71717A]">
@@ -997,8 +1056,8 @@ export default function Settings() {
 
           <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
             {/* In-App Toasts */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="space-y-0.5">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-row items-center justify-between gap-4">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">In-App Signal Toasts</div>
                 <div className="text-[13px] text-[#71717A]">
                   Non-blocking setup cards inside the trading workspace.
@@ -1012,21 +1071,21 @@ export default function Settings() {
             </div>
 
             {/* Audio Chime */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Audio Chime</div>
                 <div className="text-[13px] text-[#71717A]">
                   Directional Web Audio tone when a live signal triggers.
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={playTestChime}
-                  className="px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors"
+                  className="min-h-[40px] sm:min-h-0 px-3.5 py-2 sm:px-3 sm:py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[12px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors"
                 >
                   <PiSpeakerHigh className="h-3.5 w-3.5" />
-                  <span>Test</span>
+                  <span>Test Chime</span>
                 </button>
                 <TogglePill
                   enabled={notifSoundEnabled}
@@ -1037,8 +1096,8 @@ export default function Settings() {
             </div>
 
             {/* OS Push Notifications */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="space-y-0.5">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-row items-center justify-between gap-4">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">OS Push Notifications</div>
                 <div className="text-[13px] text-[#71717A]">
                   System notifications when TRAXO is backgrounded.
@@ -1067,14 +1126,14 @@ export default function Settings() {
             </div>
 
             {/* Confidence Floor */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Alert Confidence Floor</div>
                 <div className="text-[13px] text-[#71717A]">
                   Minimum conviction score required to fire alert notifications.
                 </div>
               </div>
-              <div className="flex items-center gap-3 w-full sm:w-64">
+              <div className="flex items-center gap-3 w-full sm:w-64 min-h-[44px] sm:min-h-0">
                 <input
                   type="range"
                   min={0}
@@ -1083,7 +1142,7 @@ export default function Settings() {
                   value={notifMinConfidencePct}
                   onChange={(e) => setNotifMinConfidencePct(Number(e.target.value))}
                   aria-label="Alert confidence floor"
-                  className="flex-1 accent-[#FAFAFA] h-1.5 bg-[#18181B] rounded-full appearance-none outline-none cursor-pointer"
+                  className="flex-1 accent-[#FAFAFA] h-2 sm:h-1.5 bg-[#18181B] rounded-full appearance-none outline-none cursor-pointer"
                 />
                 <span className="w-12 text-right text-[13px] font-mono font-medium tabular-nums text-[#FAFAFA]">
                   {notifMinConfidencePct}%
@@ -1092,7 +1151,7 @@ export default function Settings() {
             </div>
 
             {/* Timeframe Filters */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Timeframe Filters</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -1104,7 +1163,7 @@ export default function Settings() {
                   type="button"
                   onClick={() => setNotifTimeframeFilters([])}
                   className={cn(
-                    'px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors',
+                    'min-h-[38px] sm:min-h-0 px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors',
                     notifTimeframeFilters.length === 0
                       ? 'bg-[#FAFAFA] text-[#09090B]'
                       : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -1120,7 +1179,7 @@ export default function Settings() {
                       type="button"
                       onClick={() => toggleNotifTimeframeFilter(tf)}
                       className={cn(
-                        'px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors',
+                        'min-h-[38px] sm:min-h-0 px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors',
                         active
                           ? 'bg-[#FAFAFA] text-[#09090B]'
                           : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -1134,7 +1193,7 @@ export default function Settings() {
             </div>
 
             {/* Strategy Filters */}
-            <div className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Strategy Filters</div>
                 <div className="text-[13px] text-[#71717A]">
@@ -1146,7 +1205,7 @@ export default function Settings() {
                   type="button"
                   onClick={() => setNotifStrategyFilters([])}
                   className={cn(
-                    'px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors',
+                    'min-h-[38px] sm:min-h-0 px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors',
                     notifStrategyFilters.length === 0
                       ? 'bg-[#FAFAFA] text-[#09090B]'
                       : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -1162,7 +1221,7 @@ export default function Settings() {
                       type="button"
                       onClick={() => toggleNotifStrategyFilter(st.id)}
                       className={cn(
-                        'px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors',
+                        'min-h-[38px] sm:min-h-0 px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors',
                         active
                           ? 'bg-[#FAFAFA] text-[#09090B]'
                           : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -1176,7 +1235,7 @@ export default function Settings() {
             </div>
 
             {/* Instrument Filters */}
-            <div className="p-5 sm:px-6 space-y-4">
+            <div className="p-4 sm:p-5 sm:px-6 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-0.5">
                   <div className="text-[14px] font-medium text-[#FAFAFA]">Instrument Filters</div>
@@ -1188,7 +1247,7 @@ export default function Settings() {
                   type="button"
                   onClick={() => setNotifSymbolFilters([])}
                   className={cn(
-                    'px-3 py-1.5 rounded-xl text-[12px] font-medium self-start sm:self-auto transition-colors',
+                    'w-full sm:w-auto min-h-[40px] sm:min-h-0 px-3 py-2 sm:py-1.5 rounded-xl text-[12px] font-medium transition-colors',
                     notifSymbolFilters.length === 0
                       ? 'bg-[#FAFAFA] text-[#09090B]'
                       : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
@@ -1213,7 +1272,7 @@ export default function Settings() {
                             type="button"
                             onClick={() => toggleNotifSymbolFilter(symbol)}
                             className={cn(
-                              'px-2.5 py-1 rounded-lg text-[12px] font-medium transition-colors',
+                              'min-h-[36px] sm:min-h-0 px-2.5 py-1.5 sm:py-1 rounded-lg text-[12px] font-medium transition-colors',
                               active
                                 ? 'bg-[#FAFAFA] text-[#09090B]'
                                 : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',

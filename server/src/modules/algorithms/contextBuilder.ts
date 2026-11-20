@@ -21,7 +21,8 @@ import type { OrderBlockContext, NewsEvent, OBCandle } from '../../../algorithms
 import type { BreakoutContext, BKAssetType } from '../../../algorithms/breakout/types';
 import type { SupplyDemandContext, SDAssetType } from '../../../algorithms/supplyDemand/types';
 import type { TrendFollowingContext, TFAssetType, TrendDirection } from '../../../algorithms/trendFollowing/types';
-import { getAssetType, normalizeSymbol } from '../../config/instruments';
+import type { TraxoStrategyContext } from '../../../algorithms/traxo/types';
+import { getAssetType, normalizeSymbol, type InstrumentAssetType } from '../../config/instruments';
 
 export interface RawCandleInput {
   open: number;
@@ -67,7 +68,7 @@ export interface BuildStrategyContextParams {
 export interface LiveStrategyContext {
   symbol: string;
   timeframe: string;
-  assetType: 'FOREX' | 'STOCKS' | 'CRYPTO';
+  assetType: InstrumentAssetType;
   candles: NormalizedCandle[];
   htfTimeframe: string;
   htfCandles: NormalizedCandle[];
@@ -100,6 +101,7 @@ export interface LiveStrategyContext {
   toOrderBlockContext(): OrderBlockContext;
   toSupplyDemandContext(): SupplyDemandContext;
   toTrendFollowingContext(): TrendFollowingContext;
+  toTraxoContext(): TraxoStrategyContext;
 }
 
 export function normalizeCandle(candle: RawCandleInput): NormalizedCandle {
@@ -393,8 +395,7 @@ export function buildLiveStrategyContext(params: BuildStrategyContextParams): Li
     toWickRejectionContext(): WickRejectionContext {
       const candle = candles[wickIdx] || candles[lastIdx];
       const confirmationCandle = candles.length >= 2 ? candles[lastIdx] : undefined;
-      const wrAssetType: WickRejectionAssetType =
-        assetType === 'STOCKS' ? 'STOCKS' : assetType === 'CRYPTO' ? 'CRYPTO' : 'FOREX';
+      const wrAssetType: WickRejectionAssetType = assetType;
       const session = resolveWickRejectionSession(wrAssetType, candle.timestamp);
 
       return {
@@ -478,6 +479,37 @@ export function buildLiveStrategyContext(params: BuildStrategyContextParams): Li
         newsMinutesAway,
         htfTrendDirection: htf.tfHtfDirection,
         htfAdx: htf.htfAdx,
+      };
+    },
+
+    toTraxoContext(): TraxoStrategyContext {
+      const latestCandle = candles[lastIdx];
+      const parsedTs = latestCandle ? new Date(latestCandle.timestamp) : new Date();
+      const dt = Number.isNaN(parsedTs.getTime()) ? new Date() : parsedTs;
+      const utcHour = dt.getUTCHours();
+      const utcMinute = dt.getUTCMinutes();
+      const newsBlackout =
+        typeof newsMinutesAway === 'number' &&
+        newsMinutesAway >= -15 &&
+        newsMinutesAway <= 30;
+
+      return {
+        symbol: canonicalSymbol,
+        timeframe: params.timeframe,
+        candles,
+        higherTimeframeCandles: htf.htfSeries.length > 0 ? htf.htfSeries : undefined,
+        currentPrice: latestCandle?.close,
+        session: {
+          isAsian: utcHour >= 0 && utcHour < 7,
+          isLondon: utcHour >= 7 && utcHour < 16,
+          isNewYork: utcHour >= 12 && utcHour < 21,
+          isOverlap: utcHour >= 12 && utcHour < 16,
+          utcHour,
+          utcMinute,
+          dayOfMonth: dt.getUTCDate(),
+          dayOfWeek: dt.getUTCDay(),
+        },
+        newsBlackout,
       };
     },
   };

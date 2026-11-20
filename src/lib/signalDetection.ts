@@ -4,6 +4,7 @@ import { analyzeOrderBlock } from '../../server/algorithms/orderBlockStrategy';
 import { analyzeSupplyDemand } from '../../server/algorithms/supplyDemandStrategy';
 import { analyzeTrendFollowing } from '../../server/algorithms/trendFollowingStrategy';
 import { analyzeWickRejection } from '../../server/algorithms/wickRejection';
+import { getTraxoStrategy } from '../../server/algorithms/traxo';
 
 export interface Candle {
   time: number | string;
@@ -115,6 +116,46 @@ export function runSignalsForStrategies(
     let rawSignal: any = null;
 
     try {
+      if (id.startsWith('traxo_')) {
+        const traxoEngine = getTraxoStrategy(id);
+        if (traxoEngine) {
+          const traxoSig = traxoEngine.evaluate({
+            symbol,
+            timeframe,
+            candles: strategyContextCandles,
+            currentPrice: strategyContextCandles[strategyContextCandles.length - 1]?.close,
+          });
+          if (traxoSig) {
+            const traxoRisk = Math.abs(traxoSig.entryPrice - traxoSig.slPrice);
+            const traxoReward = Math.abs(traxoSig.tp1Price - traxoSig.entryPrice);
+            const traxoRr = traxoRisk > 0 ? Number((traxoReward / traxoRisk).toFixed(2)) : traxoSig.riskRewardRatio;
+            results.push({
+              id: [
+                'sig',
+                traxoSig.strategyId,
+                symbol,
+                timeframe,
+                traxoSig.direction,
+                lastTime,
+                Number(traxoSig.entryPrice || 0).toPrecision(8),
+              ].join(':'),
+              time: lastTime,
+              strategyId: traxoSig.strategyId,
+              strategyLabel: traxoSig.strategyName,
+              direction: traxoSig.direction,
+              entry: traxoSig.entryPrice,
+              sl: traxoSig.slPrice,
+              tp: traxoSig.tp1Price,
+              rr: traxoRr,
+              confidence: traxoSig.confidencePct,
+              risk: riskFromConfidence(traxoSig.confidencePct),
+              reason: traxoSig.reasons || [],
+            });
+          }
+        }
+        continue;
+      }
+
       if (id === 'breakout') {
         rawSignal = analyzeBreakout({
           symbol,

@@ -28,7 +28,7 @@ const DEFAULT_TRADING_CONTEXT = {
   autoTradeCorrelationShield: true,
   autoTradeNewsFilter: true,
   autoTradeCooldownOnLoss: true,
-  autoTradeAllowedCategories: ['forex', 'metals', 'stocks'],
+  autoTradeAllowedCategories: ['forex', 'metals', 'indices'],
   autoSyncBrokerBalance: true,
   autoTradeSessionFilter: 'all',
   updatedAt: null as number | null,
