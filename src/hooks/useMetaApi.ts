@@ -1,30 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
+import { resolveApiBaseUrl } from '@/lib/api';
 import { auth } from '@/lib/firebase';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useTradingContextStore } from '@/stores/useTradingContextStore';
-
-const ENV_API_URL = import.meta.env.VITE_API_URL as string | undefined;
-
-function resolveMetaApiBaseUrl(): string {
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    const isLocalHost = host === 'localhost' || host === '127.0.0.1';
-    if (
-      !isLocalHost &&
-      (!ENV_API_URL || ENV_API_URL.includes('localhost') || ENV_API_URL.includes('127.0.0.1'))
-    ) {
-      return window.location.origin;
-    }
-  }
-  return (ENV_API_URL || 'http://localhost:8080').replace(/\/+$/, '');
-}
 
 function getActiveUid(): string {
   return useAuthStore.getState().user?.id || auth.currentUser?.uid || 'default_trader';
 }
 
 async function metaFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
-  const baseUrl = resolveMetaApiBaseUrl();
+  const baseUrl = resolveApiBaseUrl();
   const url =
     endpoint.startsWith('http://') || endpoint.startsWith('https://')
       ? endpoint

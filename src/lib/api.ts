@@ -1,19 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { auth } from './firebase'; // Assuming you have a function to get the user's auth token
 
+const DEFAULT_LIVE_API_URL = 'https://traxo-backend-1.onrender.com';
+
 const ENV_API_URL = ((import.meta.env.VITE_API_URL || import.meta.env.VITE_SERVER_URL) as string | undefined)
   ?.trim()
-  .replace(/\/$/, '');
+  .replace(/\/+$/, '');
 
 export function resolveApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     const isLocalHost = host === 'localhost' || host === '127.0.0.1';
     if (!isLocalHost && (!ENV_API_URL || ENV_API_URL.includes('localhost') || ENV_API_URL.includes('127.0.0.1'))) {
-      return window.location.origin.replace(/\/$/, '');
+      return DEFAULT_LIVE_API_URL;
     }
   }
-  return ENV_API_URL || 'http://localhost:8080';
+  return ENV_API_URL || DEFAULT_LIVE_API_URL;
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();

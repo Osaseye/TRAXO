@@ -34,6 +34,7 @@ import { RiskPanel } from '@/components/dashboard/RiskPanel'
 import { StatsRow } from '@/components/dashboard/StatsRow'
 import { useMetaApi } from '@/hooks/useMetaApi'
 import { useMarketWebSocket } from '@/hooks/useMarketWebSocket'
+import { resolveApiBaseUrl } from '@/lib/api'
 import { auth } from '@/lib/firebase'
 import { getCandles, getOlderCandles, type Candle } from '@/lib/marketData'
 import { getMarketRiskContext } from '@/lib/marketRisk'
@@ -221,28 +222,12 @@ function defaultPlannerLevels(
   }
 }
 
-const ENV_API_URL = import.meta.env.VITE_API_URL as string | undefined
-
-function resolveDashboardApiBaseUrl(): string {
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname
-    const isLocalHost = host === 'localhost' || host === '127.0.0.1'
-    if (
-      !isLocalHost &&
-      (!ENV_API_URL || ENV_API_URL.includes('localhost') || ENV_API_URL.includes('127.0.0.1'))
-    ) {
-      return window.location.origin
-    }
-  }
-  return (ENV_API_URL || 'http://localhost:8080').replace(/\/+$/, '')
-}
-
 function getDashboardActiveUid(): string {
   return useAuthStore.getState().user?.id || auth.currentUser?.uid || 'default_trader'
 }
 
 async function dashboardApiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
-  const baseUrl = resolveDashboardApiBaseUrl()
+  const baseUrl = resolveApiBaseUrl()
   const url =
     endpoint.startsWith('http://') || endpoint.startsWith('https://')
       ? endpoint

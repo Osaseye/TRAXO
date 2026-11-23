@@ -1,20 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import io from 'socket.io-client';
+import { resolveApiBaseUrl } from './api';
 
-const ENV_API_URL = import.meta.env.VITE_API_URL as string | undefined;
-
-function resolveSocketUrl(): string {
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    const isLocalHost = host === 'localhost' || host === '127.0.0.1';
-    if (!isLocalHost && (!ENV_API_URL || ENV_API_URL.includes('localhost') || ENV_API_URL.includes('127.0.0.1'))) {
-      return window.location.origin;
-    }
-  }
-  return ENV_API_URL || 'http://localhost:8080';
-}
-
-const SOCKET_URL = resolveSocketUrl();
+const SOCKET_URL = resolveApiBaseUrl();
 
 class WebSocketService {
   socket;
