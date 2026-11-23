@@ -170,6 +170,8 @@ export default function Settings() {
   const maxDailyLossPct = useTradingContextStore((s) => s.maxDailyLossPct)
   const setMaxDailyLossPct = useTradingContextStore((s) => s.setMaxDailyLossPct)
 
+  const autoTradeGuardrailsEnabled = useTradingContextStore((s) => s.autoTradeGuardrailsEnabled)
+  const setAutoTradeGuardrailsEnabled = useTradingContextStore((s) => s.setAutoTradeGuardrailsEnabled)
   const autoTradeMinConfidence = useTradingContextStore((s) => s.autoTradeMinConfidence)
   const setAutoTradeMinConfidence = useTradingContextStore((s) => s.setAutoTradeMinConfidence)
   const autoTradeMaxPositions = useTradingContextStore((s) => s.autoTradeMaxPositions)
@@ -238,6 +240,11 @@ export default function Settings() {
         if (ctx && typeof ctx.maxConsecutiveLossCap === 'number' && ctx.maxConsecutiveLossCap > 0) {
           setMaxConsecutiveLossCap(ctx.maxConsecutiveLossCap)
         }
+        if (ctx && typeof ctx.autoTradeGuardrailsEnabled === 'boolean') {
+          useTradingContextStore.setState({
+            autoTradeGuardrailsEnabled: ctx.autoTradeGuardrailsEnabled,
+          })
+        }
       })
       .catch(() => {
         // non-fatal when backend offline
@@ -277,6 +284,7 @@ export default function Settings() {
         riskPerTradePct,
         maxDailyLossPct,
         maxConsecutiveLossCap,
+        autoTradeGuardrailsEnabled,
         autoTradeMinConfidence,
         autoTradeMinRR,
         autoTradeMaxPositions,
@@ -291,7 +299,9 @@ export default function Settings() {
       setSettingsSavedState('saved')
       showToast(
         'Settings Synced to Engine',
-        `Min Conf ${autoTradeMinConfidence}% · Min R:R ${autoTradeMinRR.toFixed(1)}R · Max Pos ${autoTradeMaxPositions} · Spread ${autoTradeSpreadCapPips}p`,
+        autoTradeGuardrailsEnabled
+          ? `Min Conf ${autoTradeMinConfidence}% · Min R:R ${autoTradeMinRR.toFixed(1)}R · Max Pos ${autoTradeMaxPositions} · Spread ${autoTradeSpreadCapPips}p`
+          : 'RAW SIGNAL MODE — All Auto-Trade guardrails bypassed on backend',
         'success'
       )
       setTimeout(() => setSettingsSavedState('idle'), 3000)
@@ -615,6 +625,43 @@ export default function Settings() {
           </div>
 
           <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
+            {/* Master Guardrails Switch (Raw Signal Mode) */}
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col gap-3 bg-[#141418]/80">
+              <div className="flex flex-row items-center justify-between gap-4">
+                <div className="space-y-0.5 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[14px] font-semibold text-[#FAFAFA]">
+                      Enforce Auto-Trade Guardrails
+                    </span>
+                    <span
+                      className={cn(
+                        'px-2 py-0.5 rounded-full text-[11px] font-mono font-medium',
+                        autoTradeGuardrailsEnabled
+                          ? 'bg-[#34D399]/10 text-[#34D399]'
+                          : 'bg-[#FBBF24]/15 text-[#FBBF24]'
+                      )}
+                    >
+                      {autoTradeGuardrailsEnabled ? 'GUARDED' : 'RAW SIGNAL MODE'}
+                    </span>
+                  </div>
+                  <div className="text-[13px] text-[#71717A]">
+                    Turn OFF to disable all 9 execution guardrails at once and auto-trade every raw signal directly as it arrives.
+                  </div>
+                </div>
+                <TogglePill
+                  enabled={autoTradeGuardrailsEnabled}
+                  onToggle={() => setAutoTradeGuardrailsEnabled(!autoTradeGuardrailsEnabled)}
+                  label="Toggle all Auto-Trade guardrails"
+                />
+              </div>
+
+              {!autoTradeGuardrailsEnabled && (
+                <div className="rounded-xl bg-[#0D0D10] border border-[#FBBF24]/30 px-3.5 py-2.5 text-[12.5px] text-[#FBBF24]">
+                  All execution filters (Min Confidence, Min R:R, Max Positions, Spread Cap, Session, News Freeze, Correlation Shield, Daily Loss &amp; Loss Cooldown) are currently bypassed. Every incoming signal will be auto-traded and recorded in your Trading Journal.
+                </div>
+              )}
+            </div>
+
             {/* Position Sizing Mode */}
             <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">

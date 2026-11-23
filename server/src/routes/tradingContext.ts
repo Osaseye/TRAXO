@@ -26,6 +26,7 @@ const DEFAULT_TRADING_CONTEXT = {
   experienceLevel: 'Intermediate',
   avoidHighImpactNews: true,
   requireChecklistBeforeTrade: false,
+  autoTradeGuardrailsEnabled: true,
   autoTradeMinConfidence: 60,
   autoTradeMinRR: 1.8,
   autoTradeMaxPositions: 5,
@@ -145,6 +146,10 @@ router.post('/', async (req: any, res: any) => {
         body.requireChecklistBeforeTrade,
         existing.requireChecklistBeforeTrade
       ),
+      autoTradeGuardrailsEnabled: pickBool(
+        body.autoTradeGuardrailsEnabled,
+        existing.autoTradeGuardrailsEnabled
+      ),
       autoTradeMinConfidence: pickNum(body.autoTradeMinConfidence, existing.autoTradeMinConfidence),
       autoTradeMinRR: pickNum(body.autoTradeMinRR, existing.autoTradeMinRR),
       autoTradeMaxPositions: pickNum(body.autoTradeMaxPositions, existing.autoTradeMaxPositions),
@@ -171,6 +176,7 @@ router.post('/', async (req: any, res: any) => {
     memoryContextByUid.set('default_trader', payload);
 
     updateRuntimeGuardrailConfig({
+      guardrailsEnabled: payload.autoTradeGuardrailsEnabled,
       minConfidence: payload.autoTradeMinConfidence,
       minRR: payload.autoTradeMinRR,
       maxPositions: payload.autoTradeMaxPositions,
@@ -195,6 +201,10 @@ router.post('/', async (req: any, res: any) => {
     await Promise.all([
       redis.set(`trading_context:${uid}`, JSON.stringify(payload)),
       redis.set('trading_context:default_trader', JSON.stringify(payload)),
+      redis.set(
+        'metaapi:auto_trade_guardrails_enabled',
+        String(payload.autoTradeGuardrailsEnabled)
+      ),
       redis.set('metaapi:auto_trade_min_conf', String(payload.autoTradeMinConfidence)),
       redis.set('metaapi:auto_trade_min_rr', String(payload.autoTradeMinRR)),
       redis.set('metaapi:auto_trade_max_pos', String(payload.autoTradeMaxPositions)),

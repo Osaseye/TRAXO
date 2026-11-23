@@ -70,6 +70,14 @@ export interface JournalEntry {
   createdAt: number
   notes?: string
   attachmentUrl?: string // local object URL only for now
+  pnlUsd?: number
+  pnlR?: number
+  exitPrice?: number | null
+  tp2?: number | null
+  tradeId?: string
+  signalId?: string | null
+  mode?: 'paper' | 'metaapi' | 'manual'
+  status?: string
   /** True once the user has moved SL to entry (break-even management). */
   breakEvenTriggered?: boolean
   /**
@@ -108,6 +116,7 @@ interface TradingContextState {
   triggerBreakEven: (id: string) => void
 
   // --- Auto-Trade Guardrails & Execution Rules ---
+  autoTradeGuardrailsEnabled: boolean
   autoTradeMinConfidence: number
   autoTradeMaxPositions: number
   autoTradeMinRR: number
@@ -117,6 +126,7 @@ interface TradingContextState {
   autoTradeCorrelationShield: boolean
   autoTradeNewsFilter: boolean
   autoTradeSpreadCapPips: number
+  setAutoTradeGuardrailsEnabled: (v: boolean) => void
   setAutoTradeMinConfidence: (v: number) => void
   setAutoTradeMaxPositions: (v: number) => void
   setAutoTradeMinRR: (v: number) => void
@@ -194,6 +204,7 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
   journal: [],
 
   // --- Auto-Trade Defaults & Guardrails ---
+  autoTradeGuardrailsEnabled: true,
   autoTradeMinConfidence: 75,
   autoTradeMaxPositions: 3,
   autoTradeMinRR: 1.8,
@@ -201,6 +212,11 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
   autoTradeAllowedCategories: ['forex', 'metals', 'indices'],
   autoTradeCooldownOnLoss: true,
 
+  setAutoTradeGuardrailsEnabled: (v) => {
+    const enabled = Boolean(v)
+    postTradingContext({ autoTradeGuardrailsEnabled: enabled }).catch(() => {})
+    set({ autoTradeGuardrailsEnabled: enabled })
+  },
   setAutoTradeMinConfidence: (v) => {
     const val = Math.max(50, Math.min(95, Number(v) || 75))
     postTradingContext({ autoTradeMinConfidence: val }).catch(() => {})
@@ -433,6 +449,7 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
     fixedRiskAmount: state.fixedRiskAmount,
     autoSyncBrokerBalance: state.autoSyncBrokerBalance,
     maxDailyLossPct: state.maxDailyLossPct,
+    autoTradeGuardrailsEnabled: state.autoTradeGuardrailsEnabled,
     autoTradeMinConfidence: state.autoTradeMinConfidence,
     autoTradeMaxPositions: state.autoTradeMaxPositions,
     autoTradeMinRR: state.autoTradeMinRR,

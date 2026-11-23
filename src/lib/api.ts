@@ -126,15 +126,19 @@ export const getJournalEntries = (uid?: string) => {
 };
 
 export const postJournalEntry = (entry: any) => {
+  const activeUid =
+    typeof entry?.uid === 'string' && entry.uid.trim() ? entry.uid : getActiveUid();
   return request('/api/journal', {
     method: 'POST',
-    body: JSON.stringify(entry),
+    body: JSON.stringify({ ...entry, uid: activeUid }),
   });
 };
 
 export const updateJournalEntry = (id: string, updates: any) => {
+  const activeUid =
+    typeof updates?.uid === 'string' && updates.uid.trim() ? updates.uid : getActiveUid();
   return request(`/api/journal/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify(updates),
+    body: JSON.stringify({ ...updates, uid: activeUid }),
   });
 };

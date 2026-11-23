@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   PiArrowLeft,
@@ -13,7 +13,8 @@ import {
   PiTrash,
   PiX,
 } from 'react-icons/pi'
-import { updateJournalEntry } from '@/lib/api'
+import { useMetaApi, type PaperTradeRecord } from '@/hooks/useMetaApi'
+import { getJournalEntries, updateJournalEntry } from '@/lib/api'
 import {
   useTradingContextStore,
   type JournalEntry,
@@ -70,6 +71,24 @@ function computePnl(entry: JournalEntry): { rr: number; pnlUsd: number; pnlR: nu
   const riskDist = Math.abs(entry.entry - entry.sl)
   const rewardDist = Math.abs(entry.tp - entry.entry)
   const rr = riskDist > 0 ? rewardDist / riskDist : 0
+
+  if (
+    typeof entry.pnlUsd === 'number' &&
+    Number.isFinite(entry.pnlUsd) &&
+    entry.outcome !== 'pending' &&
+    entry.outcome !== 'skipped'
+  ) {
+    const pnlR =
+      typeof entry.pnlR === 'number' && Number.isFinite(entry.pnlR)
+        ? entry.pnlR
+        : entry.outcome === 'win'
+          ? rr
+          : entry.outcome === 'loss'
+            ? -1
+            : 0
+    return { rr, pnlUsd: entry.pnlUsd, pnlR }
+  }
+
   if (entry.outcome === 'win') {
     return { rr, pnlUsd: entry.riskAmount > 0 ? entry.riskAmount * rr : 0, pnlR: rr }
   }
@@ -77,6 +96,45 @@ function computePnl(entry: JournalEntry): { rr: number; pnlUsd: number; pnlR: nu
     return { rr, pnlUsd: entry.riskAmount > 0 ? -entry.riskAmount : 0, pnlR: -1 }
   }
   return { rr, pnlUsd: 0, pnlR: 0 }
+}
+
+function paperTradeToDetailEntry(t: PaperTradeRecord): JournalEntry {
+  let outcome: JournalOutcome = 'pending'
+  if (['WIN_TP1', 'WIN_TP2', 'WIN_TP1_BE'].includes(t.status)) outcome = 'win'
+  else if (t.status === 'LOSS_SL') outcome = 'loss'
+  else if (t.status === 'CLOSED_MANUAL') {
+    outcome = t.realizedPnlUsd > 0 ? 'win' : t.realizedPnlUsd < 0 ? 'loss' : 'breakeven'
+  } else if (t.status === 'EXPIRED' || t.status === 'CANCELLED') outcome = 'skipped'
+
+  return {
+    id: t.id,
+    suggestionKey: t.signalId ? `signal:${t.signalId}` : `trade:${t.id}`,
+    symbol: t.symbol,
+    timeframe: t.timeframe,
+    strategy: t.strategyLabel,
+    action: t.direction,
+    entry: t.fillPrice ?? t.requestedEntry,
+    sl: t.slPrice,
+    currentSl: t.currentSl,
+    tp: t.tp1Price,
+    tp2: t.tp2Price ?? null,
+    confidence: t.confidence,
+    risk: t.tier === 'PRIME' ? 'Low' : t.tier === 'STANDARD' ? 'Medium' : 'High',
+    suggestedPosition: t.initialVolume,
+    riskAmount: t.riskAmountUsd,
+    taken: true,
+    outcome,
+    pnlUsd: t.realizedPnlUsd,
+    pnlR: t.realizedR,
+    exitPrice: t.exitPrice ?? null,
+    tradeId: t.id,
+    signalId: t.signalId,
+    mode: 'paper',
+    status: t.status,
+    createdAt: t.createdAt > 1e12 ? t.createdAt : t.createdAt * 1000,
+    notes: Array.isArray(t.reasons) ? t.reasons.join(' · ') : undefined,
+    breakEvenTriggered: t.status === 'WIN_TP1_BE' || (t.tp1HitAt != null && t.currentSl !== t.slPrice),
+  }
 }
 
 function extractTags(notes?: string): string[] {
@@ -105,12 +163,13 @@ function serializeNotesAndTags(bodyText: string, tags: string[]): string {
 
 interface EntryCardProps {
   entry: JournalEntry
+  linkedTrade?: PaperTradeRecord
   onEdit: (id: string, updates: Partial<JournalEntry>) => void
   onDelete: (id: string) => void
   onBreakEven: (id: string) => void
 }
 
-function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardProps) {
+function JournalTradeCard({ entry, linkedTrade, onEdit, onDelete, onBreakEven }: EntryCardProps) {
   const { rr, pnlUsd, pnlR } = computePnl(entry)
   const initialTags = useMemo(() => extractTags(entry.notes), [entry.notes])
   const initialBody = useMemo(() => stripTagsFromNotes(entry.notes), [entry.notes])
@@ -262,8 +321,8 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
             entry.outcome === 'loss' ||
             entry.outcome === 'breakeven') && (
             <Link
-              to={`/replay/${encodeURIComponent(entry.id)}`}
-              state={{ journalEntry: entry }}
+              to={`/replay/${encodeURIComponent(entry.tradeId || entry.id)}`}
+              state={linkedTrade ? { trade: linkedTrade, journalEntry: entry } : { journalEntry: entry }}
               className="h-9 px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
             >
               <PiPlay className="h-3.5 w-3.5 text-[#34D399]" />
@@ -461,12 +520,89 @@ export default function JournalDateDetail() {
   const editJournalEntry = useTradingContextStore((s) => s.editJournalEntry)
   const deleteJournalEntry = useTradingContextStore((s) => s.deleteJournalEntry)
   const triggerBreakEven = useTradingContextStore((s) => s.triggerBreakEven)
+  const { paperTrades } = useMetaApi()
+  const [remoteEntries, setRemoteEntries] = useState<JournalEntry[]>([])
+
+  useEffect(() => {
+    let active = true
+    getJournalEntries()
+      .then((rows) => {
+        if (!active || !Array.isArray(rows)) return
+        const mapped: JournalEntry[] = rows
+          .filter((r) => r && r.id && r.symbol)
+          .map((r) => {
+            const rawTs = Number(r.createdAt) || Date.now()
+            return {
+              id: String(r.id),
+              suggestionKey: String(r.suggestionKey || `remote:${r.id}`),
+              symbol: String(r.symbol),
+              timeframe: String(r.timeframe || '15m'),
+              strategy: String(r.strategy || 'TRAXO Engine'),
+              action: r.action === 'SELL' ? 'SELL' : 'BUY',
+              entry: Number(r.entry) || 0,
+              sl: Number(r.sl) || 0,
+              currentSl: r.currentSl != null ? Number(r.currentSl) : undefined,
+              tp: Number(r.tp) || 0,
+              tp2: r.tp2 != null ? Number(r.tp2) : null,
+              confidence: Number(r.confidence) || 80,
+              risk: r.risk === 'High' || r.risk === 'Medium' ? r.risk : 'Low',
+              suggestedPosition: Number(r.suggestedPosition ?? r.volume) || 0.01,
+              riskAmount: Number(r.riskAmount) || 0,
+              taken: Boolean(r.taken ?? true),
+              outcome: (r.outcome || 'pending') as JournalOutcome,
+              pnlUsd: r.pnlUsd != null ? Number(r.pnlUsd) : undefined,
+              pnlR: r.pnlR != null ? Number(r.pnlR) : undefined,
+              exitPrice: r.exitPrice != null ? Number(r.exitPrice) : null,
+              tradeId: r.tradeId ? String(r.tradeId) : undefined,
+              signalId: r.signalId ? String(r.signalId) : null,
+              mode: r.mode,
+              status: r.status ? String(r.status) : undefined,
+              createdAt: rawTs > 1e12 ? rawTs : rawTs * 1000,
+              notes: typeof r.notes === 'string' ? r.notes : undefined,
+              breakEvenTriggered: Boolean(r.breakEvenTriggered),
+            }
+          })
+        setRemoteEntries(mapped)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [paperTrades.length])
+
+  const paperTradesById = useMemo(() => {
+    const map = new Map<string, PaperTradeRecord>()
+    for (const t of paperTrades) {
+      map.set(t.id, t)
+      if (t.signalId) map.set(t.signalId, t)
+    }
+    return map
+  }, [paperTrades])
+
+  const mergedEntries = useMemo(() => {
+    const byKey = new Map<string, JournalEntry>()
+    const score = (e: JournalEntry) =>
+      (e.outcome !== 'pending' && e.outcome !== 'skipped' ? 10 : 0) +
+      (typeof e.pnlUsd === 'number' ? 5 : 0) +
+      (e.mode === 'paper' ? 3 : 0)
+    const upsert = (entry: JournalEntry) => {
+      const k = entry.tradeId || entry.signalId || entry.id
+      const prev = byKey.get(k) || byKey.get(entry.id)
+      if (!prev || score(entry) >= score(prev)) {
+        byKey.set(k, entry)
+      }
+    }
+    for (const e of journal) upsert(e)
+    for (const e of remoteEntries) upsert(e)
+    for (const t of paperTrades) upsert(paperTradeToDetailEntry(t))
+    return Array.from(byKey.values())
+  }, [journal, remoteEntries, paperTrades])
 
   const dayEntries = useMemo(() => {
-    return journal
+    return mergedEntries
       .filter((entry) => toDateKey(entry.createdAt) === activeDateKey)
       .sort((a, b) => b.createdAt - a.createdAt)
-  }, [journal, activeDateKey])
+  }, [mergedEntries, activeDateKey])
 
   const takenEntries = useMemo(() => dayEntries.filter((e) => e.taken), [dayEntries])
   const systemEntries = useMemo(() => dayEntries.filter((e) => !e.taken), [dayEntries])
@@ -653,6 +789,11 @@ export default function JournalDateDetail() {
                     <JournalTradeCard
                       key={entry.id}
                       entry={entry}
+                      linkedTrade={
+                        (entry.tradeId ? paperTradesById.get(entry.tradeId) : undefined) ||
+                        (entry.signalId ? paperTradesById.get(entry.signalId) : undefined) ||
+                        paperTradesById.get(entry.id)
+                      }
                       onEdit={editJournalEntry}
                       onDelete={deleteJournalEntry}
                       onBreakEven={triggerBreakEven}
@@ -677,6 +818,11 @@ export default function JournalDateDetail() {
                     <JournalTradeCard
                       key={entry.id}
                       entry={entry}
+                      linkedTrade={
+                        (entry.tradeId ? paperTradesById.get(entry.tradeId) : undefined) ||
+                        (entry.signalId ? paperTradesById.get(entry.signalId) : undefined) ||
+                        paperTradesById.get(entry.id)
+                      }
                       onEdit={editJournalEntry}
                       onDelete={deleteJournalEntry}
                       onBreakEven={triggerBreakEven}

@@ -367,6 +367,7 @@ export class OfflineReplayController {
             rollingDrawdownPct,
             consecutiveLosses: riskState.consecutiveLosses,
             accountBalance: cfg?.accountBalance,
+            bypassMinConfidence: cfg?.guardrailsEnabled === false,
           });
 
           for (const signal of found) {

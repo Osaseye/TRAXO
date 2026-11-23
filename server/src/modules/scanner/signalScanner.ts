@@ -138,6 +138,7 @@ export interface RunStrategiesOptions {
   rollingDrawdownPct?: number;
   consecutiveLosses?: number;
   accountBalance?: number;
+  bypassMinConfidence?: boolean;
 }
 
 export function runAllStrategies(
@@ -193,7 +194,7 @@ export function runAllStrategies(
       }
 
       const conf = Number(raw.confidence_pct || 0);
-      if (conf < (params.minConfidence || 50)) {
+      if (!extra.bypassMinConfidence && conf < (params.minConfidence || 50)) {
         rejects[strategyId] = [
           `Confidence ${conf}% below AI-tuned threshold of ${params.minConfidence}%`,
         ];
@@ -275,7 +276,7 @@ export function runAllStrategies(
 
       const confluence = evaluateNinePointConfluence(rawTraxo, traxoCtx);
       const conf = Number(rawTraxo.confidencePct || 0);
-      if (conf < (params.minConfidence || 50)) {
+      if (!extra.bypassMinConfidence && conf < (params.minConfidence || 50)) {
         rejects[strategy.id] = [
           `Confidence ${conf}% below AI-tuned threshold of ${params.minConfidence}%`,
         ];
@@ -535,6 +536,7 @@ export async function runScan(): Promise<void> {
             rollingDrawdownPct,
             consecutiveLosses: riskState.consecutiveLosses,
             accountBalance: guardrailCfg?.accountBalance,
+            bypassMinConfidence: guardrailCfg?.guardrailsEnabled === false,
           }
         );
 

@@ -296,6 +296,7 @@ export default function Dashboard() {
     autoTradeSpreadCapPips,
     autoTradeSessionFilter,
     journal,
+    addJournalEntry,
     logSuggestionDecision,
     setJournalOutcome,
   } = useTradingContextStore()
@@ -1298,6 +1299,25 @@ export default function Dashboard() {
 
       if (result?.success) {
         setLocalExecutedSignalIds((prev) => (prev.includes(raw.id) ? prev : [...prev, raw.id]))
+        logSuggestionDecision({
+          suggestionKey: `trade:${result.tradeId || raw.id}`,
+          symbol: raw.symbol,
+          timeframe: raw.timeframe,
+          strategy: strategyLabel || strategyId || 'TRAXO Engine',
+          action: direction,
+          entry: result.price ?? raw.entry,
+          sl: raw.sl,
+          tp: raw.tp,
+          confidence,
+          risk: 'risk' in raw ? raw.risk : riskFromConfidence(confidence),
+          suggestedPosition: lotSize,
+          riskAmount: activeRiskUsd,
+          taken: true,
+          outcome: 'pending',
+          tradeId: result.tradeId,
+          signalId: raw.id,
+          mode: isPaperMode ? 'paper' : 'metaapi',
+        })
         showToast(
           isPaperMode ? 'Paper Trade Executed' : 'Trade Executed',
           `${direction} ${lotSize}L ${raw.symbol} placed on ${executionVenueLabel}`,
@@ -1459,6 +1479,26 @@ export default function Dashboard() {
         plannerCooldownTimerRef.current = setTimeout(() => {
           setPlannerCooldownKey(null)
         }, 3000)
+
+        addJournalEntry({
+          suggestionKey: `manual:${symbol}:${timeframe}:${result.tradeId || Date.now()}`,
+          symbol,
+          timeframe,
+          strategy:
+            manualPlanner.entryType === 'limit' ? 'Manual Limit Order' : 'Manual Market Order',
+          action: manualPlanner.action,
+          entry: result.price ?? manualPlanner.entry,
+          sl: manualPlanner.sl,
+          tp: manualPlanner.tp,
+          confidence: 100,
+          risk: 'Low',
+          suggestedPosition: plannerLots,
+          riskAmount: activeRiskUsd,
+          taken: true,
+          outcome: 'pending',
+          tradeId: result.tradeId,
+          mode: isPaperMode ? 'paper' : 'metaapi',
+        })
 
         showToast(
           isPaperMode ? 'Paper Order Placed' : 'Order Placed',

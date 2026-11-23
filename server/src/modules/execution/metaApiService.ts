@@ -15,6 +15,7 @@ import {
   type SymbolQuoteResponse,
 } from './executionBroker';
 import { paperBrokerService } from './paperBrokerService';
+import { saveJournalEntry } from '../journal/journalService';
 
 export type { ExecuteTradeParams, ExecuteTradeResult, ExecutionMode, SymbolQuoteResponse };
 
@@ -333,6 +334,35 @@ export async function executeTrade(
             `[MetaApi Execution] Success (${entryType.toUpperCase()}) with '${sym}'! Order ID:`,
             result.orderId || result
           );
+          const mt5TradeId = `mt5_${result.positionId || result.orderId || Date.now()}`;
+          void saveJournalEntry({
+            uid: resolvedUid,
+            id: mt5TradeId,
+            suggestionKey: params.signalId ? `signal:${params.signalId}` : `mt5:${mt5TradeId}`,
+            symbol: canonical,
+            timeframe: params.timeframe || '15m',
+            strategy: params.strategyLabel || params.comment || 'TRAXO Auto-Trader',
+            action: actionUpper,
+            entry: targetPrice ?? anchorPrice ?? params.referencePrice ?? 0,
+            sl: safeSl,
+            tp: safeTp,
+            tp2: params.tp2,
+            rr: params.rr,
+            confidence: params.confidence ?? 80,
+            suggestedPosition: safeVolume,
+            riskAmount: params.riskAmountUsd ?? 0,
+            taken: true,
+            outcome: 'pending',
+            mode: 'metaapi',
+            source: 'metaapi',
+            tradeId: mt5TradeId,
+            signalId: params.signalId,
+            notes:
+              Array.isArray(params.reasons) && params.reasons.length > 0
+                ? params.reasons.join(' · ')
+                : 'Live MT5 Execution',
+          }).catch(() => {});
+
           return {
             success: true,
             entryType,
@@ -342,6 +372,7 @@ export async function executeTrade(
             price: targetPrice ?? anchorPrice,
             sl: safeSl,
             tp: safeTp,
+            tradeId: mt5TradeId,
             result,
           };
         }
@@ -368,6 +399,35 @@ export async function executeTrade(
               } catch (modErr: any) {
                 console.warn(`[MetaApi Execution] Post-entry stop modification notice: ${modErr.message}`);
               }
+              const mt5TradeId = `mt5_${posId}`;
+              void saveJournalEntry({
+                uid: resolvedUid,
+                id: mt5TradeId,
+                suggestionKey: params.signalId ? `signal:${params.signalId}` : `mt5:${mt5TradeId}`,
+                symbol: canonical,
+                timeframe: params.timeframe || '15m',
+                strategy: params.strategyLabel || params.comment || 'TRAXO Auto-Trader',
+                action: actionUpper,
+                entry: anchorPrice ?? params.referencePrice ?? 0,
+                sl: safeSl,
+                tp: safeTp,
+                tp2: params.tp2,
+                rr: params.rr,
+                confidence: params.confidence ?? 80,
+                suggestedPosition: safeVolume,
+                riskAmount: params.riskAmountUsd ?? 0,
+                taken: true,
+                outcome: 'pending',
+                mode: 'metaapi',
+                source: 'metaapi',
+                tradeId: mt5TradeId,
+                signalId: params.signalId,
+                notes:
+                  Array.isArray(params.reasons) && params.reasons.length > 0
+                    ? params.reasons.join(' · ')
+                    : 'Live MT5 Execution',
+              }).catch(() => {});
+
               return {
                 success: true,
                 entryType,
@@ -377,6 +437,7 @@ export async function executeTrade(
                 price: anchorPrice,
                 sl: safeSl,
                 tp: safeTp,
+                tradeId: mt5TradeId,
                 result: directResult,
               };
             }

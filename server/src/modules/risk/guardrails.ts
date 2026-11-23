@@ -12,6 +12,7 @@ export type GuardrailCode = 'A.1' | 'A.2' | 'B.4' | 'B.7' | 'C.9' | 'C.10' | 'D.
 export type SessionWindowFilter = 'all' | 'london_ny' | 'ny_only' | 'london_only';
 
 export interface GuardrailConfig {
+  guardrailsEnabled: boolean;       // Master switch — when false, bypasses all 9 guardrails (Raw Signal Mode)
   minConfidence: number;            // A.1
   minRR: number;                    // A.2
   maxPositions: number;             // B.4
@@ -96,6 +97,7 @@ export interface RiskRuntimeState {
 }
 
 export const DEFAULT_GUARDRAIL_CONFIG: GuardrailConfig = {
+  guardrailsEnabled: true,
   minConfidence: 60,
   minRR: 1.5,
   maxPositions: 5,
@@ -200,6 +202,37 @@ export function evaluatePreTradeGuardrails(
     input.quote.ask > 0
   ) {
     spreadPips = calculateSpreadPips(input.signal.symbol, input.quote.bid, input.quote.ask);
+  }
+
+  if (cfg.guardrailsEnabled === false) {
+    const bypassedCodes: Array<{ code: GuardrailCode; name: string }> = [
+      { code: 'A.1', name: 'Min Confidence' },
+      { code: 'A.2', name: 'Min Risk:Reward' },
+      { code: 'B.4', name: 'Max Concurrent Positions' },
+      { code: 'B.7', name: 'USD Correlation Shield' },
+      { code: 'C.9', name: 'Max Spread Cap' },
+      { code: 'C.10', name: 'Session Window' },
+      { code: 'D.1', name: 'Daily Loss Cap' },
+      { code: 'D.2', name: 'Consecutive Loss Cooldown' },
+      { code: 'D.3', name: 'News Freeze Window' },
+    ];
+    return {
+      allowed: true,
+      rejectedBy: null,
+      failedChecks: [],
+      checks: bypassedCodes.map((c) => ({
+        code: c.code,
+        name: c.name,
+        passed: true,
+        actual: null,
+        limit: 'bypassed',
+      })),
+      reasons: [],
+      spreadPips,
+      computedRR,
+      normalizedConfidence: normConf,
+      evaluatedAt: now.toISOString(),
+    };
   }
 
   const checks: GuardrailCheckResult[] = [];
@@ -379,7 +412,7 @@ export async function resolveNewsMinutesAway(
   config?: Partial<GuardrailConfig>
 ): Promise<number | null> {
   const cfg: GuardrailConfig = { ...DEFAULT_GUARDRAIL_CONFIG, ...(config || {}) };
-  if (!cfg.newsFilterEnabled) return null;
+  if (cfg.guardrailsEnabled === false || !cfg.newsFilterEnabled) return null;
 
   try {
     const status = await newsServiceClient.getFreezeStatus(symbol, {
@@ -415,6 +448,7 @@ export async function evaluatePreTradeGuardrailsAsync(
 
 export async function loadGuardrailConfig(): Promise<GuardrailConfig> {
   const [
+    cachedGuardrailsEnabled,
     cachedMinConf,
     cachedMinRR,
     cachedMaxPos,
@@ -428,6 +462,7 @@ export async function loadGuardrailConfig(): Promise<GuardrailConfig> {
     cachedMaxConsecLosses,
     cachedTradingCtx,
   ] = await Promise.all([
+    redis.get('metaapi:auto_trade_guardrails_enabled').catch(() => null),
     redis.get('metaapi:auto_trade_min_conf').catch(() => null),
     redis.get('metaapi:auto_trade_min_rr').catch(() => null),
     redis.get('metaapi:auto_trade_max_pos').catch(() => null),
@@ -453,6 +488,11 @@ export async function loadGuardrailConfig(): Promise<GuardrailConfig> {
     val !== null && !Number.isNaN(Number(val)) ? Number(val) : fallback;
 
   return {
+    guardrailsEnabled:
+      runtimeGuardrailOverrides.guardrailsEnabled ??
+      (cachedGuardrailsEnabled !== null
+        ? cachedGuardrailsEnabled !== 'false'
+        : (ctxObj.autoTradeGuardrailsEnabled ?? DEFAULT_GUARDRAIL_CONFIG.guardrailsEnabled)),
     minConfidence:
       runtimeGuardrailOverrides.minConfidence ??
       numOr(cachedMinConf, ctxObj.autoTradeMinConfidence ?? DEFAULT_GUARDRAIL_CONFIG.minConfidence),

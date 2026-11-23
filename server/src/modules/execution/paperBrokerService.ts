@@ -15,6 +15,7 @@ import {
   queryCandles,
 } from '../storage/sqliteDb';
 import { broadcast } from '../websocket/websocketManager';
+import { syncPaperTradeToJournal } from '../journal/journalService';
 import {
   assignDynamicExitMode,
   isTerminalPaperStatus,
@@ -534,6 +535,7 @@ export class PaperBrokerService implements IExecutionBroker {
       const saved = this.getTradeById(tradeId);
       if (saved) {
         broadcast({ type: 'PAPER_TRADE_UPDATED', payload: saved });
+        void syncPaperTradeToJournal(saved).catch(() => {});
       }
 
       return {
@@ -721,6 +723,7 @@ export class PaperBrokerService implements IExecutionBroker {
     if (updated) {
       buildAndSaveTradeReplaySnapshot(updated);
       broadcast({ type: 'PAPER_TRADE_UPDATED', payload: updated });
+      void syncPaperTradeToJournal(updated).catch(() => {});
     }
     return { success: true, result: updated };
   }
@@ -958,6 +961,7 @@ export class PaperBrokerService implements IExecutionBroker {
       }
 
       broadcast({ type: 'PAPER_TRADE_UPDATED', payload: trade });
+      void syncPaperTradeToJournal(trade).catch(() => {});
     }
 
     for (const uid of touchedUids) {

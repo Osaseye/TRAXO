@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   PiArrowUpRight,
@@ -17,8 +17,8 @@ import {
   PiTrophy,
   PiWarningCircle,
 } from 'react-icons/pi'
-import { useMetaApi } from '@/hooks/useMetaApi'
-import { updateJournalEntry } from '@/lib/api'
+import { useMetaApi, type PaperTradeRecord } from '@/hooks/useMetaApi'
+import { getJournalEntries, updateJournalEntry } from '@/lib/api'
 import {
   useTradingContextStore,
   type JournalEntry,
@@ -70,6 +70,23 @@ function computeEntryMetrics(entry: JournalEntry): TradeMetrics {
   const rewardDist = Math.abs(entry.tp - entry.entry)
   const rr = riskDist > 0 ? rewardDist / riskDist : 0
 
+  if (
+    typeof entry.pnlUsd === 'number' &&
+    Number.isFinite(entry.pnlUsd) &&
+    entry.outcome !== 'pending' &&
+    entry.outcome !== 'skipped'
+  ) {
+    const pnlR =
+      typeof entry.pnlR === 'number' && Number.isFinite(entry.pnlR)
+        ? entry.pnlR
+        : entry.outcome === 'win'
+          ? rr
+          : entry.outcome === 'loss'
+            ? -1
+            : 0
+    return { rr, pnlUsd: entry.pnlUsd, pnlR }
+  }
+
   if (entry.outcome === 'win') {
     const pnlUsd = entry.riskAmount > 0 ? entry.riskAmount * rr : 0
     return { rr, pnlUsd, pnlR: rr }
@@ -79,6 +96,83 @@ function computeEntryMetrics(entry: JournalEntry): TradeMetrics {
     return { rr, pnlUsd, pnlR: -1 }
   }
   return { rr, pnlUsd: 0, pnlR: 0 }
+}
+
+function paperTradeToJournalEntry(t: PaperTradeRecord): JournalEntry {
+  let outcome: JournalOutcome = 'pending'
+  if (['WIN_TP1', 'WIN_TP2', 'WIN_TP1_BE'].includes(t.status)) {
+    outcome = 'win'
+  } else if (t.status === 'LOSS_SL') {
+    outcome = 'loss'
+  } else if (t.status === 'CLOSED_MANUAL') {
+    outcome = t.realizedPnlUsd > 0 ? 'win' : t.realizedPnlUsd < 0 ? 'loss' : 'breakeven'
+  } else if (t.status === 'EXPIRED' || t.status === 'CANCELLED') {
+    outcome = 'skipped'
+  }
+
+  return {
+    id: t.id,
+    suggestionKey: t.signalId ? `signal:${t.signalId}` : `trade:${t.id}`,
+    symbol: t.symbol,
+    timeframe: t.timeframe,
+    strategy: t.strategyLabel,
+    action: t.direction,
+    entry: t.fillPrice ?? t.requestedEntry,
+    sl: t.slPrice,
+    currentSl: t.currentSl,
+    tp: t.tp1Price,
+    tp2: t.tp2Price ?? null,
+    confidence: t.confidence,
+    risk: t.tier === 'PRIME' ? 'Low' : t.tier === 'STANDARD' ? 'Medium' : 'High',
+    suggestedPosition: t.initialVolume,
+    riskAmount: t.riskAmountUsd,
+    taken: true,
+    outcome,
+    pnlUsd: t.realizedPnlUsd,
+    pnlR: t.realizedR,
+    exitPrice: t.exitPrice ?? null,
+    tradeId: t.id,
+    signalId: t.signalId,
+    mode: 'paper',
+    status: t.status,
+    createdAt: t.createdAt > 1e12 ? t.createdAt : t.createdAt * 1000,
+    notes: Array.isArray(t.reasons) ? t.reasons.join(' · ') : undefined,
+    breakEvenTriggered: t.status === 'WIN_TP1_BE' || (t.tp1HitAt != null && t.currentSl !== t.slPrice),
+  }
+}
+
+function normalizeRemoteJournalEntry(raw: Record<string, unknown>): JournalEntry | null {
+  if (!raw || !raw.id || !raw.symbol) return null
+  const rawTs = Number(raw.createdAt) || Date.now()
+  return {
+    id: String(raw.id),
+    suggestionKey: String(raw.suggestionKey || `remote:${raw.id}`),
+    symbol: String(raw.symbol),
+    timeframe: String(raw.timeframe || '15m'),
+    strategy: String(raw.strategy || 'TRAXO Engine'),
+    action: raw.action === 'SELL' ? 'SELL' : 'BUY',
+    entry: Number(raw.entry) || 0,
+    sl: Number(raw.sl) || 0,
+    currentSl: raw.currentSl != null ? Number(raw.currentSl) : undefined,
+    tp: Number(raw.tp) || 0,
+    tp2: raw.tp2 != null ? Number(raw.tp2) : null,
+    confidence: Number(raw.confidence) || 80,
+    risk: raw.risk === 'High' || raw.risk === 'Medium' ? raw.risk : 'Low',
+    suggestedPosition: Number(raw.suggestedPosition ?? raw.volume) || 0.01,
+    riskAmount: Number(raw.riskAmount) || 0,
+    taken: Boolean(raw.taken ?? true),
+    outcome: (raw.outcome || 'pending') as JournalOutcome,
+    pnlUsd: raw.pnlUsd != null ? Number(raw.pnlUsd) : undefined,
+    pnlR: raw.pnlR != null ? Number(raw.pnlR) : undefined,
+    exitPrice: raw.exitPrice != null ? Number(raw.exitPrice) : null,
+    tradeId: raw.tradeId ? String(raw.tradeId) : undefined,
+    signalId: raw.signalId ? String(raw.signalId) : null,
+    mode: raw.mode === 'paper' || raw.mode === 'metaapi' || raw.mode === 'manual' ? raw.mode : undefined,
+    status: raw.status ? String(raw.status) : undefined,
+    createdAt: rawTs > 1e12 ? rawTs : rawTs * 1000,
+    notes: typeof raw.notes === 'string' ? raw.notes : undefined,
+    breakEvenTriggered: Boolean(raw.breakEvenTriggered),
+  }
 }
 
 function extractTagsFromNotes(notes?: string): string[] {
@@ -130,14 +224,65 @@ export default function TradingJournal() {
   const [search, setSearch] = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState<'ALL' | JournalOutcome>('ALL')
   const [directionFilter, setDirectionFilter] = useState<'ALL' | 'BUY' | 'SELL'>('ALL')
+  const [remoteJournal, setRemoteJournal] = useState<JournalEntry[]>([])
 
   const [todayKey] = useState(() => toDateKey(Date.now()))
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear())
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth())
 
+  useEffect(() => {
+    let active = true
+    getJournalEntries()
+      .then((rows) => {
+        if (!active || !Array.isArray(rows)) return
+        const parsed = rows
+          .map((r) => normalizeRemoteJournalEntry(r))
+          .filter((item): item is JournalEntry => item !== null)
+        setRemoteJournal(parsed)
+      })
+      .catch(() => {
+        // Offline / backend down — local & paper trades still work
+      })
+    return () => {
+      active = false
+    }
+  }, [paperTrades.length])
+
+  const paperTradesById = useMemo(() => {
+    const map = new Map<string, PaperTradeRecord>()
+    for (const t of paperTrades) {
+      map.set(t.id, t)
+      if (t.signalId) map.set(t.signalId, t)
+    }
+    return map
+  }, [paperTrades])
+
+  const allJournalEntries = useMemo(() => {
+    const byKey = new Map<string, JournalEntry>()
+    const scoreEntry = (e: JournalEntry) => {
+      const resolvedBoost = e.outcome !== 'pending' && e.outcome !== 'skipped' ? 10 : 0
+      const pnlBoost = typeof e.pnlUsd === 'number' ? 5 : 0
+      const paperBoost = e.mode === 'paper' ? 3 : 0
+      return resolvedBoost + pnlBoost + paperBoost
+    }
+    const upsert = (entry: JournalEntry) => {
+      const dedupKey = entry.tradeId || entry.signalId || entry.id
+      const existing = byKey.get(dedupKey) || byKey.get(entry.id)
+      if (!existing || scoreEntry(entry) >= scoreEntry(existing)) {
+        byKey.set(dedupKey, entry)
+      }
+    }
+
+    for (const e of journal) upsert(e)
+    for (const e of remoteJournal) upsert(e)
+    for (const t of paperTrades) upsert(paperTradeToJournalEntry(t))
+
+    return Array.from(byKey.values()).sort((a, b) => b.createdAt - a.createdAt)
+  }, [journal, remoteJournal, paperTrades])
+
   const scopedEntries = useMemo(() => {
-    return scope === 'taken' ? journal.filter((j) => j.taken) : journal
-  }, [journal, scope])
+    return scope === 'taken' ? allJournalEntries.filter((j) => j.taken) : allJournalEntries
+  }, [allJournalEntries, scope])
 
   // Global KPI metrics across scoped entries
   const kpis = useMemo(() => {
@@ -474,7 +619,7 @@ export default function TradingJournal() {
                       : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
                   }`}
                 >
-                  <span>Manual Journal</span>
+                  <span>Calendar &amp; All Trades</span>
                   <span className="font-mono text-[11px] opacity-75">{scopedEntries.length}</span>
                 </button>
               </div>
@@ -1416,11 +1561,17 @@ export default function TradingJournal() {
                           entry.outcome === 'breakeven') && (
                           <button
                             type="button"
-                            onClick={() =>
-                              navigate(`/replay/${encodeURIComponent(entry.id)}`, {
-                                state: { journalEntry: entry },
+                            onClick={() => {
+                              const targetId = entry.tradeId || entry.id
+                              const linkedTrade =
+                                paperTradesById.get(targetId) ||
+                                (entry.signalId ? paperTradesById.get(entry.signalId) : undefined)
+                              navigate(`/replay/${encodeURIComponent(targetId)}`, {
+                                state: linkedTrade
+                                  ? { trade: linkedTrade, journalEntry: entry }
+                                  : { journalEntry: entry },
                               })
-                            }
+                            }}
                             title="Open Replay Page"
                             className="h-9 px-3 rounded-xl bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[12.5px] font-medium text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors shrink-0"
                           >
@@ -1596,11 +1747,17 @@ export default function TradingJournal() {
                                 entry.outcome === 'breakeven') && (
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    navigate(`/replay/${encodeURIComponent(entry.id)}`, {
-                                      state: { journalEntry: entry },
+                                  onClick={() => {
+                                    const targetId = entry.tradeId || entry.id
+                                    const linkedTrade =
+                                      paperTradesById.get(targetId) ||
+                                      (entry.signalId ? paperTradesById.get(entry.signalId) : undefined)
+                                    navigate(`/replay/${encodeURIComponent(targetId)}`, {
+                                      state: linkedTrade
+                                        ? { trade: linkedTrade, journalEntry: entry }
+                                        : { journalEntry: entry },
                                     })
-                                  }
+                                  }}
                                   title="Open Replay Page"
                                   className="h-8 px-2.5 rounded-lg bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[12px] text-[#FAFAFA] inline-flex items-center gap-1 transition-colors"
                                 >
