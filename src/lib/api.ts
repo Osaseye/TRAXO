@@ -111,10 +111,12 @@ export const getTradingContext = (uid?: string) => {
   return request(`/api/trading-context?uid=${encodeURIComponent(activeUid)}`);
 };
 
-export const postTradingContext = (data: any) => {
+export const postTradingContext = (data: Record<string, unknown>) => {
+  const activeUid =
+    typeof data?.uid === 'string' && data.uid.trim() ? data.uid : getActiveUid();
   return request('/api/trading-context', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, uid: activeUid }),
   });
 };
 

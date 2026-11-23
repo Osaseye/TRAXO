@@ -114,6 +114,21 @@ export const DEFAULT_GUARDRAIL_CONFIG: GuardrailConfig = {
   accountBalance: 10000,
 };
 
+let runtimeGuardrailOverrides: Partial<GuardrailConfig> = {};
+
+export function updateRuntimeGuardrailConfig(partial: Partial<GuardrailConfig>): void {
+  const cleaned: Partial<GuardrailConfig> = {};
+  for (const [key, val] of Object.entries(partial)) {
+    if (val !== undefined && val !== null && !(typeof val === 'number' && Number.isNaN(val))) {
+      (cleaned as Record<string, unknown>)[key] = val;
+    }
+  }
+  runtimeGuardrailOverrides = {
+    ...runtimeGuardrailOverrides,
+    ...cleaned,
+  };
+}
+
 function todayUtcKey(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
@@ -438,37 +453,61 @@ export async function loadGuardrailConfig(): Promise<GuardrailConfig> {
     val !== null && !Number.isNaN(Number(val)) ? Number(val) : fallback;
 
   return {
-    minConfidence: numOr(cachedMinConf, ctxObj.autoTradeMinConfidence ?? DEFAULT_GUARDRAIL_CONFIG.minConfidence),
-    minRR: numOr(cachedMinRR, ctxObj.autoTradeMinRR ?? DEFAULT_GUARDRAIL_CONFIG.minRR),
-    maxPositions: numOr(cachedMaxPos, ctxObj.autoTradeMaxPositions ?? DEFAULT_GUARDRAIL_CONFIG.maxPositions),
+    minConfidence:
+      runtimeGuardrailOverrides.minConfidence ??
+      numOr(cachedMinConf, ctxObj.autoTradeMinConfidence ?? DEFAULT_GUARDRAIL_CONFIG.minConfidence),
+    minRR:
+      runtimeGuardrailOverrides.minRR ??
+      numOr(cachedMinRR, ctxObj.autoTradeMinRR ?? DEFAULT_GUARDRAIL_CONFIG.minRR),
+    maxPositions:
+      runtimeGuardrailOverrides.maxPositions ??
+      numOr(cachedMaxPos, ctxObj.autoTradeMaxPositions ?? DEFAULT_GUARDRAIL_CONFIG.maxPositions),
     correlationEnabled:
-      cachedCorrelation !== null
+      runtimeGuardrailOverrides.correlationEnabled ??
+      (cachedCorrelation !== null
         ? cachedCorrelation === 'true'
-        : (ctxObj.autoTradeCorrelationShield ?? DEFAULT_GUARDRAIL_CONFIG.correlationEnabled),
-    maxCorrelatedUsdPositions: DEFAULT_GUARDRAIL_CONFIG.maxCorrelatedUsdPositions,
-    maxSpreadPips: numOr(cachedSpreadCap, ctxObj.autoTradeSpreadCapPips ?? DEFAULT_GUARDRAIL_CONFIG.maxSpreadPips),
-    sessionFilter: ((cachedSession || ctxObj.autoTradeSessionFilter || 'all') as SessionWindowFilter),
-    maxDailyLossPct: numOr(
-      cachedMaxDailyLossPct,
-      ctxObj.maxDailyLossPct ?? DEFAULT_GUARDRAIL_CONFIG.maxDailyLossPct
-    ),
+        : (ctxObj.autoTradeCorrelationShield ?? DEFAULT_GUARDRAIL_CONFIG.correlationEnabled)),
+    maxCorrelatedUsdPositions:
+      runtimeGuardrailOverrides.maxCorrelatedUsdPositions ??
+      DEFAULT_GUARDRAIL_CONFIG.maxCorrelatedUsdPositions,
+    maxSpreadPips:
+      runtimeGuardrailOverrides.maxSpreadPips ??
+      numOr(cachedSpreadCap, ctxObj.autoTradeSpreadCapPips ?? DEFAULT_GUARDRAIL_CONFIG.maxSpreadPips),
+    sessionFilter:
+      runtimeGuardrailOverrides.sessionFilter ??
+      ((cachedSession || ctxObj.autoTradeSessionFilter || 'all') as SessionWindowFilter),
+    maxDailyLossPct:
+      runtimeGuardrailOverrides.maxDailyLossPct ??
+      numOr(
+        cachedMaxDailyLossPct,
+        ctxObj.maxDailyLossPct ?? DEFAULT_GUARDRAIL_CONFIG.maxDailyLossPct
+      ),
     cooldownEnabled:
-      cachedCooldownEnabled !== null
+      runtimeGuardrailOverrides.cooldownEnabled ??
+      (cachedCooldownEnabled !== null
         ? cachedCooldownEnabled === 'true'
-        : (ctxObj.autoTradeCooldownOnLoss ?? DEFAULT_GUARDRAIL_CONFIG.cooldownEnabled),
-    maxConsecutiveLosses: numOr(
-      cachedMaxConsecLosses,
-      ctxObj.maxConsecutiveLossCap ?? DEFAULT_GUARDRAIL_CONFIG.maxConsecutiveLosses
-    ),
-    cooldownMinutes: DEFAULT_GUARDRAIL_CONFIG.cooldownMinutes,
+        : (ctxObj.autoTradeCooldownOnLoss ?? DEFAULT_GUARDRAIL_CONFIG.cooldownEnabled)),
+    maxConsecutiveLosses:
+      runtimeGuardrailOverrides.maxConsecutiveLosses ??
+      numOr(
+        cachedMaxConsecLosses,
+        ctxObj.maxConsecutiveLossCap ?? DEFAULT_GUARDRAIL_CONFIG.maxConsecutiveLosses
+      ),
+    cooldownMinutes:
+      runtimeGuardrailOverrides.cooldownMinutes ?? DEFAULT_GUARDRAIL_CONFIG.cooldownMinutes,
     newsFilterEnabled:
-      cachedNewsFilter !== null
+      runtimeGuardrailOverrides.newsFilterEnabled ??
+      (cachedNewsFilter !== null
         ? cachedNewsFilter === 'true'
-        : (ctxObj.autoTradeNewsFilter ?? DEFAULT_GUARDRAIL_CONFIG.newsFilterEnabled),
+        : (ctxObj.autoTradeNewsFilter ?? DEFAULT_GUARDRAIL_CONFIG.newsFilterEnabled)),
     newsFreezeBeforeMinutes: DEFAULT_GUARDRAIL_CONFIG.newsFreezeBeforeMinutes,
     newsFreezeAfterMinutes: DEFAULT_GUARDRAIL_CONFIG.newsFreezeAfterMinutes,
-    riskAmountUsd: numOr(cachedRiskAmt, ctxObj.fixedRiskAmount ?? DEFAULT_GUARDRAIL_CONFIG.riskAmountUsd),
-    accountBalance: Number(ctxObj.accountBalance) || DEFAULT_GUARDRAIL_CONFIG.accountBalance,
+    riskAmountUsd:
+      runtimeGuardrailOverrides.riskAmountUsd ??
+      numOr(cachedRiskAmt, ctxObj.fixedRiskAmount ?? DEFAULT_GUARDRAIL_CONFIG.riskAmountUsd),
+    accountBalance:
+      runtimeGuardrailOverrides.accountBalance ??
+      (Number(ctxObj.accountBalance) || DEFAULT_GUARDRAIL_CONFIG.accountBalance),
   };
 }
 

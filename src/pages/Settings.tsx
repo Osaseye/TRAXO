@@ -4,6 +4,7 @@ import {
   PiArrowsClockwise,
   PiArrowUpRight,
   PiCheck,
+  PiFloppyDisk,
   PiPower,
   PiSlidersHorizontal,
   PiSpeakerHigh,
@@ -20,6 +21,7 @@ import {
 } from '@/stores/useTradingContextStore'
 import { useMetaApi } from '@/hooks/useMetaApi'
 import { getTradingContext, postTradingContext } from '@/lib/api'
+import { showToast } from '@/stores/useToastStore'
 import { cn } from '@/lib/utils'
 
 function formatCurrency(value: number) {
@@ -219,6 +221,8 @@ export default function Settings() {
   const [maxConsecutiveLossCap, setMaxConsecutiveLossCap] = useState<number>(3)
   const [brokerConfig, setBrokerConfig] = useState<BrokerDeskConfig>(loadBrokerDeskConfig)
   const [brokerSavedToast, setBrokerSavedToast] = useState(false)
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [settingsSavedState, setSettingsSavedState] = useState<'idle' | 'saved' | 'error'>('idle')
   const [mobileTab, setMobileTab] = useState<SettingsSectionTab>('all')
 
   useEffect(() => {
@@ -260,6 +264,49 @@ export default function Settings() {
     postTradingContext({ maxConsecutiveLossCap: safe }).catch(() => {})
   }
 
+  async function handleSaveAllSettings() {
+    if (savingSettings) return
+    setSavingSettings(true)
+    setSettingsSavedState('idle')
+    try {
+      const payload = {
+        accountBalance,
+        riskMode,
+        fixedRiskAmount,
+        autoSyncBrokerBalance,
+        riskPerTradePct,
+        maxDailyLossPct,
+        maxConsecutiveLossCap,
+        autoTradeMinConfidence,
+        autoTradeMinRR,
+        autoTradeMaxPositions,
+        autoTradeSpreadCapPips,
+        autoTradeSessionFilter,
+        autoTradeAllowedCategories,
+        autoTradeCooldownOnLoss,
+        autoTradeCorrelationShield,
+        autoTradeNewsFilter,
+      }
+      await postTradingContext(payload)
+      setSettingsSavedState('saved')
+      showToast(
+        'Settings Synced to Engine',
+        `Min Conf ${autoTradeMinConfidence}% · Min R:R ${autoTradeMinRR.toFixed(1)}R · Max Pos ${autoTradeMaxPositions} · Spread ${autoTradeSpreadCapPips}p`,
+        'success'
+      )
+      setTimeout(() => setSettingsSavedState('idle'), 3000)
+    } catch {
+      setSettingsSavedState('error')
+      showToast(
+        'Sync Failed',
+        'Could not reach backend server. Local settings are kept; try saving again when backend is online.',
+        'error'
+      )
+    } finally {
+      setSavingSettings(false)
+    }
+  }
+
   const riskBudget =
     riskMode === 'fixedAmount' ? fixedRiskAmount : (accountBalance * riskPerTradePct) / 100
   const dailyLossBudget = (accountBalance * maxDailyLossPct) / 100
@@ -285,6 +332,30 @@ export default function Settings() {
           </div>
 
           <div className="grid grid-cols-2 sm:flex items-center gap-2.5 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => void handleSaveAllSettings()}
+              disabled={savingSettings}
+              className={cn(
+                'col-span-2 sm:col-span-1 min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 rounded-xl text-[13px] font-semibold inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60',
+                settingsSavedState === 'saved'
+                  ? 'bg-[#34D399]/15 border border-[#34D399]/35 text-[#34D399]'
+                  : 'bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B]'
+              )}
+            >
+              {settingsSavedState === 'saved' ? (
+                <PiCheck className="h-4 w-4 shrink-0" />
+              ) : (
+                <PiFloppyDisk className="h-4 w-4 shrink-0" />
+              )}
+              <span>
+                {savingSettings
+                  ? 'Saving...'
+                  : settingsSavedState === 'saved'
+                    ? 'Saved to Engine'
+                    : 'Save Settings'}
+              </span>
+            </button>
             <Link
               to="/notifications?tab=telemetry"
               className="min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl border border-white/[0.07] bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center justify-center gap-1.5 transition-colors"
@@ -294,10 +365,10 @@ export default function Settings() {
             </Link>
             <Link
               to="/dashboard"
-              className="min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-medium inline-flex items-center justify-center gap-1.5 transition-colors"
+              className="min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 rounded-xl border border-white/[0.07] bg-[#18181B] hover:bg-[#222227] text-[#FAFAFA] text-[13px] font-medium inline-flex items-center justify-center gap-1.5 transition-colors"
             >
               <span>Terminal</span>
-              <PiArrowUpRight className="h-4 w-4 shrink-0" />
+              <PiArrowUpRight className="h-4 w-4 shrink-0 text-[#A1A1AA]" />
             </Link>
           </div>
         </div>
@@ -508,13 +579,39 @@ export default function Settings() {
 
         {/* 2. Risk & Execution Guardrails */}
         <section className={cn('space-y-3', !showSection('risk') && 'hidden md:block')}>
-          <div>
-            <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
-              Risk &amp; Execution Guardrails
-            </h2>
-            <p className="text-[13px] text-[#71717A]">
-              Synced with your trading context and enforced atomically before MetaApi order routing.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+                Risk &amp; Execution Guardrails
+              </h2>
+              <p className="text-[13px] text-[#71717A]">
+                Synced with your trading context and enforced atomically before order routing.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleSaveAllSettings()}
+              disabled={savingSettings}
+              className={cn(
+                'min-h-[40px] sm:min-h-0 px-3.5 py-2 rounded-xl text-[12.5px] font-semibold inline-flex items-center justify-center gap-1.5 transition-colors shrink-0 disabled:opacity-60',
+                settingsSavedState === 'saved'
+                  ? 'bg-[#34D399]/15 border border-[#34D399]/35 text-[#34D399]'
+                  : 'bg-[#18181B] hover:bg-[#222227] border border-white/[0.1] text-[#FAFAFA]'
+              )}
+            >
+              {settingsSavedState === 'saved' ? (
+                <PiCheck className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <PiFloppyDisk className="h-3.5 w-3.5 shrink-0 text-[#34D399]" />
+              )}
+              <span>
+                {savingSettings
+                  ? 'Saving Rules...'
+                  : settingsSavedState === 'saved'
+                    ? 'Rules Saved'
+                    : 'Save Guardrails'}
+              </span>
+            </button>
           </div>
 
           <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
@@ -694,7 +791,7 @@ export default function Settings() {
                   <span className="text-[13px] font-mono text-[#71717A] shrink-0">%</span>
                 </div>
                 <div className="grid grid-cols-5 sm:flex sm:flex-wrap gap-1.5">
-                  {[55, 65, 75, 80, 85].map((v) => (
+                  {[55, 60, 65, 75, 85].map((v) => (
                     <button
                       key={v}
                       type="button"
