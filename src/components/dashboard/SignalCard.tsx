@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   PiCaretDown,
   PiCaretUp,
@@ -6,8 +7,10 @@ import {
   PiCopy,
   PiCrosshair,
   PiLightning,
+  PiPlay,
   PiSpinnerGap,
 } from 'react-icons/pi'
+import { apiFetch } from '@/lib/api'
 import { calculateLots, cn, formatMT4OrderClipboardPayload, formatPrice } from '@/lib/utils'
 import { showToast } from '@/stores/useToastStore'
 import type { Signal, SignalDirection } from '@/types'
@@ -19,6 +22,9 @@ export interface SignalCardProps {
   signal: DashboardSignalItem
   isSelected?: boolean
   riskAmountUsd?: number
+  executionMode?: 'paper' | 'metaapi'
+  isExecuting?: boolean
+  isExecuted?: boolean
   onFocus?: (signal: DashboardSignalItem) => void
   onExecute?: (signal: DashboardSignalItem, lotSize: number) => Promise<void> | void
   onLogDecision?: (signal: DashboardSignalItem, taken: boolean) => void
@@ -154,22 +160,38 @@ function statusBadgeMeta(status?: string): { label: string; className: string } 
   }
 }
 
+function isLiveStatus(status?: string): boolean {
+  if (!status) return true
+  const lower = status.trim().toLowerCase()
+  return lower === 'live' || lower === 'active' || lower === 'open' || lower === 'pending'
+}
+
 export function SignalCard({
   signal,
   isSelected = false,
   riskAmountUsd = 50,
+  executionMode = 'paper',
+  isExecuting = false,
+  isExecuted = false,
   onFocus,
   onExecute,
   onLogDecision,
 }: SignalCardProps) {
+  const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
   const [executing, setExecuting] = useState(false)
+  const [localExecuted, setLocalExecuted] = useState(false)
+  const clickLockRef = useRef(false)
   const [copied, setCopied] = useState(false)
 
+  const isPaperMode = executionMode !== 'metaapi'
   const item = normalizeSignal(signal)
   const isBuy = item.direction === 'BUY'
   const isSell = item.direction === 'SELL'
   const isTradeable = isBuy || isSell
+  const isSignalLive = isLiveStatus(item.status)
+  const isBusy = executing || Boolean(isExecuting)
+  const alreadyExecuted = Boolean(isExecuted) || localExecuted
   const lots = isTradeable ? calculateLots(item.symbol, item.entry, item.sl, Math.max(1, riskAmountUsd)) : 0.01
   const statusMeta = statusBadgeMeta(item.status)
 
@@ -190,34 +212,60 @@ export function SignalCard({
 
   const handleExecute = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!isTradeable || executing) return
+    if (!isTradeable || !isSignalLive || clickLockRef.current || isBusy || alreadyExecuted) return
+    clickLockRef.current = true
     try {
       setExecuting(true)
       if (onExecute) {
         await onExecute(signal, lots)
         return
       }
-      const res = await fetch('/api/metaapi/execute', {
+      const res = await apiFetch('/api/metaapi/execute', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          signalId: item.id,
           symbol: item.symbol,
+          timeframe: item.timeframe,
           action: item.direction,
+          strategyLabel: item.strategyLabel,
           volume: lots,
           sl: item.sl,
           tp: item.tp,
           entryType: 'market',
+          price: item.entry,
+          referencePrice: item.entry,
+          riskAmountUsd,
+          rr: item.rr,
+          confidence: item.confidencePct,
+          reasons: item.reason,
         }),
       })
       const data = await res.json()
       if (data.success) {
-        showToast('MT5 Order Sent', `${item.direction} ${lots}L ${item.symbol} placed on Exness`, 'success')
+        setLocalExecuted(true)
+        showToast(
+          isPaperMode ? 'Paper Order Placed' : 'Broker Order Sent',
+          `${item.direction} ${lots}L ${item.symbol} placed on ${isPaperMode ? 'Paper Broker' : 'Live Broker'}`,
+          'success'
+        )
+      } else if (data.duplicate) {
+        setLocalExecuted(true)
+        showToast(
+          'Already Executed',
+          data.error || 'This setup has already been executed',
+          'info'
+        )
       } else {
-        showToast('MT5 Notice', data.error || 'Execution declined by broker bridge', 'info')
+        showToast(
+          isPaperMode ? 'Paper Broker Notice' : 'Broker Notice',
+          data.error || 'Execution declined by execution engine',
+          'info'
+        )
       }
     } catch {
-      showToast('Server Error', 'Unable to reach MT5 execution bridge', 'error')
+      showToast('Server Error', 'Unable to reach execution endpoint', 'error')
     } finally {
+      clickLockRef.current = false
       setExecuting(false)
     }
   }
@@ -324,7 +372,7 @@ export function SignalCard({
         </div>
       </div>
 
-      {/* Action Row: Chart Focus, MT5 Execute & Copy */}
+      {/* Action Row: Chart Focus, Paper / Live Execute & Copy */}
       <div className="flex items-center gap-2">
         {onFocus && (
           <button
@@ -346,21 +394,61 @@ export function SignalCard({
           </button>
         )}
 
-        {isTradeable && (
+        {isTradeable && isSignalLive && (
           <button
             type="button"
-            disabled={executing}
+            disabled={isBusy || alreadyExecuted}
             onClick={handleExecute}
-            className="flex-1 h-8 px-3 rounded-lg bg-[#161619] hover:bg-white/[0.08] border border-white/[0.08] text-[#FAFAFA] text-[13px] font-medium flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
-            title={`Execute ${item.direction} ${lots} lots on Exness MT5`}
+            className={cn(
+              'flex-1 h-8 px-3 rounded-lg border text-[13px] font-medium flex items-center justify-center gap-1.5 transition-colors',
+              alreadyExecuted
+                ? 'bg-[#161619] border-[#34D399]/25 text-[#34D399] cursor-default'
+                : 'bg-[#161619] hover:bg-white/[0.08] border-white/[0.08] text-[#FAFAFA] disabled:opacity-50'
+            )}
+            title={
+              alreadyExecuted
+                ? `Already executed on ${isPaperMode ? 'TRAXO Paper Broker' : 'Live Broker'}`
+                : `Execute ${item.direction} ${lots} lots on ${isPaperMode ? 'TRAXO Paper Broker' : 'Live Broker'}`
+            }
           >
-            {executing ? (
+            {alreadyExecuted ? (
+              <PiCheck size={15} className="text-[#34D399]" />
+            ) : isBusy ? (
               <PiSpinnerGap size={15} className="animate-spin text-[#A1A1AA]" />
             ) : (
               <PiLightning size={15} className={isBuy ? 'text-[#34D399]' : 'text-[#F87171]'} />
             )}
-            <span>{executing ? 'Sending...' : 'Execute MT5'}</span>
-            <span className="text-[12px] font-mono tabular-nums text-[#71717A]">({lots}L)</span>
+            <span>
+              {alreadyExecuted
+                ? isPaperMode
+                  ? 'Executed (Paper)'
+                  : 'Executed'
+                : isBusy
+                ? 'Placing...'
+                : isPaperMode
+                ? 'Execute in Paper'
+                : 'Execute in MT5'}
+            </span>
+            {!alreadyExecuted && !isBusy && (
+              <span className="text-[12px] font-mono tabular-nums text-[#71717A]">({lots}L)</span>
+            )}
+          </button>
+        )}
+
+        {isTradeable && !isSignalLive && statusMeta && statusMeta.label !== 'Expired' && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/replay/${encodeURIComponent(item.id)}`, {
+                state: { signal },
+              })
+            }}
+            className="flex-1 h-8 px-3 rounded-lg bg-[#161619] hover:bg-white/[0.08] border border-white/[0.08] text-[13px] font-medium text-[#FAFAFA] flex items-center justify-center gap-1.5 transition-colors"
+            title="Open visual bar-by-bar replay page"
+          >
+            <PiPlay size={14} className="text-[#34D399]" />
+            <span>Outcome Replay</span>
           </button>
         )}
 

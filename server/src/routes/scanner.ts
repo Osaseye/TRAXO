@@ -1,6 +1,6 @@
 import express from 'express';
 import { normalizeSymbol } from '../config/instruments';
-import redis from '../modules/market-data/redisClient';
+import redis, { backupRedis, getRedisTopologyStatus } from '../modules/market-data/redisClient';
 import { getRiskRuntimeState } from '../modules/risk/guardrails';
 import { getGlobalScanStatus } from '../modules/scanner/globalSignalScanner';
 import { triggerScanAsync } from '../modules/scanner/scannerCron';
@@ -10,7 +10,7 @@ const router = express.Router();
 function scanKeys(pattern: string): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const found: string[] = [];
-    const stream = redis.scanStream({ match: pattern, count: 200 });
+    const stream = backupRedis.scanStream({ match: pattern, count: 200 });
     stream.on('data', (batch: string[]) => found.push(...batch));
     stream.on('end', () => resolve(found));
     stream.on('error', reject);
@@ -21,6 +21,7 @@ function scanKeys(pattern: string): Promise<string[]> {
 router.get('/status', async (_req: any, res: any) => {
   const scanState = getGlobalScanStatus();
   const riskState = await getRiskRuntimeState().catch(() => null);
+  const redisTopology = getRedisTopologyStatus();
 
   try {
     await redis.ping();
@@ -28,6 +29,7 @@ router.get('/status', async (_req: any, res: any) => {
       status: 'ok',
       message: 'Scanner is running and connected to Redis.',
       redis: 'connected',
+      redisTopology,
       scanState,
       riskState,
     });
@@ -37,6 +39,7 @@ router.get('/status', async (_req: any, res: any) => {
       status: 'error',
       message: 'Scanner is running, but Redis connection failed.',
       redis: 'disconnected',
+      redisTopology,
       scanState,
       riskState,
     });
@@ -59,9 +62,9 @@ router.get('/rejects', async (req: any, res: any) => {
 
     if (rawSymbol && timeframe) {
       const cleanSymbol = normalizeSymbol(rawSymbol);
-      let data = await redis.get(`scan_rejects:${cleanSymbol}:${timeframe}`);
+      let data = await backupRedis.get(`scan_rejects:${cleanSymbol}:${timeframe}`);
       if (!data && cleanSymbol !== rawSymbol) {
-        data = await redis.get(`scan_rejects:${rawSymbol}:${timeframe}`);
+        data = await backupRedis.get(`scan_rejects:${rawSymbol}:${timeframe}`);
       }
       res.json({
         status: 'ok',
@@ -74,14 +77,14 @@ router.get('/rejects', async (req: any, res: any) => {
 
     const [allKeys, rawGuardrailEvents] = await Promise.all([
       scanKeys('scan_rejects:*').catch(() => [] as string[]),
-      redis.lrange('scan_rejects:guardrails', 0, 99).catch(() => [] as string[]),
+      backupRedis.lrange('scan_rejects:guardrails', 0, 99).catch(() => [] as string[]),
     ]);
 
     const pairKeys = allKeys.filter((k) => k !== 'scan_rejects:guardrails');
     const items: Array<{ symbol: string; timeframe: string; rejects: any }> = [];
 
     if (pairKeys.length > 0) {
-      const values = await redis.mget(pairKeys).catch(() => [] as Array<string | null>);
+      const values = await backupRedis.mget(pairKeys).catch(() => [] as Array<string | null>);
       pairKeys.forEach((key, idx) => {
         const rawVal = values[idx];
         if (!rawVal) return;

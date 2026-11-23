@@ -36,12 +36,12 @@ const SYMBOL_GROUPS: Array<{ label: string; symbols: ChartSymbol[] }> = [
     symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'EURJPY', 'GBPJPY', 'EURGBP'],
   },
   {
-    label: 'Metals',
-    symbols: ['XAUUSD', 'XAGUSD'],
+    label: 'Gold',
+    symbols: ['XAUUSD'],
   },
   {
-    label: 'Stocks',
-    symbols: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'],
+    label: 'Futures',
+    symbols: ['MNQ'],
   },
 ]
 
@@ -54,9 +54,9 @@ const EXPERIENCE_LEVELS: Array<{ id: ExperienceLevel; label: string }> = [
 ]
 
 const MARKET_INSTRUMENTS: Array<{ id: Instrument; label: string }> = [
-  { id: 'forex', label: 'Forex' },
-  { id: 'commodities', label: 'Metals & Commodities' },
-  { id: 'stocks', label: 'US Equities' },
+  { id: 'forex', label: 'Forex Majors' },
+  { id: 'commodities', label: 'Gold (XAU/USD)' },
+  { id: 'futures', label: 'Futures (MNQ)' },
 ]
 
 type ProfileSectionTab = 'all' | 'identity' | 'terminal' | 'security'

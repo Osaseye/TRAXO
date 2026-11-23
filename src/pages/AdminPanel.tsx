@@ -14,8 +14,7 @@ import {
   PiWifiHigh,
   PiWifiSlash,
 } from 'react-icons/pi'
-import { getScannerStatus } from '@/lib/api'
-import { auth } from '@/lib/firebase'
+import { apiFetch, getScannerStatus } from '@/lib/api'
 import { useMetaApi } from '@/hooks/useMetaApi'
 import { useStrategyOptimizer } from '@/hooks/useStrategyOptimizer'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -32,11 +31,6 @@ const ALG_CONFIG = {
   swingLookback: '3 bars',
   i2eMinR: '0.8R (min distance for structure TP)',
 }
-
-const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/$/, '')
-const HEALTH_URL = API_BASE
-  ? `${API_BASE}/health`
-  : `${((import.meta.env.VITE_SERVER_URL as string | undefined) || 'http://localhost:8080').replace(/\/$/, '')}/health`
 
 interface HealthResponse {
   status: string
@@ -70,7 +64,7 @@ export default function AdminPanel() {
     try {
       const [scanRes, healthRes] = await Promise.allSettled([
         getScannerStatus(),
-        fetch(HEALTH_URL).then((r) => (r.ok ? r.json() : null)),
+        apiFetch('/health').then((r) => (r.ok ? r.json() : null)),
       ])
       if (scanRes.status === 'fulfilled') {
         setScannerStatus(
@@ -104,10 +98,7 @@ export default function AdminPanel() {
     setTriggerBusy(true)
     setTriggerMessage(null)
     try {
-      const token = await auth.currentUser?.getIdToken().catch(() => null)
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
-      const url = API_BASE ? `${API_BASE}/api/scanner/trigger` : '/api/scanner/trigger'
-      const res = await fetch(url, { method: 'POST', headers })
+      const res = await apiFetch('/api/scanner/trigger', { method: 'POST' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json().catch(() => ({}))
       setTriggerMessage(data?.message || 'Manual scan cycle initiated.')
@@ -159,7 +150,13 @@ export default function AdminPanel() {
       { label: 'Firebase API Key Configured', ok: Boolean(import.meta.env.VITE_FIREBASE_API_KEY), detail: import.meta.env.VITE_FIREBASE_API_KEY ? 'Present' : 'Missing' },
       { label: 'Express Health Endpoint', ok: health?.status === 'ok', detail: health?.status || 'Offline' },
       { label: 'Redis Signal Cache', ok: scannerStatus?.redis === 'connected' || scannerStatus?.status === 'ok', detail: scannerStatus?.redis || scannerStatus?.status || 'Unknown' },
-      { label: 'MetaApi Broker Bridge', ok: Boolean(mt5Account?.connected), detail: mt5Account?.connected ? `Connected (${mt5Positions.length} open)` : 'Disconnected' },
+      {
+        label: mt5Account?.mode !== 'metaapi' ? 'TRAXO Paper Engine' : 'MetaApi Broker Bridge',
+        ok: Boolean(mt5Account?.connected),
+        detail: mt5Account?.connected
+          ? `${mt5Account?.mode !== 'metaapi' ? 'Paper Active' : 'Connected'} (${mt5Positions.length} open)`
+          : 'Disconnected',
+      },
     ]
   }, [user, health, scannerStatus, mt5Account, mt5Positions])
 

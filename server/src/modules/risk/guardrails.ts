@@ -5,7 +5,7 @@ import {
   normalizeSymbol,
 } from '../../config/instruments';
 import { newsServiceClient } from '../../services/news/NewsServiceClient';
-import redis from '../market-data/redisClient';
+import redis, { backupRedis } from '../market-data/redisClient';
 
 export type GuardrailCode = 'A.1' | 'A.2' | 'B.4' | 'B.7' | 'C.9' | 'C.10' | 'D.1' | 'D.2' | 'D.3';
 
@@ -547,7 +547,7 @@ export async function recordGuardrailRejection(
   };
 
   try {
-    const existingRaw = await redis.get(key).catch(() => null);
+    const existingRaw = await backupRedis.get(key).catch(() => null);
     let existingObj: Record<string, any> = {};
     if (existingRaw) {
       try {
@@ -561,11 +561,11 @@ export async function recordGuardrailRejection(
     existingObj._guardrailEvents = [eventRecord, ...prevEvents].slice(0, 20);
 
     await Promise.all([
-      redis.set(key, JSON.stringify(existingObj), 'EX', 7200).catch(() => {}),
-      redis.lpush('scan_rejects:guardrails', JSON.stringify(eventRecord)).catch(() => {}),
-      redis.ltrim('scan_rejects:guardrails', 0, 99).catch(() => {}),
+      backupRedis.set(key, JSON.stringify(existingObj), 'EX', 7200).catch(() => {}),
+      backupRedis.lpush('scan_rejects:guardrails', JSON.stringify(eventRecord)).catch(() => {}),
+      backupRedis.ltrim('scan_rejects:guardrails', 0, 99).catch(() => {}),
     ]);
   } catch (err: any) {
-    console.error('[Guardrails] Failed to log scan_rejects to Redis:', err.message);
+    console.error('[Guardrails] Failed to log scan_rejects to backup Redis:', err.message);
   }
 }

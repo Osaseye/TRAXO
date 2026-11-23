@@ -7,7 +7,16 @@ import {
   PiPlayFill,
   PiWarning,
 } from 'react-icons/pi';
-import { getCandleData as getCandles } from '@/lib/api';
+import { getCandles } from '@/lib/marketData';
+import {
+  TRAXO_MARKET_PILLARS,
+  TRAXO_STRATEGIES,
+  TRAXO_STRATEGY_MAP,
+  normalizeTraxoStrategyId,
+  type LegacyStrategyCatalogId,
+  type TraxoCatalogStrategyId,
+  type TraxoMarketPillar,
+} from '@/lib/traxoStrategies';
 import {
   useTradingContextStore,
   type ChartSymbol,
@@ -18,6 +27,7 @@ import {
   runBreakoutBacktest,
   runOrderBlockBacktest,
   runSDBacktest,
+  runTraxoBacktest,
   runTrendFollowingBacktest,
 } from '../../server/algorithms/backtesting';
 import type {
@@ -26,14 +36,9 @@ import type {
 } from '../../server/algorithms/backtesting';
 import type { WickRejectionAssetType } from '../../server/algorithms/wickRejection';
 
-type BacktestStrategyId =
-  | 'wick-rejection'
-  | 'breakout'
-  | 'order-block'
-  | 'supply-demand'
-  | 'trend-following';
+type BacktestStrategyId = TraxoCatalogStrategyId | LegacyStrategyCatalogId;
 
-const STRATEGIES: Array<{ id: BacktestStrategyId; label: string }> = [
+const LEGACY_STRATEGIES: ReadonlyArray<{ id: LegacyStrategyCatalogId; label: string }> = [
   { id: 'wick-rejection', label: 'Wick Rejection' },
   { id: 'breakout', label: 'Breakout' },
   { id: 'order-block', label: 'Order Block' },
@@ -41,35 +46,117 @@ const STRATEGIES: Array<{ id: BacktestStrategyId; label: string }> = [
   { id: 'trend-following', label: 'Trend Following' },
 ];
 
-const SYMBOLS: ChartSymbol[] = [
-  'EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'XAGUSD', 'AUDUSD',
-  'USDCAD', 'USDCHF', 'NZDUSD', 'EURJPY', 'GBPJPY', 'EURGBP',
-  'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META',
-  'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI',
+const PILLAR_SYMBOLS: Record<TraxoMarketPillar, ChartSymbol[]> = {
+  FOREX: [
+    'EURUSD',
+    'GBPUSD',
+    'USDJPY',
+    'AUDUSD',
+    'USDCAD',
+    'EURGBP',
+    'USDCHF',
+    'EURJPY',
+    'GBPJPY',
+    'NZDUSD',
+  ],
+  GOLD: ['XAUUSD'],
+  FUTURES: ['MNQ'],
+};
+
+const ALL_BACKTEST_SYMBOLS: readonly ChartSymbol[] = [
+  ...PILLAR_SYMBOLS.FOREX,
+  ...PILLAR_SYMBOLS.GOLD,
+  ...PILLAR_SYMBOLS.FUTURES,
 ];
 
 const TIMEFRAMES: ChartTimeframe[] = ['1m', '5m', '15m', '1H', '4H', '1D'];
 
+const TRAXO_OPTIMAL_TIMEFRAMES: Record<TraxoCatalogStrategyId, ChartTimeframe[]> = {
+  'traxo-london-apex': ['15m', '5m'],
+  'traxo-tokyo-yield': ['15m', '5m'],
+  'traxo-sovereign-fix': ['15m', '5m'],
+  'traxo-barrier-grid': ['15m', '5m', '1H'],
+  'traxo-macro-vector': ['15m'],
+  'traxo-aurum-sweep': ['15m', '5m'],
+  'traxo-bullion-strike': ['15m', '1H', '4H'],
+  'traxo-ny-bullet': ['15m', '5m'],
+  'traxo-aurum-fix': ['15m', '5m'],
+  'traxo-kinetic-nr7': ['1H', '1D', '15m'],
+  'traxo-globex-sweep': ['5m', '15m', '1m'],
+  'traxo-velocity-orb': ['5m', '1m'],
+  'traxo-initial-balance': ['15m', '5m'],
+  'traxo-mean-equilibrium': ['15m', '5m', '1m'],
+  'traxo-power-hour-moc': ['15m', '5m'],
+};
+
 const LOOKBACKS = [
-  { label: '100 bars', value: 100 },
   { label: '250 bars', value: 250 },
   { label: '500 bars', value: 500 },
   { label: '1,000 bars', value: 1000 },
+  { label: '2,000 bars', value: 2000 },
 ];
 
-const STOCK_SYMBOLS = new Set<ChartSymbol>([
-  'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI',
-]);
+function isTraxoStrategy(id: BacktestStrategyId): id is TraxoCatalogStrategyId {
+  return id.startsWith('traxo-');
+}
+
+function normalizeSymbolToChart(raw: string): ChartSymbol | null {
+  const cleaned = raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (cleaned === 'XAUUSD') return 'XAUUSD';
+  if (cleaned === 'MNQ' || cleaned === 'NQ' || cleaned === 'USTEC') return 'MNQ';
+  return (ALL_BACKTEST_SYMBOLS as readonly string[]).includes(cleaned)
+    ? (cleaned as ChartSymbol)
+    : null;
+}
+
+function resolveStrategyParam(raw: string | null): BacktestStrategyId | null {
+  if (!raw) return null;
+  const traxo = normalizeTraxoStrategyId(raw);
+  if (traxo) return traxo;
+  const cleaned = raw.trim().toLowerCase().replace(/_/g, '-');
+  return LEGACY_STRATEGIES.some((s) => s.id === cleaned)
+    ? (cleaned as LegacyStrategyCatalogId)
+    : null;
+}
+
+function getDefaultStrategyForPillar(pillar: TraxoMarketPillar): TraxoCatalogStrategyId {
+  return TRAXO_STRATEGIES.find((s) => s.market === pillar)?.id ?? 'traxo-london-apex';
+}
+
+function getSymbolsForSelection(
+  strategyId: BacktestStrategyId,
+  pillar: TraxoMarketPillar
+): ChartSymbol[] {
+  if (!isTraxoStrategy(strategyId)) {
+    return PILLAR_SYMBOLS[pillar];
+  }
+  const spec = TRAXO_STRATEGY_MAP[strategyId];
+  if (!spec) return PILLAR_SYMBOLS[pillar];
+  if (spec.market === 'FUTURES') return ['MNQ'];
+  if (spec.market === 'GOLD') return ['XAUUSD'];
+  const mapped = spec.supportedSymbols
+    .map(normalizeSymbolToChart)
+    .filter((s): s is ChartSymbol => s !== null);
+  return mapped.length > 0 ? Array.from(new Set(mapped)) : PILLAR_SYMBOLS.FOREX;
+}
+
+function getRecommendedTimeframes(strategyId: BacktestStrategyId): ChartTimeframe[] {
+  if (isTraxoStrategy(strategyId)) {
+    return TRAXO_OPTIMAL_TIMEFRAMES[strategyId] ?? ['15m'];
+  }
+  return TIMEFRAMES;
+}
 
 function getAssetType(symbol: ChartSymbol): WickRejectionAssetType {
-  if (STOCK_SYMBOLS.has(symbol)) return 'STOCKS';
+  if (symbol === 'MNQ') return 'FUTURES';
+  if (symbol === 'XAUUSD') return 'COMMODITY';
   return 'FOREX';
 }
 
 function formatPrice(value: number, symbol: ChartSymbol): string {
   const digits = symbol.includes('JPY')
     ? 3
-    : symbol === 'XAUUSD' || symbol === 'XAGUSD' || STOCK_SYMBOLS.has(symbol)
+    : symbol === 'XAUUSD' || symbol === 'MNQ'
     ? 2
     : 5;
   return value.toLocaleString('en-US', {
@@ -796,17 +883,56 @@ export default function Backtesting() {
   const initialRiskPct = useTradingContextStore((s) => s.riskPerTradePct);
 
   const strategyParam = searchParams.get('strategy');
-  const validParamStrategy = STRATEGIES.some((s) => s.id === strategyParam)
-    ? (strategyParam as BacktestStrategyId)
-    : null;
+  const validParamStrategy = resolveStrategyParam(strategyParam);
 
-  const [localStrategy, setLocalStrategy] = useState<BacktestStrategyId>(
-    validParamStrategy ?? 'wick-rejection'
-  );
+  const initialStrategy: BacktestStrategyId = validParamStrategy ?? 'traxo-london-apex';
+  const initialSpec = isTraxoStrategy(initialStrategy)
+    ? TRAXO_STRATEGY_MAP[initialStrategy]
+    : undefined;
+  const initialPillar: TraxoMarketPillar = initialSpec?.market ?? 'FOREX';
+
+  const [localStrategy, setLocalStrategy] = useState<BacktestStrategyId>(initialStrategy);
   const strategy = validParamStrategy ?? localStrategy;
+
+  const activeTraxoSpec = isTraxoStrategy(strategy)
+    ? TRAXO_STRATEGY_MAP[strategy]
+    : undefined;
+
+  const [localPillar, setLocalPillar] = useState<TraxoMarketPillar>(initialPillar);
+  const marketPillar: TraxoMarketPillar = activeTraxoSpec?.market ?? localPillar;
+
+  const availableSymbols = useMemo(
+    () => getSymbolsForSelection(strategy, marketPillar),
+    [strategy, marketPillar]
+  );
+  const recommendedTimeframes = useMemo(
+    () => getRecommendedTimeframes(strategy),
+    [strategy]
+  );
+
+  const [symbol, setSymbol] = useState<ChartSymbol>(
+    () => getSymbolsForSelection(initialStrategy, initialPillar)[0]
+  );
+  const [timeframe, setTimeframe] = useState<ChartTimeframe>(
+    () => getRecommendedTimeframes(initialStrategy)[0]
+  );
+  const activeSymbol = availableSymbols.includes(symbol) ? symbol : availableSymbols[0];
 
   const handleStrategyChange = (next: BacktestStrategyId) => {
     setLocalStrategy(next);
+    const nextSpec = isTraxoStrategy(next) ? TRAXO_STRATEGY_MAP[next] : undefined;
+    const nextPillar = nextSpec?.market ?? localPillar;
+    if (nextSpec) {
+      setLocalPillar(nextSpec.market);
+    }
+    const nextSymbols = getSymbolsForSelection(next, nextPillar);
+    if (!nextSymbols.includes(activeSymbol)) {
+      setSymbol(nextSymbols[0]);
+    }
+    const nextTfs = getRecommendedTimeframes(next);
+    if (!nextTfs.includes(timeframe)) {
+      setTimeframe(nextTfs[0]);
+    }
     if (strategyParam !== null) {
       setSearchParams(
         (prev) => {
@@ -819,9 +945,37 @@ export default function Backtesting() {
     }
   };
 
-  const [symbol, setSymbol] = useState<ChartSymbol>('EURUSD');
-  const [timeframe, setTimeframe] = useState<ChartTimeframe>('4H');
-  const [lookback, setLookback] = useState<number>(500);
+  const handlePillarChange = (nextPillar: TraxoMarketPillar) => {
+    setLocalPillar(nextPillar);
+    const nextDefault = getDefaultStrategyForPillar(nextPillar);
+    const switchingTraxo = isTraxoStrategy(strategy) && TRAXO_STRATEGY_MAP[strategy]?.market !== nextPillar;
+    const targetStrategy = switchingTraxo ? nextDefault : strategy;
+
+    if (switchingTraxo) {
+      setLocalStrategy(nextDefault);
+      if (strategyParam !== null) {
+        setSearchParams(
+          (prev) => {
+            const updated = new URLSearchParams(prev);
+            updated.set('strategy', nextDefault);
+            return updated;
+          },
+          { replace: true }
+        );
+      }
+      const nextTfs = getRecommendedTimeframes(nextDefault);
+      if (!nextTfs.includes(timeframe)) {
+        setTimeframe(nextTfs[0]);
+      }
+    }
+
+    const nextSymbols = getSymbolsForSelection(targetStrategy, nextPillar);
+    if (!nextSymbols.includes(activeSymbol)) {
+      setSymbol(nextSymbols[0]);
+    }
+  };
+
+  const [lookback, setLookback] = useState<number>(1000);
   const [capital, setCapital] = useState<number>(initialAccountBalance || 10000);
   const [riskPct, setRiskPct] = useState<number>(initialRiskPct || 1.0);
 
@@ -835,32 +989,60 @@ export default function Backtesting() {
     setError(null);
     setResult(null);
 
+    const toBacktestCandle = (c: any) => ({
+      time: Number(c.time),
+      open: Number(c.open),
+      high: Number(c.high),
+      low: Number(c.low),
+      close: Number(c.close),
+      volume: Number(c.volume ?? 0),
+    });
+
     try {
-      const candles = await getCandles(symbol, timeframe, lookback);
+      const needsHtfH1 = strategy === 'traxo-macro-vector';
+      const needsHtfDaily = strategy === 'traxo-kinetic-nr7' && timeframe !== '1D';
+      const needsOptionalHtf =
+        strategy === 'traxo-sovereign-fix' || strategy === 'traxo-power-hour-moc';
+
+      const htfPromise = needsHtfH1
+        ? getCandles(activeSymbol, '1H', 600)
+        : needsHtfDaily
+        ? getCandles(activeSymbol, '1D', 200)
+        : needsOptionalHtf
+        ? getCandles(activeSymbol, '1H', 250)
+        : Promise.resolve(undefined);
+
+      const [candles, htfCandles] = await Promise.all([
+        getCandles(activeSymbol, timeframe, lookback),
+        htfPromise,
+      ]);
+
       if (!candles || candles.length < 30) {
-        throw new Error('Insufficient historical candle series returned for selected range.');
+        throw new Error(`Insufficient historical candle series returned for ${activeSymbol} (${timeframe}).`);
       }
 
-      const mapped = candles.map((c: any) => ({
-        time: Number(c.time),
-        open: Number(c.open),
-        high: Number(c.high),
-        low: Number(c.low),
-        close: Number(c.close),
-        volume: Number(c.volume ?? 0),
-      }));
+      const mapped = candles.map(toBacktestCandle);
+      const mappedHtf =
+        htfCandles && htfCandles.length > 0 ? htfCandles.map(toBacktestCandle) : undefined;
 
-      const opts = { symbol, timeframe, assetType: getAssetType(symbol) };
-      const summary =
-        strategy === 'order-block'
-          ? runOrderBlockBacktest(mapped, opts)
-          : strategy === 'trend-following'
-          ? runTrendFollowingBacktest(mapped, opts)
-          : strategy === 'breakout'
-          ? runBreakoutBacktest(mapped, opts)
-          : strategy === 'supply-demand'
-          ? runSDBacktest(mapped, opts)
-          : runBacktest(mapped, opts);
+      const opts = {
+        symbol: activeSymbol,
+        timeframe,
+        assetType: getAssetType(activeSymbol),
+        higherTimeframeCandles: mappedHtf,
+      };
+
+      const summary = isTraxoStrategy(strategy)
+        ? runTraxoBacktest(strategy, mapped, opts)
+        : strategy === 'order-block'
+        ? runOrderBlockBacktest(mapped, opts)
+        : strategy === 'trend-following'
+        ? runTrendFollowingBacktest(mapped, opts)
+        : strategy === 'breakout'
+        ? runBreakoutBacktest(mapped, opts)
+        : strategy === 'supply-demand'
+        ? runSDBacktest(mapped, opts)
+        : runBacktest(mapped, opts);
 
       setResult(summary);
       setStatus('done');
@@ -868,7 +1050,7 @@ export default function Backtesting() {
       setError(err instanceof Error ? err.message : 'Backtest simulation failed.');
       setStatus('error');
     }
-  }, [symbol, timeframe, lookback, strategy]);
+  }, [activeSymbol, timeframe, lookback, strategy]);
 
   const simMetrics = useMemo(() => {
     if (!result) return null;
@@ -881,6 +1063,8 @@ export default function Backtesting() {
     return result.signals.filter((s) => s.outcome === filter);
   }, [result, filter]);
 
+  const resultSymbol = (result?.symbol as ChartSymbol | undefined) ?? activeSymbol;
+
   return (
     <div className="min-h-full bg-[#09090B] text-[#FAFAFA] overflow-x-hidden">
       <div className="max-w-[1360px] mx-auto px-3.5 sm:px-8 py-5 sm:py-8 space-y-6 sm:space-y-8">
@@ -888,7 +1072,7 @@ export default function Backtesting() {
         <header className="flex flex-wrap items-end justify-between gap-3 sm:gap-4">
           <div className="space-y-1">
             <p className="text-[12px] font-medium text-[#71717A]">
-              Walk-forward historical simulator
+              Walk-forward Tri-Market historical simulator
             </p>
             <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-[-0.03em] leading-[1.15] text-[#FAFAFA]">
               Backtesting Workbench
@@ -903,7 +1087,31 @@ export default function Backtesting() {
         </header>
 
         {/* Parameter Control Bar */}
-        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-5">
+        <section className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 sm:p-5 space-y-4">
+          {/* Focused Tri-Market Pillar Switcher */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/[0.06]">
+            <span className="text-[12px] font-medium text-[#71717A]">Focused market</span>
+            <div className="inline-flex flex-wrap items-center gap-1 rounded-full bg-[#18181B] p-1">
+              {TRAXO_MARKET_PILLARS.map((pillar) => {
+                const active = marketPillar === pillar.id;
+                return (
+                  <button
+                    key={pillar.id}
+                    type="button"
+                    onClick={() => handlePillarChange(pillar.id)}
+                    className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
+                      active
+                        ? 'bg-[#FAFAFA] text-[#09090B] font-semibold'
+                        : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                    }`}
+                  >
+                    {pillar.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4 items-end">
             <div className="col-span-2 sm:col-span-1 space-y-1.5">
               <label className="block text-[12px] font-medium text-[#71717A]">
@@ -914,11 +1122,34 @@ export default function Backtesting() {
                 onChange={(e) => handleStrategyChange(e.target.value as BacktestStrategyId)}
                 className="w-full h-11 sm:h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] text-[#FAFAFA] transition-colors"
               >
-                {STRATEGIES.map((s) => (
-                  <option key={s.id} value={s.id} className="bg-[#18181B]">
-                    {s.label}
-                  </option>
-                ))}
+                <optgroup label="TRAXO Forex Majors (5)" className="bg-[#18181B] text-[#71717A]">
+                  {TRAXO_STRATEGIES.filter((s) => s.market === 'FOREX').map((s) => (
+                    <option key={s.id} value={s.id} className="bg-[#18181B] text-[#FAFAFA]">
+                      {s.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="TRAXO Gold · XAU/USD (5)" className="bg-[#18181B] text-[#71717A]">
+                  {TRAXO_STRATEGIES.filter((s) => s.market === 'GOLD').map((s) => (
+                    <option key={s.id} value={s.id} className="bg-[#18181B] text-[#FAFAFA]">
+                      {s.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="TRAXO Futures · MNQ (5)" className="bg-[#18181B] text-[#71717A]">
+                  {TRAXO_STRATEGIES.filter((s) => s.market === 'FUTURES').map((s) => (
+                    <option key={s.id} value={s.id} className="bg-[#18181B] text-[#FAFAFA]">
+                      {s.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Legacy Core Engines (5)" className="bg-[#18181B] text-[#71717A]">
+                  {LEGACY_STRATEGIES.map((s) => (
+                    <option key={s.id} value={s.id} className="bg-[#18181B] text-[#FAFAFA]">
+                      {s.label}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </div>
 
@@ -927,11 +1158,11 @@ export default function Backtesting() {
                 Symbol
               </label>
               <select
-                value={symbol}
+                value={activeSymbol}
                 onChange={(e) => setSymbol(e.target.value as ChartSymbol)}
                 className="w-full h-11 sm:h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-medium text-[#FAFAFA] transition-colors"
               >
-                {SYMBOLS.map((sym) => (
+                {availableSymbols.map((sym) => (
                   <option key={sym} value={sym} className="bg-[#18181B]">
                     {sym}
                   </option>
@@ -948,11 +1179,14 @@ export default function Backtesting() {
                 onChange={(e) => setTimeframe(e.target.value as ChartTimeframe)}
                 className="w-full h-11 sm:h-10 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13px] font-mono tabular-nums text-[#FAFAFA] transition-colors"
               >
-                {TIMEFRAMES.map((tf) => (
-                  <option key={tf} value={tf} className="bg-[#18181B]">
-                    {tf}
-                  </option>
-                ))}
+                {TIMEFRAMES.map((tf) => {
+                  const isOptimal = Boolean(activeTraxoSpec && recommendedTimeframes.includes(tf));
+                  return (
+                    <option key={tf} value={tf} className="bg-[#18181B]">
+                      {isOptimal ? `${tf} (Optimal)` : tf}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -1014,6 +1248,21 @@ export default function Backtesting() {
               </button>
             </div>
           </div>
+
+          {activeTraxoSpec && (
+            <div className="pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#A1A1AA]">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                <span className="px-2 py-0.5 rounded-full bg-white/[0.06] text-[#FAFAFA] font-medium shrink-0">
+                  {activeTraxoSpec.marketLabel}
+                </span>
+                <span className="truncate">{activeTraxoSpec.keyRule}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 font-mono text-[11.5px] text-[#71717A]">
+                <span>Optimal TF: {activeTraxoSpec.timeframes}</span>
+                <span>{activeTraxoSpec.idealSessions}</span>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Error State */}
@@ -1037,7 +1286,7 @@ export default function Backtesting() {
                 Configure parameters above to run a walk-forward replay
               </p>
               <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA] max-w-[54ch] mx-auto leading-relaxed">
-                Evaluates signal triggers candle by candle without look-ahead bias, computing compounded equity, drawdown depth, profit factor, and trade execution telemetry.
+                Evaluates signal triggers candle by candle without look-ahead bias across Forex, XAU/USD, and MNQ — computing compounded equity, drawdown depth, profit factor, and execution telemetry.
               </p>
             </div>
           </div>
@@ -1181,8 +1430,17 @@ export default function Backtesting() {
               </div>
 
               {filteredSignals.length === 0 ? (
-                <div className="px-6 py-10 text-center text-[13px] text-[#71717A]">
-                  No simulated trades match the selected filter.
+                <div className="px-6 py-10 text-center space-y-1.5 text-[13px] text-[#71717A]">
+                  <p>
+                    {result.totalSignals === 0
+                      ? `No qualifying setups found across ${result.totalCandles} ${result.timeframe} candles on ${result.symbol}.`
+                      : 'No simulated trades match the selected filter.'}
+                  </p>
+                  {result.totalSignals === 0 && activeTraxoSpec && (
+                    <p className="text-[12px] text-[#A1A1AA] max-w-[60ch] mx-auto">
+                      Session- and calendar-gated engines ({activeTraxoSpec.idealSessions}) often need a 1,000–2,000 bar range on {activeTraxoSpec.timeframes}.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>
@@ -1193,7 +1451,7 @@ export default function Backtesting() {
                         key={sig.id}
                         sig={sig}
                         idx={idx}
-                        symbol={symbol}
+                        symbol={resultSymbol}
                         pnlDollar={simMetrics.pnlBySignalId[sig.id]}
                       />
                     ))}
@@ -1222,7 +1480,7 @@ export default function Backtesting() {
                             key={sig.id}
                             sig={sig}
                             idx={idx}
-                            symbol={symbol}
+                            symbol={resultSymbol}
                             pnlDollar={simMetrics.pnlBySignalId[sig.id]}
                           />
                         ))}

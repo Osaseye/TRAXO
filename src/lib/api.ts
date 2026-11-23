@@ -1,25 +1,65 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { auth } from './firebase'; // Assuming you have a function to get the user's auth token
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const ENV_API_URL = ((import.meta.env.VITE_API_URL || import.meta.env.VITE_SERVER_URL) as string | undefined)
+  ?.trim()
+  .replace(/\/$/, '');
 
-async function request(endpoint: string, options: any = {}) {
-  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
+export function resolveApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+    if (!isLocalHost && (!ENV_API_URL || ENV_API_URL.includes('localhost') || ENV_API_URL.includes('127.0.0.1'))) {
+      return window.location.origin.replace(/\/$/, '');
+    }
+  }
+  return ENV_API_URL || 'http://localhost:8080';
+}
 
+export const API_BASE_URL = resolveApiBaseUrl();
+
+export function getActiveUid(): string {
+  return auth.currentUser?.uid || 'default_trader';
+}
+
+export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+  const headers = new Headers(options.headers);
+
+  if (options.body && !headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+  if (!headers.has('X-Traxo-Uid')) {
+    headers.set('X-Traxo-Uid', getActiveUid());
+  }
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const config = {
+  const url =
+    endpoint.startsWith('http://') || endpoint.startsWith('https://')
+      ? endpoint
+      : `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+
+  return fetch(url, {
     ...options,
     headers,
-  };
+  });
+}
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+async function request(endpoint: string, options: RequestInit = {}) {
+  const headers = new Headers(options.headers);
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  if (!headers.has('X-Traxo-Uid')) {
+    headers.set('X-Traxo-Uid', getActiveUid());
+  }
+
+  const response = await apiFetch(endpoint, {
+    ...options,
+    headers,
+  });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({})); // Gracefully handle non-JSON error responses
@@ -40,8 +80,22 @@ export const getLiveSignals = () => {
   return request('/api/signals/live');
 };
 
-export const getCandleData = (symbol: string, timeframe: string, outputsize = 200) => {
-  return request(`/api/candles?symbol=${symbol}&timeframe=${timeframe}&outputsize=${outputsize}`);
+export const getCandleData = (
+  symbol: string,
+  timeframe: string,
+  outputsize = 200,
+  options?: { from?: number; to?: number; limit?: number; source?: 'sqlite' }
+) => {
+  const params = new URLSearchParams({
+    symbol,
+    timeframe,
+    outputsize: String(outputsize),
+  });
+  if (options?.from !== undefined) params.set('from', String(options.from));
+  if (options?.to !== undefined) params.set('to', String(options.to));
+  if (options?.limit !== undefined) params.set('limit', String(options.limit));
+  if (options?.source) params.set('source', options.source);
+  return request(`/api/candles?${params.toString()}`);
 };
 
 export const getScannerStatus = () => {
@@ -49,12 +103,12 @@ export const getScannerStatus = () => {
 };
 
 export const getScannerRejects = (symbol: string, timeframe: string) => {
-  return request(`/api/scanner/rejects?symbol=${symbol}&timeframe=${timeframe}`);
+  return request(`/api/scanner/rejects?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`);
 };
 
 export const getTradingContext = (uid?: string) => {
-  const query = uid ? `?uid=${uid}` : '';
-  return request(`/api/trading-context${query}`);
+  const activeUid = uid || getActiveUid();
+  return request(`/api/trading-context?uid=${encodeURIComponent(activeUid)}`);
 };
 
 export const postTradingContext = (data: any) => {
@@ -65,8 +119,8 @@ export const postTradingContext = (data: any) => {
 };
 
 export const getJournalEntries = (uid?: string) => {
-  const query = uid ? `?uid=${uid}` : '';
-  return request(`/api/journal${query}`);
+  const activeUid = uid || getActiveUid();
+  return request(`/api/journal?uid=${encodeURIComponent(activeUid)}`);
 };
 
 export const postJournalEntry = (entry: any) => {

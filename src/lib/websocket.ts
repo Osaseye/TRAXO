@@ -1,7 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import io from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const ENV_API_URL = import.meta.env.VITE_API_URL as string | undefined;
+
+function resolveSocketUrl(): string {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+    if (!isLocalHost && (!ENV_API_URL || ENV_API_URL.includes('localhost') || ENV_API_URL.includes('127.0.0.1'))) {
+      return window.location.origin;
+    }
+  }
+  return ENV_API_URL || 'http://localhost:8080';
+}
+
+const SOCKET_URL = resolveSocketUrl();
 
 class WebSocketService {
   socket;
@@ -11,6 +24,7 @@ class WebSocketService {
 
   constructor() {
     this.socket = io(SOCKET_URL, {
+      autoConnect: false,
       transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -59,6 +73,10 @@ class WebSocketService {
     }
 
     this.listeners.get(eventName)!.add(callback);
+
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
 
     // Return unsubscribe function
     return () => {

@@ -4,6 +4,7 @@ import { PiBell, PiList } from 'react-icons/pi'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
 import { useNotificationStore } from '@/stores/useNotificationStore'
+import { apiFetch } from '@/lib/api'
 import webSocketService from '@/lib/websocket'
 import { cn } from '@/lib/utils'
 
@@ -42,17 +43,19 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
 
   const wsConnected = useSyncExternalStore(subscribeWs, getWsSnapshot, () => false)
   const [mt5Connected, setMt5Connected] = useState<boolean>(false)
+  const [executionMode, setExecutionMode] = useState<'paper' | 'metaapi'>('paper')
 
   useEffect(() => {
     let active = true
 
     async function checkMt5Status() {
       try {
-        const res = await fetch('/api/metaapi/account')
+        const res = await apiFetch('/api/metaapi/account')
         if (!active) return
         if (res.ok) {
-          const data = (await res.json()) as { connected?: boolean }
+          const data = (await res.json()) as { connected?: boolean; mode?: 'paper' | 'metaapi' }
           setMt5Connected(Boolean(data?.connected))
+          setExecutionMode(data?.mode === 'metaapi' ? 'metaapi' : 'paper')
         } else {
           setMt5Connected(false)
         }
@@ -129,7 +132,15 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
         <div className="flex items-center gap-2.5 sm:gap-3 px-1">
           <span
             className="flex items-center gap-1.5"
-            title={mt5Connected ? 'MT5 Bridge Connected' : 'MT5 Bridge Standby'}
+            title={
+              executionMode === 'metaapi'
+                ? mt5Connected
+                  ? 'MT5 Bridge Connected'
+                  : 'MT5 Bridge Standby'
+                : mt5Connected
+                ? 'TRAXO Paper Engine Active'
+                : 'Paper Engine Standby'
+            }
           >
             <span
               className={cn(
@@ -138,7 +149,7 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
               )}
             />
             <span className="text-[11.5px] sm:text-[12px] font-medium text-[#A1A1AA]">
-              MT5
+              {executionMode === 'metaapi' ? 'MT5' : 'Paper'}
             </span>
           </span>
 

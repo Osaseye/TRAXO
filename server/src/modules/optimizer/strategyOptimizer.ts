@@ -1,5 +1,5 @@
 import { roundToDigits } from '../../config/instruments';
-import redis from '../market-data/redisClient';
+import redis, { backupRedis } from '../market-data/redisClient';
 
 export type StrategyId =
   | 'wick_rejection'
@@ -182,13 +182,23 @@ export function normalizeStrategyId(id?: string): StrategyId {
 
 export async function init(): Promise<void> {
   try {
-    const [enabledVal, paramsVal, historyVal, lossCountVal, winCountVal] = await Promise.all([
+    let [enabledVal, paramsVal, historyVal, lossCountVal, winCountVal] = await Promise.all([
       redis.get('optimizer:enabled').catch(() => null),
       redis.get('optimizer:parameters').catch(() => null),
       redis.get('optimizer:history').catch(() => null),
       redis.get('optimizer:loss_count').catch(() => null),
       redis.get('optimizer:win_count').catch(() => null),
     ]);
+
+    if (enabledVal === null && paramsVal === null) {
+      [enabledVal, paramsVal, historyVal, lossCountVal, winCountVal] = await Promise.all([
+        backupRedis.get('optimizer:enabled').catch(() => null),
+        backupRedis.get('optimizer:parameters').catch(() => null),
+        backupRedis.get('optimizer:history').catch(() => null),
+        backupRedis.get('optimizer:loss_count').catch(() => null),
+        backupRedis.get('optimizer:win_count').catch(() => null),
+      ]);
+    }
 
     if (enabledVal !== null) {
       isFeedbackEngineEnabled = enabledVal === 'true';
@@ -225,7 +235,10 @@ export function getFeedbackEngineEnabled(): boolean {
 
 export async function setFeedbackEngineEnabled(enabled: boolean): Promise<boolean> {
   isFeedbackEngineEnabled = Boolean(enabled);
-  await redis.set('optimizer:enabled', String(isFeedbackEngineEnabled)).catch(() => {});
+  await Promise.all([
+    redis.set('optimizer:enabled', String(isFeedbackEngineEnabled)).catch(() => {}),
+    backupRedis.set('optimizer:enabled', String(isFeedbackEngineEnabled)).catch(() => {}),
+  ]);
   console.log(`[StrategyOptimizer] Feedback Engine Master Switch set to: ${isFeedbackEngineEnabled}`);
   return isFeedbackEngineEnabled;
 }
@@ -315,11 +328,22 @@ function applyParamStep(
 }
 
 async function persistOptimizerState(): Promise<void> {
+  const paramsStr = JSON.stringify(learnedParameters);
+  const histStr = JSON.stringify(optimizationHistory);
+  const lossStr = String(totalLossesAnalyzed);
+  const winStr = String(totalWinsAnalyzed);
+  const enabledStr = String(isFeedbackEngineEnabled);
+
   await Promise.all([
-    redis.set('optimizer:parameters', JSON.stringify(learnedParameters)).catch(() => {}),
-    redis.set('optimizer:history', JSON.stringify(optimizationHistory)).catch(() => {}),
-    redis.set('optimizer:loss_count', String(totalLossesAnalyzed)).catch(() => {}),
-    redis.set('optimizer:win_count', String(totalWinsAnalyzed)).catch(() => {}),
+    redis.set('optimizer:parameters', paramsStr).catch(() => {}),
+    redis.set('optimizer:history', histStr).catch(() => {}),
+    redis.set('optimizer:loss_count', lossStr).catch(() => {}),
+    redis.set('optimizer:win_count', winStr).catch(() => {}),
+    backupRedis.set('optimizer:enabled', enabledStr).catch(() => {}),
+    backupRedis.set('optimizer:parameters', paramsStr).catch(() => {}),
+    backupRedis.set('optimizer:history', histStr).catch(() => {}),
+    backupRedis.set('optimizer:loss_count', lossStr).catch(() => {}),
+    backupRedis.set('optimizer:win_count', winStr).catch(() => {}),
   ]);
 }
 

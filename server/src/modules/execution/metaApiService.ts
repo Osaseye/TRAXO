@@ -8,12 +8,24 @@ import {
   roundToDigits,
 } from '../../config/instruments';
 import redis from '../market-data/redisClient';
+import {
+  type ExecuteTradeParams,
+  type ExecuteTradeResult,
+  type ExecutionMode,
+  type SymbolQuoteResponse,
+} from './executionBroker';
+import { paperBrokerService } from './paperBrokerService';
+
+export type { ExecuteTradeParams, ExecuteTradeResult, ExecutionMode, SymbolQuoteResponse };
 
 let api: any = null;
 let account: any = null;
 let connection: any = null;
 let connectionPromise: Promise<any> | null = null;
-let isAutoTradeEnabled = false;
+let executionMode: ExecutionMode =
+  String(process.env.EXECUTION_MODE || 'paper').toLowerCase() === 'metaapi' ? 'metaapi' : 'paper';
+// Autonomous execution defaults ON in internal paper mode so testing starts immediately
+let isAutoTradeEnabled = executionMode === 'paper';
 
 redis
   .get('metaapi:auto_trade_enabled')
@@ -24,44 +36,23 @@ redis
   })
   .catch(() => {});
 
-export interface ExecuteTradeParams {
-  symbol: string;
-  action: 'BUY' | 'SELL' | string;
-  volume?: number;
-  sl?: number;
-  tp?: number;
-  entryType?: 'market' | 'limit';
-  price?: number;
-  openPrice?: number;
-  limitPrice?: number;
-  comment?: string;
+redis
+  .get('execution:mode')
+  .then((val) => {
+    if (val === 'paper' || val === 'metaapi') {
+      executionMode = val;
+    }
+  })
+  .catch(() => {});
+
+export function getExecutionMode(): ExecutionMode {
+  return executionMode;
 }
 
-export interface ExecuteTradeResult {
-  success: boolean;
-  entryType: 'market' | 'limit';
-  symbol: string;
-  brokerSymbol?: string;
-  volume?: number;
-  price?: number;
-  sl?: number;
-  tp?: number;
-  result?: any;
-  error?: string;
-}
-
-export interface SymbolQuoteResponse {
-  ok: boolean;
-  symbol: string;
-  brokerSymbol?: string;
-  bid: number | null;
-  ask: number | null;
-  mid: number | null;
-  spread: number | null;
-  spreadPips: number | null;
-  digits: number;
-  timestamp?: string;
-  error?: string;
+export function setExecutionMode(mode: ExecutionMode): ExecutionMode {
+  executionMode = mode === 'metaapi' ? 'metaapi' : 'paper';
+  redis.set('execution:mode', executionMode).catch(() => {});
+  return executionMode;
 }
 
 export async function initMetaApi(): Promise<boolean> {
@@ -120,12 +111,16 @@ export async function getConnection(): Promise<any | null> {
   return connectionPromise;
 }
 
-export async function getAccountInfo(): Promise<Record<string, any>> {
+export async function getAccountInfo(uid = 'default_trader'): Promise<Record<string, any>> {
+  if (executionMode === 'paper') {
+    return paperBrokerService.getAccountInfo(uid);
+  }
   try {
     const conn = await getConnection();
     if (!conn) {
       return {
         connected: false,
+        mode: 'metaapi',
         state: account ? account.state : 'DISCONNECTED',
         balance: 0,
         equity: 0,
@@ -136,6 +131,7 @@ export async function getAccountInfo(): Promise<Record<string, any>> {
     const info = await conn.getAccountInformation();
     return {
       connected: true,
+      mode: 'metaapi',
       state: 'CONNECTED',
       balance: info.balance,
       equity: info.equity,
@@ -149,6 +145,7 @@ export async function getAccountInfo(): Promise<Record<string, any>> {
     console.error('[MetaApi] Failed to fetch account info:', error.message);
     return {
       connected: false,
+      mode: 'metaapi',
       error: error.message,
     };
   }
@@ -175,7 +172,13 @@ export async function getSymbolPrice(symbol: string): Promise<any | null> {
   }
 }
 
-export async function getSymbolQuote(symbol: string): Promise<SymbolQuoteResponse> {
+export async function getSymbolQuote(
+  symbol: string,
+  referencePrice?: number
+): Promise<SymbolQuoteResponse> {
+  if (executionMode === 'paper') {
+    return paperBrokerService.getSymbolQuote(symbol, referencePrice);
+  }
   const canonical = normalizeSymbol(symbol);
   const spec = getInstrumentSpec(canonical);
   const price = await getSymbolPrice(canonical);
@@ -214,7 +217,14 @@ export async function getSymbolQuote(symbol: string): Promise<SymbolQuoteRespons
   };
 }
 
-export async function executeTrade(params: ExecuteTradeParams): Promise<ExecuteTradeResult> {
+export async function executeTrade(
+  params: ExecuteTradeParams,
+  uid = 'default_trader'
+): Promise<ExecuteTradeResult> {
+  const resolvedUid = params.uid || uid || 'default_trader';
+  if (executionMode === 'paper') {
+    return paperBrokerService.executeTrade({ ...params, uid: resolvedUid });
+  }
   const canonical = normalizeSymbol(params.symbol);
   const spec = getInstrumentSpec(canonical);
   const entryType: 'market' | 'limit' = params.entryType === 'limit' ? 'limit' : 'market';
@@ -403,7 +413,10 @@ export async function executeTrade(params: ExecuteTradeParams): Promise<ExecuteT
   }
 }
 
-export async function getOpenPositions(): Promise<any[]> {
+export async function getOpenPositions(uid = 'default_trader'): Promise<any[]> {
+  if (executionMode === 'paper') {
+    return paperBrokerService.getOpenPositions(uid);
+  }
   try {
     const conn = await getConnection();
     if (!conn) return [];
@@ -428,7 +441,18 @@ export async function getOpenPositions(): Promise<any[]> {
   }
 }
 
-export async function closePosition(positionId: string): Promise<{ success: boolean; result?: any; error?: string }> {
+export async function closePosition(
+  positionId: string,
+  exitPriceOverride?: number,
+  uid = 'default_trader'
+): Promise<{ success: boolean; result?: any; error?: string }> {
+  if (executionMode === 'paper') {
+    const existing = paperBrokerService.getTradeById(positionId);
+    if (existing && existing.uid !== uid) {
+      return { success: false, error: `Paper trade '${positionId}' not found` };
+    }
+    return paperBrokerService.closePosition(positionId, exitPriceOverride);
+  }
   try {
     const conn = await getConnection();
     if (!conn) throw new Error('MetaApi connection unavailable');
@@ -440,7 +464,10 @@ export async function closePosition(positionId: string): Promise<{ success: bool
   }
 }
 
-export async function getOpenOrders(): Promise<any[]> {
+export async function getOpenOrders(uid = 'default_trader'): Promise<any[]> {
+  if (executionMode === 'paper') {
+    return paperBrokerService.getOpenOrders(uid);
+  }
   try {
     const conn = await getConnection();
     if (!conn) return [];
@@ -464,7 +491,17 @@ export async function getOpenOrders(): Promise<any[]> {
   }
 }
 
-export async function cancelOrder(orderId: string): Promise<{ success: boolean; result?: any; error?: string }> {
+export async function cancelOrder(
+  orderId: string,
+  uid = 'default_trader'
+): Promise<{ success: boolean; result?: any; error?: string }> {
+  if (executionMode === 'paper') {
+    const existing = paperBrokerService.getTradeById(orderId);
+    if (existing && existing.uid !== uid) {
+      return { success: false, error: `Paper order '${orderId}' not found` };
+    }
+    return paperBrokerService.cancelOrder(orderId);
+  }
   try {
     const conn = await getConnection();
     if (!conn) throw new Error('MetaApi connection unavailable');

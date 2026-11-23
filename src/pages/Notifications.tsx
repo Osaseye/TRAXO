@@ -26,13 +26,13 @@ import {
   PiWifiSlash,
 } from 'react-icons/pi'
 import {
+  apiFetch,
   getCandleData,
   getHistoricalSignals,
   getLiveSignals,
   getScannerRejects,
   getScannerStatus,
 } from '@/lib/api'
-import { auth } from '@/lib/firebase'
 import { runSignalsForStrategies } from '@/lib/signalDetection'
 import { normalizeStrategyId } from '@/lib/strategyId'
 import { useMetaApi } from '@/hooks/useMetaApi'
@@ -133,10 +133,8 @@ const WATCHLIST_REJECT_SWEEP: ReadonlyArray<{ symbol: string; timeframe: string 
   { symbol: 'USDJPY', timeframe: '1H' },
   { symbol: 'XAUUSD', timeframe: '15m' },
   { symbol: 'XAUUSD', timeframe: '1H' },
-  { symbol: 'BTCUSD', timeframe: '1H' },
-  { symbol: 'AAPL', timeframe: '1H' },
-  { symbol: 'NVDA', timeframe: '1H' },
-  { symbol: 'TSLA', timeframe: '15m' },
+  { symbol: 'MNQ', timeframe: '15m' },
+  { symbol: 'MNQ', timeframe: '1H' },
 ]
 
 const VALID_CHART_SYMBOLS = new Set<string>([
@@ -144,16 +142,14 @@ const VALID_CHART_SYMBOLS = new Set<string>([
   'GBPUSD',
   'USDJPY',
   'XAUUSD',
+  'MNQ',
   'AUDUSD',
   'USDCAD',
   'USDCHF',
   'NZDUSD',
-  'BTCUSD',
-  'ETHUSD',
-  'SOLUSD',
-  'AAPL',
-  'NVDA',
-  'TSLA',
+  'EURJPY',
+  'GBPJPY',
+  'EURGBP',
 ])
 
 const VALID_CHART_TIMEFRAMES = new Set<string>(['1m', '5m', '15m', '1H', '4H', '1D'])
@@ -167,20 +163,6 @@ const ALG_CONFIG = {
   obLookback: '20 candles',
   swingLookback: '3 bars',
   i2eMinR: '0.8R (min distance for structure TP)',
-}
-
-const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/$/, '')
-const HEALTH_URL = API_BASE
-  ? `${API_BASE}/health`
-  : `${((import.meta.env.VITE_SERVER_URL as string | undefined) || 'http://localhost:8080').replace(/\/$/, '')}/health`
-
-function buildApiUrl(path: string): string {
-  return API_BASE ? `${API_BASE}${path}` : path
-}
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const token = await auth.currentUser?.getIdToken().catch(() => null)
-  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 function formatPrice(val: number): string {
@@ -517,7 +499,6 @@ export default function Notifications() {
     setRejectionsLoading(true)
     setRejectionsError(null)
     try {
-      const headers = await getAuthHeaders()
       const collected: RejectionRecord[] = []
       const seenIds = new Set<string>()
       const addUnique = (items: RejectionRecord[]) => {
@@ -532,7 +513,7 @@ export default function Notifications() {
 
       let globalSucceeded = false
       try {
-        const res = await fetch(buildApiUrl('/api/scanner/rejects'), { headers })
+        const res = await apiFetch('/api/scanner/rejects')
         if (res.ok) {
           const data = await res.json()
           const parsed = parseRejectionPayload(data)
@@ -580,13 +561,10 @@ export default function Notifications() {
   const fetchTelemetry = useCallback(async () => {
     setTelemetryLoading(true)
     try {
-      const headers = await getAuthHeaders()
       const [statusRes, globalRes, healthRes] = await Promise.allSettled([
         getScannerStatus(),
-        fetch(buildApiUrl('/api/global-signals/status'), { headers }).then((r) =>
-          r.ok ? r.json() : null
-        ),
-        fetch(HEALTH_URL).then((r) => (r.ok ? r.json() : null)),
+        apiFetch('/api/global-signals/status').then((r) => (r.ok ? r.json() : null)),
+        apiFetch('/health').then((r) => (r.ok ? r.json() : null)),
       ])
 
       if (statusRes.status === 'fulfilled') {
@@ -941,18 +919,12 @@ export default function Notifications() {
     setManualScanBusy(true)
     setManualScanNotice(null)
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        ...(await getAuthHeaders()),
-      }
-      let res = await fetch(buildApiUrl('/api/scanner/trigger'), {
+      let res = await apiFetch('/api/scanner/trigger', {
         method: 'POST',
-        headers,
       })
       if (res.status === 404) {
-        res = await fetch(buildApiUrl('/api/scanner/scan'), {
+        res = await apiFetch('/api/scanner/scan', {
           method: 'POST',
-          headers,
         })
       }
       if (!res.ok) {
@@ -1219,7 +1191,13 @@ export default function Notifications() {
                   mt5Account?.connected ? 'text-[#34D399]' : 'text-[#FAFAFA]'
                 }`}
               >
-                {mt5Account?.connected ? 'MT5 Online' : isHealthOk ? 'API Online' : 'Standby'}
+                {mt5Account?.connected
+                  ? mt5Account?.mode !== 'metaapi'
+                    ? 'Paper Online'
+                    : 'MT5 Online'
+                  : isHealthOk
+                  ? 'API Online'
+                  : 'Standby'}
               </span>
               <span className="text-[12px] font-mono tabular-nums text-[#71717A]">
                 {mt5Positions.length} open
@@ -1559,6 +1537,20 @@ export default function Notifications() {
                           </div>
 
                           <div className="flex items-center gap-2 pt-1">
+                            {(sig.status === 'WIN' || sig.status === 'LOSS') && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(`/replay/${encodeURIComponent(sig.id)}`, {
+                                    state: { signal: sig },
+                                  })
+                                }
+                                className="flex-1 min-h-[44px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[12.5px] font-medium text-[#FAFAFA] transition-colors"
+                              >
+                                <PiPlay className="h-3.5 w-3.5 text-[#34D399]" />
+                                <span>Replay</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleOpenInTerminal(sig)}
@@ -1731,6 +1723,21 @@ export default function Notifications() {
                                         className="p-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#A1A1AA] hover:text-[#34D399] transition-colors"
                                       >
                                         <PiCheck className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                    {(sig.status === 'WIN' || sig.status === 'LOSS') && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          navigate(`/replay/${encodeURIComponent(sig.id)}`, {
+                                            state: { signal: sig },
+                                          })
+                                        }
+                                        title="Open Outcome Replay Page"
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[12px] font-medium text-[#FAFAFA] transition-colors"
+                                      >
+                                        <PiPlay className="h-3 w-3 text-[#34D399]" />
+                                        <span>Replay</span>
                                       </button>
                                     )}
                                     <button
@@ -2203,7 +2210,9 @@ export default function Notifications() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 py-3.5 text-[14px]">
                     <div className="flex items-center gap-2.5">
                       <PiHardDrives className="h-4 w-4 text-[#A1A1AA] shrink-0" />
-                      <span className="text-[#FAFAFA]">Exness MT5 / MetaApi</span>
+                      <span className="text-[#FAFAFA]">
+                        {mt5Account?.mode !== 'metaapi' ? 'TRAXO Paper Engine' : 'Exness MT5 / MetaApi'}
+                      </span>
                     </div>
                     <span
                       className={`text-[13px] font-mono tabular-nums pl-6 sm:pl-0 ${

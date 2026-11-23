@@ -7,7 +7,7 @@ export type SymbolOption =
   | 'GBPUSD'
   | 'USDJPY'
   | 'XAUUSD'
-  | 'XAGUSD'
+  | 'MNQ'
   | 'AUDUSD'
   | 'USDCAD'
   | 'USDCHF'
@@ -15,20 +15,8 @@ export type SymbolOption =
   | 'EURJPY'
   | 'GBPJPY'
   | 'EURGBP'
-  | 'AAPL'
-  | 'MSFT'
-  | 'NVDA'
-  | 'TSLA'
-  | 'AMZN'
-  | 'META'
-  | 'GOOGL'
-  | 'NFLX'
-  | 'AMD'
-  | 'COIN'
-  | 'MSTR'
-  | 'SMCI'
 
-export type MarketCategory = 'forex' | 'metals' | 'stocks'
+export type MarketCategory = 'forex' | 'metals' | 'futures'
 
 export const FX_SYMBOLS: SymbolOption[] = [
   'EURUSD',
@@ -42,21 +30,8 @@ export const FX_SYMBOLS: SymbolOption[] = [
   'GBPJPY',
   'EURGBP',
 ]
-export const METAL_SYMBOLS: SymbolOption[] = ['XAUUSD', 'XAGUSD']
-export const STOCK_SYMBOLS: SymbolOption[] = [
-  'AAPL',
-  'MSFT',
-  'NVDA',
-  'TSLA',
-  'AMZN',
-  'META',
-  'GOOGL',
-  'NFLX',
-  'AMD',
-  'COIN',
-  'MSTR',
-  'SMCI',
-]
+export const METAL_SYMBOLS: SymbolOption[] = ['XAUUSD']
+export const FUTURES_SYMBOLS: SymbolOption[] = ['MNQ']
 
 export const MARKET_CATEGORIES: Array<{
   id: MarketCategory
@@ -65,8 +40,8 @@ export const MARKET_CATEGORIES: Array<{
   symbols: SymbolOption[]
 }> = [
   { id: 'forex', label: 'Forex', icon: PiCoins, symbols: FX_SYMBOLS },
-  { id: 'metals', label: 'Metals', icon: PiFire, symbols: METAL_SYMBOLS },
-  { id: 'stocks', label: 'Stocks', icon: PiChartBar, symbols: STOCK_SYMBOLS },
+  { id: 'metals', label: 'Gold', icon: PiFire, symbols: METAL_SYMBOLS },
+  { id: 'futures', label: 'Futures', icon: PiChartBar, symbols: FUTURES_SYMBOLS },
 ]
 
 export const TIMEFRAMES: ChartTimeframe[] = ['1m', '5m', '15m', '1H', '4H', '1D']

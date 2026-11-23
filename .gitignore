@@ -1,4 +1,4 @@
-    # Logs
+# Logs
 logs
 *.log
 npm-debug.log*
@@ -25,12 +25,21 @@ dist-ssr
 
 .vercel
 
-# Environment Variables
+# Environment Variables & Local Secret Backups
 .env
 .env.local
+.env*
+!.env.example
+!server/.env.example
+env
+server/env
+
+# Local SQLite Database & WAL Files
+server/data/*.db
+server/data/*.db-wal
+server/data/*.db-shm
 
 # Secrets / Service Account Keys
 **/*firebase-adminsdk*.json
 **/service-account*.json
 **/*-private-key*.json
-.env*

@@ -22,6 +22,7 @@ import { analyzeBreakout } from './breakoutStrategy'
 import type { BreakoutContext, BKAssetType } from './breakout/types'
 import { analyzeSupplyDemand } from './supplyDemandStrategy'
 import type { SupplyDemandContext, SDAssetType } from './supplyDemand/types'
+import { getTraxoStrategy, type TraxoCandle, type TraxoStrategyContext } from './traxo'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -230,6 +231,8 @@ export interface BacktestOptions {
   assetType: WickRejectionAssetType
   /** Minimum candle index to start scanning (needs 14+ for ATR warm-up). Default: 20 */
   startIdx?: number
+  /** Optional strictly aligned higher-timeframe candles (e.g. 1H for Macro Vector, 1D for Kinetic NR7). */
+  higherTimeframeCandles?: BacktestCandle[]
 }
 
 export function runBacktest(candles: BacktestCandle[], options: BacktestOptions): BacktestSummary {
@@ -734,6 +737,243 @@ export function runSDBacktest(candles: BacktestCandle[], options: BacktestOption
       outcome:                trade.outcome,
       achievedRR:             trade.achievedRR,
       barsToResolution:       trade.barsToResolution,
+    })
+  }
+
+  return buildSummary(symbol, timeframe, assetType, candles.length, signals)
+}
+
+// ---------------------------------------------------------------------------
+// Native TRAXO 15-Engine Walk-Forward Backtester
+// ---------------------------------------------------------------------------
+
+function toTraxoCandle(c: BacktestCandle): TraxoCandle {
+  return {
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+    volume: c.volume ?? 0,
+    timestamp: new Date(c.time * 1000).toISOString(),
+  }
+}
+
+function buildUtcSessionSnapshot(
+  unixSeconds: number,
+): NonNullable<TraxoStrategyContext['session']> {
+  const d = new Date(unixSeconds * 1000)
+  const utcHour = d.getUTCHours()
+  const utcMinute = d.getUTCMinutes()
+  return {
+    isAsian: utcHour >= 0 && utcHour < 8,
+    isLondon: utcHour >= 7 && utcHour < 16,
+    isNewYork: utcHour >= 12 && utcHour < 21,
+    isOverlap: utcHour >= 12 && utcHour < 16,
+    utcHour,
+    utcMinute,
+    dayOfMonth: d.getUTCDate(),
+    dayOfWeek: d.getUTCDay(),
+  }
+}
+
+function inferBarDurationSec(candles: BacktestCandle[]): number {
+  for (let i = 1; i < candles.length; i++) {
+    const diff = candles[i].time - candles[i - 1].time
+    if (diff > 0) {
+      if (diff >= 72_000) return 86_400
+      if (diff >= 10_800) return 14_400
+      if (diff >= 3_000) return 3_600
+      return diff
+    }
+  }
+  return 0
+}
+
+function simulateTraxoTrade(
+  candles: BacktestCandle[],
+  signalIdx: number,
+  entry: number,
+  sl: number,
+  tp: number,
+  direction: 'BUY' | 'SELL',
+  entryType: 'MARKET' | 'LIMIT' | 'STOP',
+): {
+  filled: boolean
+  outcome: 'win' | 'loss' | 'pending'
+  barsToResolution: number | null
+  achievedRR: number | null
+} {
+  const MAX_BARS = 96
+  const MAX_ENTRY_WAIT = 24
+  const risk = Math.abs(entry - sl)
+  if (risk <= 0) {
+    return { filled: false, outcome: 'pending', barsToResolution: null, achievedRR: null }
+  }
+
+  let startForwardIdx = signalIdx + 1
+
+  if (entryType === 'LIMIT' || entryType === 'STOP') {
+    let fillIdx: number | null = null
+    const maxFillIdx = Math.min(candles.length - 1, signalIdx + MAX_ENTRY_WAIT)
+    for (let i = signalIdx + 1; i <= maxFillIdx; i++) {
+      const bar = candles[i]
+      if (bar.low <= entry && bar.high >= entry) {
+        fillIdx = i
+        break
+      }
+    }
+    if (fillIdx === null) {
+      return { filled: false, outcome: 'pending', barsToResolution: null, achievedRR: null }
+    }
+    const fillBar = candles[fillIdx]
+    if (direction === 'BUY' && fillBar.low <= sl) {
+      return { filled: true, outcome: 'loss', barsToResolution: fillIdx - signalIdx, achievedRR: -1 }
+    }
+    if (direction === 'SELL' && fillBar.high >= sl) {
+      return { filled: true, outcome: 'loss', barsToResolution: fillIdx - signalIdx, achievedRR: -1 }
+    }
+    startForwardIdx = fillIdx + 1
+  }
+
+  const maxExitIdx = Math.min(candles.length - 1, startForwardIdx + MAX_BARS - 1)
+  for (let i = startForwardIdx; i <= maxExitIdx; i++) {
+    const bar = candles[i]
+    if (direction === 'BUY') {
+      if (bar.low <= sl) {
+        return { filled: true, outcome: 'loss', barsToResolution: i - signalIdx, achievedRR: -1 }
+      }
+      if (bar.high >= tp) {
+        const reward = Math.abs(tp - entry)
+        return {
+          filled: true,
+          outcome: 'win',
+          barsToResolution: i - signalIdx,
+          achievedRR: Number((reward / risk).toFixed(2)),
+        }
+      }
+    } else {
+      if (bar.high >= sl) {
+        return { filled: true, outcome: 'loss', barsToResolution: i - signalIdx, achievedRR: -1 }
+      }
+      if (bar.low <= tp) {
+        const reward = Math.abs(entry - tp)
+        return {
+          filled: true,
+          outcome: 'win',
+          barsToResolution: i - signalIdx,
+          achievedRR: Number((reward / risk).toFixed(2)),
+        }
+      }
+    }
+  }
+
+  return { filled: true, outcome: 'pending', barsToResolution: null, achievedRR: null }
+}
+
+/**
+ * Runs any of the 15 proprietary TRAXO Tri-Market strategies walk-forward
+ * across historical candles with strict zero look-ahead slicing for both
+ * primary and higher-timeframe candle series.
+ */
+export function runTraxoBacktest(
+  strategyId: string,
+  candles: BacktestCandle[],
+  options: BacktestOptions,
+): BacktestSummary {
+  const { symbol, timeframe, assetType, startIdx = 30, higherTimeframeCandles } = options
+  const snakeId = strategyId.trim().toLowerCase().replace(/-/g, '_')
+  const engine = getTraxoStrategy(snakeId)
+
+  if (!engine || candles.length < 30) {
+    return emptyBacktest(symbol, timeframe, assetType, candles.length)
+  }
+
+  const allTraxoCandles = candles.map(toTraxoCandle)
+  const htfSource = Array.isArray(higherTimeframeCandles)
+    ? [...higherTimeframeCandles].sort((a, b) => a.time - b.time)
+    : []
+  const allHtfTraxo = htfSource.map(toTraxoCandle)
+  const htfBarDurationSec = inferBarDurationSec(htfSource)
+
+  const windowSize = snakeId === 'traxo_kinetic_nr7' && allHtfTraxo.length === 0 ? 800 : 280
+  const effectiveStart = Math.min(Math.max(10, startIdx), candles.length - 2)
+
+  let htfCursor = 0
+  const signals: BacktestSignalResult[] = []
+  const seenSetups = new Set<string>()
+  const lastDirIdx: Record<'BUY' | 'SELL', number> = { BUY: -999, SELL: -999 }
+
+  for (let endIdx = effectiveStart; endIdx < candles.length - 1; endIdx++) {
+    const bar = candles[endIdx]
+
+    while (
+      htfCursor < htfSource.length &&
+      htfSource[htfCursor].time + htfBarDurationSec <= bar.time
+    ) {
+      htfCursor++
+    }
+
+    const sliceStart = Math.max(0, endIdx + 1 - windowSize)
+    const slice = allTraxoCandles.slice(sliceStart, endIdx + 1)
+    const htfSlice =
+      htfCursor > 0 ? allHtfTraxo.slice(Math.max(0, htfCursor - 260), htfCursor) : undefined
+
+    const ctx: TraxoStrategyContext = {
+      symbol,
+      timeframe,
+      candles: slice,
+      higherTimeframeCandles: htfSlice,
+      currentPrice: bar.close,
+      session: buildUtcSessionSnapshot(bar.time),
+      newsBlackout: false,
+    }
+
+    const sig = engine.evaluate(ctx)
+    if (!sig) continue
+
+    const utcDateKey = new Date(bar.time * 1000).toISOString().slice(0, 10)
+    const setupKey =
+      snakeId === 'traxo_kinetic_nr7'
+        ? `${sig.direction}:${utcDateKey}`
+        : `${sig.direction}:${utcDateKey}:${sig.entryPrice.toPrecision(5)}`
+
+    if (seenSetups.has(setupKey)) continue
+    if (endIdx - lastDirIdx[sig.direction] < 4) continue
+
+    const trade = simulateTraxoTrade(
+      candles,
+      endIdx,
+      sig.entryPrice,
+      sig.slPrice,
+      sig.tp1Price,
+      sig.direction,
+      sig.entryType,
+    )
+    if (!trade.filled) continue
+
+    seenSetups.add(setupKey)
+    lastDirIdx[sig.direction] = endIdx
+
+    signals.push({
+      id: `${sig.strategyId}:${bar.time}:${endIdx}`,
+      signalIdx: endIdx,
+      time: bar.time,
+      direction: sig.direction,
+      entry: sig.entryPrice,
+      sl: sig.slPrice,
+      tp1: sig.tp1Price,
+      tp2: sig.tp2Price,
+      tier: sig.tier.toLowerCase(),
+      confidence: Math.round(sig.confidencePct),
+      score: Math.round(sig.score),
+      tp1_source: 'structure',
+      tp2_source: 'structure',
+      order_block_confluence: sig.reasons.some((r) => /ob|fvg|order block/i.test(r)),
+      liquidity_sweep: sig.reasons.some((r) => /sweep|purge|stop-run|liquidity/i.test(r)),
+      reason: sig.reasons,
+      outcome: trade.outcome,
+      achievedRR: trade.achievedRR,
+      barsToResolution: trade.barsToResolution,
     })
   }
 

@@ -12,12 +12,19 @@
     font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
     @apply bg-[#070709] text-text-primary min-h-screen;
-    overflow-x: hidden;
+    overflow-x: clip;
+    -webkit-overflow-scrolling: touch;
+    touch-action: manipulation;
+  }
+
+  a, button, [role="button"], input, select, textarea {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Minimal dark scrollbar */

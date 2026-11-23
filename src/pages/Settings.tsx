@@ -34,19 +34,16 @@ const NOTIF_SYMBOL_GROUPS: Array<{ label: string; symbols: ChartSymbol[] }> = [
     label: 'Forex',
     symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'EURJPY', 'GBPJPY', 'EURGBP'],
   },
-  { label: 'Metals', symbols: ['XAUUSD', 'XAGUSD'] },
-  {
-    label: 'Stocks',
-    symbols: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'],
-  },
+  { label: 'Gold', symbols: ['XAUUSD'] },
+  { label: 'Futures', symbols: ['MNQ'] },
 ]
 
 const NOTIF_TIMEFRAMES: ChartTimeframe[] = ['1m', '5m', '15m', '1H', '4H', '1D']
 
 const ALLOWED_CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'forex', label: 'Forex Pairs' },
-  { id: 'metals', label: 'Precious Metals' },
-  { id: 'stocks', label: 'US Equities' },
+  { id: 'metals', label: 'Gold (XAU/USD)' },
+  { id: 'indices', label: 'Futures (MNQ)' },
 ]
 
 const BROKER_STORAGE_KEY = 'traxo-broker-desk-config'

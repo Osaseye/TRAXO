@@ -20,6 +20,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { useOnboardingStore } from '@/stores/useOnboardingStore'
 import { getCandleData as getCandles } from '@/lib/api'
 import { runSignalsForStrategies } from '@/lib/signalDetection'
+import webSocketService from '@/lib/websocket'
 import { notifySignal } from '@/hooks/useSignalNotification'
 import type { StoredSignal } from '@/stores/useAnalysisSignalStore'
 import type { ChartSymbol, ChartTimeframe } from '@/stores/useTradingContextStore'
@@ -30,9 +31,8 @@ import type { ChartSymbol, ChartTimeframe } from '@/stores/useTradingContextStor
 
 /** Symbols that will be scanned automatically in the background. */
 const SCAN_SYMBOLS: ChartSymbol[] = [
-  'EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'XAGUSD', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD',
-  'EURJPY', 'GBPJPY', 'EURGBP', 'AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX',
-  'AMD', 'COIN', 'MSTR', 'SMCI',
+  'EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'MNQ', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD',
+  'EURJPY', 'GBPJPY', 'EURGBP',
 ]
 
 /** Timeframes to scan per symbol. Lower TFs are excluded to protect API quota. */
@@ -136,6 +136,13 @@ export function GlobalMultiSymbolScanner() {
     }
 
     async function tick() {
+      if (webSocketService.getClient()?.connected) {
+        scanRunning.current = false
+        if (_progress.running) {
+          emitProgress({ running: false, current: '' })
+        }
+        return
+      }
       if (scanRunning.current || cancelRef.current) return
       scanRunning.current = true
 

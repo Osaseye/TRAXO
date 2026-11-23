@@ -10,10 +10,16 @@ import type { DashboardStats } from '@/types'
 export interface StatsRowProps {
   stats: DashboardStats
   compact?: boolean
+  executionMode?: 'paper' | 'metaapi'
   className?: string
 }
 
-export function StatsRow({ stats, compact = false, className }: StatsRowProps) {
+export function StatsRow({
+  stats,
+  compact = false,
+  executionMode = 'paper',
+  className,
+}: StatsRowProps) {
   const pnlPositive = stats.pnlToday >= 0
   const hasWinRate = stats.weeklyWinRate > 0
   const winRateGood = stats.weeklyWinRate >= 0.55
@@ -41,7 +47,7 @@ export function StatsRow({ stats, compact = false, className }: StatsRowProps) {
     {
       label: 'Active trades',
       value: String(stats.activeTrades),
-      sub: 'Open MT5 & pending',
+      sub: executionMode === 'metaapi' ? 'Open MT5 & pending' : 'Open paper & pending',
       valueTone: 'text-[#FAFAFA]',
       icon: <PiChartLineUp size={15} className="text-[#71717A]" />,
     },

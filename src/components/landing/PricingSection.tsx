@@ -73,7 +73,7 @@ const CAPABILITIES: CapabilityItem[] = [
 
 export function PricingSection() {
   return (
-    <section id="stack" className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 bg-[#09090B] overflow-hidden select-none font-sans">
+    <section id="stack" className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 bg-[#09090B] overflow-x-clip font-sans">
       {/* ── Background Coordinate Grid ──────────────────────────────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
@@ -108,7 +108,7 @@ export function PricingSection() {
                 key={cap.id}
                 initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.2 }}
+                viewport={{ once: true, amount: 0.05 }}
                 transition={{ duration: 0.45, delay: idx * 0.08 }}
                 className="space-y-3.5 sm:space-y-4 pb-7 sm:pb-8 border-b border-white/[0.06] last:border-b-0 last:pb-0 md:last:border-b md:last:pb-8"
               >

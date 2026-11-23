@@ -52,6 +52,24 @@ function normalizeCandle(raw: RawCandle): Candle {
     }
 }
 
+function normalizeAndDedupeCandles(rawCandles: RawCandle[]): Candle[] {
+    const normalized = rawCandles
+        .map(normalizeCandle)
+        .filter((c) => Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close))
+        .sort((a, b) => a.time - b.time)
+
+    const deduped: Candle[] = []
+    for (const candle of normalized) {
+        if (deduped.length > 0 && deduped[deduped.length - 1].time === candle.time) {
+            deduped[deduped.length - 1] = candle
+        } else {
+            deduped.push(candle)
+        }
+    }
+
+    return deduped
+}
+
 /**
  * Fetches historical candles for a symbol/timeframe from the backend
  * (/api/candles via getCandleData in @/lib/api) and normalizes them into
@@ -69,21 +87,34 @@ export async function getCandles(
     try {
         const response = await getCandleData(symbol, timeframe, outputsize)
         const rawCandles: RawCandle[] = Array.isArray(response) ? response : response?.candles ?? []
-
-        const normalized = rawCandles.map(normalizeCandle).sort((a, b) => a.time - b.time)
-
-        const deduped: Candle[] = []
-        for (const candle of normalized) {
-            if (deduped.length > 0 && deduped[deduped.length - 1].time === candle.time) {
-                deduped[deduped.length - 1] = candle
-            } else {
-                deduped.push(candle)
-            }
-        }
-
-        return deduped
+        return normalizeAndDedupeCandles(rawCandles)
     } catch (error) {
         console.error(`Failed to load candles for ${symbol} ${timeframe}:`, error)
+        return []
+    }
+}
+
+/**
+ * Fetches older historical candles archived in SQLite strictly before `beforeUnixSec`,
+ * used when the user scrolls the chart toward the left edge.
+ */
+export async function getOlderCandles(
+    symbol: ChartSymbol,
+    timeframe: ChartTimeframe,
+    beforeUnixSec: number,
+    limit = 1000
+): Promise<Candle[]> {
+    try {
+        const cutoff = Math.floor(beforeUnixSec)
+        const response = await getCandleData(symbol, timeframe, limit, {
+            to: cutoff,
+            source: 'sqlite',
+            limit,
+        })
+        const rawCandles: RawCandle[] = Array.isArray(response) ? response : response?.candles ?? []
+        return normalizeAndDedupeCandles(rawCandles).filter((c) => c.time <= cutoff)
+    } catch (error) {
+        console.error(`Failed to load older history for ${symbol} ${timeframe}:`, error)
         return []
     }
 }

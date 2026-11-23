@@ -196,9 +196,8 @@ const LEVELS: { id: ExperienceLevel; label: string; sub: string }[] = [
 
 const INSTRUMENTS: { id: Instrument; label: string; tick: string }[] = [
   { id: 'forex', label: 'Forex Majors & Crosses', tick: 'EUR/USD · GBP/USD · USD/JPY' },
-  { id: 'commodities', label: 'Precious Metals & Oil', tick: 'XAU/USD Gold · XAG/USD · WTI' },
-  { id: 'crypto', label: 'Crypto Assets', tick: 'BTC/USD · ETH/USD · SOL/USD' },
-  { id: 'stocks', label: 'Indices & Equities', tick: 'NAS100 · US30 · SPX500' },
+  { id: 'commodities', label: 'Spot Gold', tick: 'XAU/USD Gold' },
+  { id: 'futures', label: 'Nasdaq-100 Micro Futures', tick: 'MNQ · Micro E-mini Nasdaq-100' },
 ]
 
 function StepProfile({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {

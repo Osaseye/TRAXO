@@ -6,6 +6,7 @@ import {
   PiCaretRight,
   PiFloppyDisk,
   PiHash,
+  PiPlay,
   PiPlus,
   PiShield,
   PiTag,
@@ -256,6 +257,19 @@ function JournalTradeCard({ entry, onEdit, onDelete, onBreakEven }: EntryCardPro
             <option value="breakeven">Breakeven</option>
             <option value="skipped">Skipped</option>
           </select>
+
+          {(entry.outcome === 'win' ||
+            entry.outcome === 'loss' ||
+            entry.outcome === 'breakeven') && (
+            <Link
+              to={`/replay/${encodeURIComponent(entry.id)}`}
+              state={{ journalEntry: entry }}
+              className="h-9 px-3 py-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
+            >
+              <PiPlay className="h-3.5 w-3.5 text-[#34D399]" />
+              <span>Replay</span>
+            </Link>
+          )}
 
           <button
             type="button"

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Time, UTCTimestamp } from 'lightweight-charts'
 import {
   PiArrowsClockwise,
-  PiBroadcast,
   PiCaretDown,
   PiCaretUp,
   PiCheck,
@@ -33,13 +32,16 @@ import { SignalFeed } from '@/components/dashboard/SignalFeed'
 import type { DashboardSignalItem } from '@/components/dashboard/SignalCard'
 import { RiskPanel } from '@/components/dashboard/RiskPanel'
 import { StatsRow } from '@/components/dashboard/StatsRow'
-import { StrategyPanel } from '@/components/dashboard/StrategyPanel'
 import { useMetaApi } from '@/hooks/useMetaApi'
 import { useMarketWebSocket } from '@/hooks/useMarketWebSocket'
-import { getCandles, type Candle } from '@/lib/marketData'
+import { auth } from '@/lib/firebase'
+import { getCandles, getOlderCandles, type Candle } from '@/lib/marketData'
 import { getMarketRiskContext } from '@/lib/marketRisk'
 import {
+  formatEntryTypeBadge,
+  formatShortEngineTag,
   priceDigits,
+  resolveSignalExitMode,
   riskFromConfidence,
   runSignalsForStrategies,
   type RiskLabel,
@@ -48,14 +50,14 @@ import { calculateLots, cn, formatMT4OrderClipboardPayload, formatPrice } from '
 import { useAnalysisSignalStore, type StoredSignal } from '@/stores/useAnalysisSignalStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useOnboardingStore, type OnboardingStrategyId } from '@/stores/useOnboardingStore'
-import { useStrategyStore } from '@/stores/useStrategyStore'
 import { showToast } from '@/stores/useToastStore'
 import {
+  isValidChartSymbol,
   useTradingContextStore,
   type ChartSymbol,
   type ChartTimeframe,
 } from '@/stores/useTradingContextStore'
-import type { DashboardStats, Strategy, StrategyId } from '@/types'
+import type { DashboardStats } from '@/types'
 
 type TradeAction = 'BUY' | 'SELL'
 type InspectorTab = 'setups' | 'planner' | 'risk'
@@ -95,44 +97,12 @@ interface ManualPlannerState {
   activeOnChart: boolean
 }
 
-interface EngineDef {
-  storeId: StrategyId
-  kebabId: OnboardingStrategyId
-  name: string
-  description: string
-}
-
-const ENGINE_DEFINITIONS: EngineDef[] = [
-  {
-    storeId: 'wick_rejection',
-    kebabId: 'wick-rejection',
-    name: 'Wick Rejection',
-    description: 'Liquidity sweep and rejection wick reversal engine.',
-  },
-  {
-    storeId: 'breakout',
-    kebabId: 'breakout',
-    name: 'Breakout',
-    description: 'Consolidation range expansion with momentum filter.',
-  },
-  {
-    storeId: 'order_block',
-    kebabId: 'order-block',
-    name: 'Order Block',
-    description: 'Institutional displacement and mitigation zone retest.',
-  },
-  {
-    storeId: 'supply_demand',
-    kebabId: 'supply-demand',
-    name: 'Supply & Demand',
-    description: 'Imbalance zone reaction and structural flip setups.',
-  },
-  {
-    storeId: 'trend_following',
-    kebabId: 'trend-following',
-    name: 'Trend Following',
-    description: 'Pullback continuation aligned with dominant structure.',
-  },
+const CORE_ENGINE_KEBABS: OnboardingStrategyId[] = [
+  'wick-rejection',
+  'breakout',
+  'order-block',
+  'supply-demand',
+  'trend-following',
 ]
 
 const CANONICAL_KEBAB_MAP: Record<string, OnboardingStrategyId> = {
@@ -180,13 +150,13 @@ const CANONICAL_KEBAB_MAP: Record<string, OnboardingStrategyId> = {
 function getCategoryForSymbol(sym: string): MarketCategory {
   if ((MARKET_CATEGORIES[0]?.symbols as string[]).includes(sym)) return 'forex'
   if ((MARKET_CATEGORIES[1]?.symbols as string[]).includes(sym)) return 'metals'
-  return 'stocks'
+  return 'futures'
 }
 
 function formatCategoryLabel(cat: MarketCategory): string {
   if (cat === 'forex') return 'Forex'
-  if (cat === 'metals') return 'Metals'
-  return 'Stocks'
+  if (cat === 'metals') return 'Gold'
+  return 'Futures'
 }
 
 function generateManualLevels(entry: number, action: TradeAction, range: number, digits: number) {
@@ -210,6 +180,15 @@ function normalizeStrategyToKebab(id: string): string {
   return CANONICAL_KEBAB_MAP[id] ?? id.replace(/_/g, '-')
 }
 
+const ALL_ENGINE_KEBABS: OnboardingStrategyId[] = Array.from(
+  new Set(Object.values(CANONICAL_KEBAB_MAP))
+)
+
+function isSignalLive(status?: string): boolean {
+  const st = String(status || 'live').trim().toLowerCase()
+  return st === 'live' || st === 'active' || st === 'open' || st === 'pending'
+}
+
 function defaultPlannerLevels(
   symbol: string,
   lastCandle: Candle | undefined,
@@ -217,7 +196,14 @@ function defaultPlannerLevels(
 ): ManualPlannerState {
   const digits = priceDigits(symbol)
   const basePrice =
-    lastCandle?.close ?? (symbol.includes('JPY') ? 150.0 : symbol.includes('XAU') ? 2650.0 : 1.085)
+    lastCandle?.close ??
+    (symbol.includes('JPY')
+      ? 150.0
+      : symbol.includes('XAU')
+      ? 2650.0
+      : symbol.includes('MNQ')
+      ? 21000.0
+      : 1.085)
   const range = lastCandle
     ? Math.max(lastCandle.high - lastCandle.low, basePrice * 0.002)
     : basePrice * 0.002
@@ -235,17 +221,67 @@ function defaultPlannerLevels(
   }
 }
 
+const ENV_API_URL = import.meta.env.VITE_API_URL as string | undefined
+
+function resolveDashboardApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1'
+    if (
+      !isLocalHost &&
+      (!ENV_API_URL || ENV_API_URL.includes('localhost') || ENV_API_URL.includes('127.0.0.1'))
+    ) {
+      return window.location.origin
+    }
+  }
+  return (ENV_API_URL || 'http://localhost:8080').replace(/\/+$/, '')
+}
+
+function getDashboardActiveUid(): string {
+  return useAuthStore.getState().user?.id || auth.currentUser?.uid || 'default_trader'
+}
+
+async function dashboardApiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const baseUrl = resolveDashboardApiBaseUrl()
+  const url =
+    endpoint.startsWith('http://') || endpoint.startsWith('https://')
+      ? endpoint
+      : `${baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`
+  const activeUid = getDashboardActiveUid()
+  const headers = new Headers(options.headers)
+
+  if (!headers.has('X-Traxo-Uid')) {
+    headers.set('X-Traxo-Uid', activeUid)
+  }
+  if (options.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  if (auth.currentUser && !headers.has('Authorization')) {
+    try {
+      const token = await auth.currentUser.getIdToken()
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`)
+      }
+    } catch {
+      // Proceed with X-Traxo-Uid header if token refresh fails
+    }
+  }
+
+  return fetch(url, {
+    ...options,
+    headers,
+  })
+}
+
 export default function Dashboard() {
+  const activeStoreUid = useAuthStore((s) => s.user?.id ?? null)
   const displayName = useAuthStore(
     (s) => s.user?.displayName || s.user?.fullName || s.user?.email || 'Operator'
   )
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const { selectedStrategyIds, toggleSelectedStrategy, setSelectedStrategies } =
-    useOnboardingStore()
-  const storeStrategies = useStrategyStore((s) => s.strategies)
-  const setStoreStrategies = useStrategyStore((s) => s.setStrategies)
-  const toggleStoreStrategy = useStrategyStore((s) => s.toggleStrategy)
+  const selectedStrategyIds = useOnboardingStore((s) => s.selectedStrategyIds)
 
   const {
     accountBalance,
@@ -275,12 +311,18 @@ export default function Dashboard() {
   const {
     account,
     positions: metaPositions,
+    paperTrades,
     executeManualTrade,
     closeOpenPosition,
     refreshPositions,
     refreshAccount,
     loading: metaLoading,
   } = useMetaApi()
+
+  const executionMode: 'paper' | 'metaapi' = account?.mode === 'metaapi' ? 'metaapi' : 'paper'
+  const isPaperMode = executionMode !== 'metaapi'
+  const executionVenueLabel = isPaperMode ? 'Paper Broker' : 'Broker Bridge'
+  const executionDeskBadge = isPaperMode ? 'TRAXO Paper' : 'Live Broker'
 
   // Terminal UI states
   const [inspectorOpen, setInspectorOpen] = useState(true)
@@ -316,14 +358,31 @@ export default function Dashboard() {
   const [symbolSearch, setSymbolSearch] = useState('')
   const symbolPickerRef = useRef<HTMLDivElement>(null)
 
-  // Chart & scan state
+  // Chart & feed reload state
   const [loading, setLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
+  const [retryingFeed, setRetryingFeed] = useState(false)
   const [candles, setCandles] = useState<Candle[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [hasMoreHistory, setHasMoreHistory] = useState(true)
+  const loadingHistoryRef = useRef(false)
+  const hasMoreHistoryRef = useRef(true)
+  const candlesRef = useRef<Candle[]>([])
+  const activeChartKeyRef = useRef(`${symbol}:${timeframe}`)
   const [hoveredSignalId, setHoveredSignalId] = useState<string | null>(null)
   const [lockedSignalId, setLockedSignalId] = useState<string | null>(null)
+  const [lockedPositionId, setLockedPositionId] = useState<string | null>(null)
+  // Survives the symbol/timeframe reset so cross-chart focus (signal card / position row) is not wiped
+  const pendingFocusRef = useRef<{
+    key: string
+    signalId: string | null
+    positionId: string | null
+  } | null>(null)
   const [focusTime, setFocusTime] = useState<UTCTimestamp | null>(null)
   const [focusNonce, setFocusNonce] = useState(0)
+
+  useEffect(() => {
+    candlesRef.current = candles
+  }, [candles])
 
   // Live quote & pending orders
   const [liveQuote, setLiveQuote] = useState<LiveQuote>({
@@ -336,9 +395,22 @@ export default function Dashboard() {
   const [closingPosId, setClosingPosId] = useState<string | null>(null)
   const [cancelingOrderId, setCancelingOrderId] = useState<string | null>(null)
   const [executingTrade, setExecutingTrade] = useState(false)
-  const [executingChartSignal, setExecutingChartSignal] = useState(false)
+  const executingSignalIdsRef = useRef<Set<string>>(new Set())
+  const [executingSignalIds, setExecutingSignalIds] = useState<string[]>([])
+  const [localExecutedSignalIds, setLocalExecutedSignalIds] = useState<string[]>([])
+  const executingPlannerRef = useRef<boolean>(false)
+  const [plannerCooldownKey, setPlannerCooldownKey] = useState<string | null>(null)
+  const plannerCooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [orderCopied, setOrderCopied] = useState(false)
   const [dismissedNoticeKeys, setDismissedNoticeKeys] = useState<string[]>([])
+
+  useEffect(() => {
+    return () => {
+      if (plannerCooldownTimerRef.current) {
+        clearTimeout(plannerCooldownTimerRef.current)
+      }
+    }
+  }, [])
 
   // Manual planner state
   const [manualPlanner, setManualPlanner] = useState<ManualPlannerState>(() =>
@@ -349,7 +421,7 @@ export default function Dashboard() {
   useEffect(() => {
     const urlSymbol = searchParams.get('symbol')
     const urlTimeframe = searchParams.get('timeframe')
-    if (urlSymbol && urlSymbol !== symbol) setSymbol(urlSymbol as ChartSymbol)
+    if (urlSymbol && isValidChartSymbol(urlSymbol) && urlSymbol !== symbol) setSymbol(urlSymbol)
     if (urlTimeframe && urlTimeframe !== timeframe) setTimeframe(urlTimeframe as ChartTimeframe)
   }, [searchParams, symbol, timeframe, setSymbol, setTimeframe])
 
@@ -364,98 +436,19 @@ export default function Dashboard() {
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [])
 
-  // Unlock all 5 engines cleanly if onboarding store only had 1 default or empty
+  // Include all active TRAXO proprietary engines + core engines cleanly so signals are never dropped
   const activeEngineKebabs = useMemo<OnboardingStrategyId[]>(() => {
-    const valid = selectedStrategyIds.filter((id) =>
-      ENGINE_DEFINITIONS.some((e) => e.kebabId === id)
-    )
-    return valid.length > 0 ? valid : ENGINE_DEFINITIONS.map((e) => e.kebabId)
+    const valid = selectedStrategyIds
+      .map((id) => normalizeStrategyToKebab(id) as OnboardingStrategyId)
+      .filter((id) => ALL_ENGINE_KEBABS.includes(id))
+    const merged = Array.from(new Set([...valid, ...CORE_ENGINE_KEBABS]))
+    return valid.length > 0 ? merged : ALL_ENGINE_KEBABS
   }, [selectedStrategyIds])
 
-  // Compute live per-engine counts & win rates from real signal store
-  const engineStats = useMemo(() => {
-    const counts: Record<string, number> = {}
-    const wins: Record<string, number> = {}
-    const settled: Record<string, number> = {}
-
-    for (const def of ENGINE_DEFINITIONS) {
-      counts[def.storeId] = 0
-      wins[def.storeId] = 0
-      settled[def.storeId] = 0
-    }
-
-    for (const sig of allSignals) {
-      const kebab = normalizeStrategyToKebab(sig.strategyId)
-      const def = ENGINE_DEFINITIONS.find((d) => d.kebabId === kebab)
-      if (!def) continue
-      counts[def.storeId] = (counts[def.storeId] ?? 0) + 1
-      const st = (sig.status || '').toLowerCase()
-      if (st === 'win' || st === 'tp_hit') {
-        wins[def.storeId] = (wins[def.storeId] ?? 0) + 1
-        settled[def.storeId] = (settled[def.storeId] ?? 0) + 1
-      } else if (st === 'loss' || st === 'sl_hit') {
-        settled[def.storeId] = (settled[def.storeId] ?? 0) + 1
-      }
-    }
-
-    return { counts, wins, settled }
-  }, [allSignals])
-
-  // Keep useStrategyStore synchronized with the 5 engines + live store metrics
+  const activeEngineKebabsRef = useRef<OnboardingStrategyId[]>(activeEngineKebabs)
   useEffect(() => {
-    const nextStrategies: Strategy[] = ENGINE_DEFINITIONS.map((def) => {
-      const existing = storeStrategies.find((s) => s.id === def.storeId)
-      const totalSignals = engineStats.counts[def.storeId] ?? 0
-      const settledCount = engineStats.settled[def.storeId] ?? 0
-      const winCount = engineStats.wins[def.storeId] ?? 0
-      const active =
-        existing !== undefined
-          ? activeEngineKebabs.includes(def.kebabId)
-          : activeEngineKebabs.includes(def.kebabId)
-
-      return {
-        id: def.storeId,
-        name: def.name,
-        description: def.description,
-        active,
-        winRate: settledCount > 0 ? winCount / settledCount : 0,
-        totalSignals,
-        avgRR: 2.2,
-      }
-    })
-
-    const unchanged =
-      storeStrategies.length === nextStrategies.length &&
-      nextStrategies.every((s, idx) => {
-        const cur = storeStrategies[idx]
-        return (
-          cur &&
-          cur.id === s.id &&
-          cur.active === s.active &&
-          cur.totalSignals === s.totalSignals &&
-          cur.winRate === s.winRate
-        )
-      })
-
-    if (!unchanged) {
-      setStoreStrategies(nextStrategies)
-    }
-  }, [activeEngineKebabs, engineStats, storeStrategies, setStoreStrategies])
-
-  const handleToggleEngine = useCallback(
-    (id: StrategyId) => {
-      const def = ENGINE_DEFINITIONS.find((d) => d.storeId === id)
-      if (!def) return
-      toggleStoreStrategy(id)
-      const currentlyOn = activeEngineKebabs.includes(def.kebabId)
-      if (currentlyOn && activeEngineKebabs.length === 1) {
-        setSelectedStrategies([def.kebabId])
-        return
-      }
-      toggleSelectedStrategy(def.kebabId)
-    },
-    [activeEngineKebabs, setSelectedStrategies, toggleSelectedStrategy, toggleStoreStrategy]
-  )
+    activeEngineKebabsRef.current = activeEngineKebabs
+  }, [activeEngineKebabs])
 
   const handleSelectSymbol = useCallback(
     (nextSym: SymbolOption) => {
@@ -478,10 +471,23 @@ export default function Dashboard() {
   // Fetch candles when symbol or timeframe changes
   useEffect(() => {
     let cancelled = false
+    activeChartKeyRef.current = `${symbol}:${timeframe}`
+    loadingHistoryRef.current = false
+    hasMoreHistoryRef.current = true
     const initTimer = setTimeout(() => {
       setLoading(true)
+      setLoadingHistory(false)
+      setHasMoreHistory(true)
       setHoveredSignalId(null)
-      setLockedSignalId(null)
+      const pendingFocus = pendingFocusRef.current
+      if (pendingFocus && pendingFocus.key === `${symbol}:${timeframe}`) {
+        setLockedSignalId(pendingFocus.signalId)
+        setLockedPositionId(pendingFocus.positionId)
+      } else {
+        setLockedSignalId(null)
+        setLockedPositionId(null)
+      }
+      pendingFocusRef.current = null
       setCandles([])
     }, 0)
 
@@ -490,6 +496,24 @@ export default function Dashboard() {
       if (cancelled) return
       setCandles(generatedCandles)
       setLoading(false)
+      if (generatedCandles.length > 0) {
+        const detected = runSignalsForStrategies(
+          generatedCandles,
+          symbol,
+          timeframe,
+          activeEngineKebabsRef.current
+        )
+        if (detected.length > 0) {
+          addSignals(
+            detected.map((s) => ({
+              ...s,
+              symbol,
+              timeframe,
+              status: 'live',
+            }))
+          )
+        }
+      }
       const last = generatedCandles[generatedCandles.length - 1]
       setManualPlanner((prev) => ({
         ...defaultPlannerLevels(symbol, last, prev.action),
@@ -502,6 +526,52 @@ export default function Dashboard() {
     return () => {
       cancelled = true
       clearTimeout(initTimer)
+    }
+  }, [addSignals, symbol, timeframe])
+
+  const handleLoadMoreHistory = useCallback(async () => {
+    if (loadingHistoryRef.current || !hasMoreHistoryRef.current || candlesRef.current.length === 0) {
+      return
+    }
+    const oldestRaw = candlesRef.current[0]?.time
+    const oldestTime =
+      typeof oldestRaw === 'string'
+        ? Math.floor(new Date(oldestRaw).getTime() / 1000)
+        : Number(oldestRaw)
+    if (!Number.isFinite(oldestTime) || oldestTime <= 0) return
+
+    const requestKey = `${symbol}:${timeframe}`
+    loadingHistoryRef.current = true
+    setLoadingHistory(true)
+
+    try {
+      const older = await getOlderCandles(symbol, timeframe, oldestTime - 1, 1000)
+      if (activeChartKeyRef.current !== requestKey) return
+
+      const strictlyOlder = older.filter((c) => Number(c.time) < oldestTime)
+      if (strictlyOlder.length === 0) {
+        hasMoreHistoryRef.current = false
+        setHasMoreHistory(false)
+        return
+      }
+
+      setCandles((prev) => {
+        const byTime = new Map<number, Candle>()
+        for (const c of [...strictlyOlder, ...prev]) {
+          byTime.set(Number(c.time), c)
+        }
+        return Array.from(byTime.values()).sort((a, b) => Number(a.time) - Number(b.time))
+      })
+
+      if (strictlyOlder.length < 1000) {
+        hasMoreHistoryRef.current = false
+        setHasMoreHistory(false)
+      }
+    } finally {
+      if (activeChartKeyRef.current === requestKey) {
+        loadingHistoryRef.current = false
+        setLoadingHistory(false)
+      }
     }
   }, [symbol, timeframe])
 
@@ -519,7 +589,7 @@ export default function Dashboard() {
   // Fetch live broker quote & pending orders
   const fetchLiveQuote = useCallback(async () => {
     try {
-      const res = await fetch(`/api/metaapi/quote?symbol=${encodeURIComponent(symbol)}`)
+      const res = await dashboardApiFetch(`/api/metaapi/quote?symbol=${encodeURIComponent(symbol)}`)
       if (res.ok) {
         const data = await res.json()
         if (data && typeof data.bid === 'number' && typeof data.ask === 'number') {
@@ -545,7 +615,8 @@ export default function Dashboard() {
 
   const fetchPendingOrders = useCallback(async () => {
     try {
-      const res = await fetch('/api/metaapi/orders')
+      const uid = activeStoreUid || auth.currentUser?.uid || 'default_trader'
+      const res = await dashboardApiFetch(`/api/metaapi/orders?uid=${encodeURIComponent(uid)}`)
       if (res.ok) {
         const data = await res.json()
         setPendingOrders(Array.isArray(data.orders) ? data.orders : [])
@@ -553,7 +624,7 @@ export default function Dashboard() {
     } catch {
       // Endpoint unavailable when offline
     }
-  }, [])
+  }, [activeStoreUid])
 
   useEffect(() => {
     const initialTimer = setTimeout(() => {
@@ -585,7 +656,7 @@ export default function Dashboard() {
       if (!activeEngineSet.has(normalizeStrategyToKebab(signal.strategyId))) continue
       const key = signalMarkerKey(signal)
       const existing = bySetup.get(key)
-      if (!existing || (existing.status !== 'live' && signal.status === 'live')) {
+      if (!existing || (!isSignalLive(existing.status) && isSignalLive(signal.status))) {
         bySetup.set(key, signal)
       }
     }
@@ -604,15 +675,26 @@ export default function Dashboard() {
     [chartSignals, hoveredSignalId]
   )
 
-  const lockedSignal = useMemo(
-    () => chartSignals.find((s) => s.id === lockedSignalId) ?? null,
-    [chartSignals, lockedSignalId]
-  )
+  const lockedSignal = useMemo(() => {
+    if (!lockedSignalId) return null
+    return (
+      chartSignals.find((s) => s.id === lockedSignalId) ??
+      // Fallback: the signal may belong to an engine that is currently filtered out
+      allSignals.find(
+        (s) => s.id === lockedSignalId && s.symbol === symbol && s.timeframe === timeframe
+      ) ??
+      null
+    )
+  }, [allSignals, chartSignals, lockedSignalId, symbol, timeframe])
 
-  const activeLiveSignal = useMemo(
-    () => chartSignals.find((s) => s.status === 'live') ?? null,
+  const liveChartSignals = useMemo(
+    () => chartSignals.filter((s) => isSignalLive(s.status)),
     [chartSignals]
   )
+
+  // Only auto-draw a setup when there is exactly one live signal. With several live
+  // signals the trader picks one (hover to preview, click / chip to lock).
+  const activeLiveSignal = liveChartSignals.length === 1 ? liveChartSignals[0] : null
 
   const marketRiskContext = useMemo(
     () => getMarketRiskContext(symbol, timeframe, activeEngineKebabs.length),
@@ -709,19 +791,18 @@ export default function Dashboard() {
     const markerBySetup = new Map<string, ChartPanelMarker>()
 
     for (const s of chartSignals) {
-      const isLive = s.status === 'live'
-      const shortStrat =
-        s.strategyLabel === 'Supply & Demand'
-          ? 'S&D'
-          : s.strategyLabel === 'Wick Rejection'
-          ? 'WICK'
-          : s.strategyLabel.split(' ')[0].toUpperCase()
+      const isLive = isSignalLive(s.status)
+      const shortStrat = formatShortEngineTag(s.strategyId, s.strategyLabel)
+      const entryBadge = formatEntryTypeBadge(s.rawEntryType || s.entryType)
+      const confPct =
+        s.confidence <= 1 ? Math.round(s.confidence * 100) : Math.round(s.confidence)
+      const sigTimeSec = (s.time > 1e12 ? Math.floor(s.time / 1000) : Math.floor(s.time)) as UTCTimestamp
       markerBySetup.set(signalMarkerKey(s), {
-        time: s.time as UTCTimestamp,
+        time: sigTimeSec,
         position: s.direction === 'BUY' ? 'belowBar' : 'aboveBar',
         shape: s.direction === 'BUY' ? 'arrowUp' : 'arrowDown',
         color: isLive ? (s.direction === 'BUY' ? '#34D399' : '#F87171') : '#71717A',
-        text: `${shortStrat} ${s.direction} ${s.confidence}%`,
+        text: `${shortStrat} · ${entryBadge} ${s.direction} ${confPct}%`,
       })
     }
 
@@ -752,37 +833,149 @@ export default function Dashboard() {
     : 0.01
   const plannerPotentialProfit = plannerValid ? activeRiskUsd * plannerRR : 0
 
-  const activeSignalForChart = lockedSignal || hoveredSignal || activeLiveSignal
+  const executingSignalIdSet = useMemo(() => new Set(executingSignalIds), [executingSignalIds])
+  const executedSignalIdSet = useMemo(() => {
+    const s = new Set(localExecutedSignalIds)
+    for (const t of paperTrades) {
+      if (t.signalId && t.status !== 'CANCELLED') {
+        s.add(t.signalId)
+      }
+    }
+    return s
+  }, [localExecutedSignalIds, paperTrades])
+  const plannerFingerprint = `${symbol}:${manualPlanner.action}:${manualPlanner.entryType}:${manualPlanner.entry}:${manualPlanner.sl}:${manualPlanner.tp}:${plannerLots}`
+  const isPlannerJustPlaced = plannerCooldownKey === plannerFingerprint
 
-  const chartActiveSignal: ChartPanelActiveSignal | null =
-    manualPlanner.activeOnChart && inspectorTab === 'planner'
-      ? null
-      : activeSignalForChart
-      ? {
-          id: activeSignalForChart.id,
-          entry: activeSignalForChart.entry,
-          sl: activeSignalForChart.sl,
-          tp: activeSignalForChart.tp,
-          action: activeSignalForChart.direction,
-          entryTime: activeSignalForChart.time as UTCTimestamp,
-          confidence:
-            activeSignalForChart.confidence <= 1
-              ? Math.round(activeSignalForChart.confidence * 100)
-              : Math.round(activeSignalForChart.confidence),
-          rr: activeSignalForChart.rr,
-          locked: Boolean(lockedSignal),
-          strategyLabel: activeSignalForChart.strategyLabel,
-          risk: activeSignalForChart.risk,
-          reason: activeSignalForChart.reason,
-          lotSize: calculateLots(
-            symbol,
-            activeSignalForChart.entry,
-            activeSignalForChart.sl,
-            activeRiskUsd
-          ),
-          riskAmountUsd: activeRiskUsd,
-        }
-      : null
+  // Locked open position / pending order → draw its real levels (incl. BE-moved SL)
+  const lockedPositionSetup = useMemo<ChartPanelActiveSignal | null>(() => {
+    if (!lockedPositionId) return null
+    const trade = paperTrades.find((t) => t.id === lockedPositionId)
+    if (trade) {
+      if (trade.symbol !== symbol) return null
+      const entry = trade.fillPrice ?? trade.requestedEntry
+      const riskDist = Math.abs(entry - trade.slPrice)
+      const rr = riskDist > 0 ? Math.abs(trade.tp1Price - entry) / riskDist : undefined
+      const anchor = trade.filledAt ?? trade.createdAt
+      return {
+        id: trade.signalId ?? trade.id,
+        entry,
+        sl: trade.currentSl ?? trade.slPrice,
+        tp: trade.tp1Price,
+        tp2: trade.tp2Price,
+        exitMode: trade.exitMode,
+        entryType: trade.entryType,
+        tier: trade.confluence?.tier ?? trade.tier,
+        status: trade.status === 'PENDING' ? 'position_pending' : 'position_open',
+        confluence: trade.confluence
+          ? {
+              score: trade.confluence.score,
+              maxScore: trade.confluence.maxScore,
+              tier: trade.confluence.tier,
+              passedCriteria: trade.confluence.passedCriteria,
+              checks: trade.confluence.checks,
+            }
+          : null,
+        action: trade.direction,
+        entryTime: (anchor > 1e12 ? Math.floor(anchor / 1000) : anchor) as UTCTimestamp,
+        confidence:
+          trade.confidence <= 1 ? Math.round(trade.confidence * 100) : Math.round(trade.confidence),
+        rr: trade.plannedRr || rr,
+        locked: true,
+        strategyLabel: trade.strategyLabel,
+        reason: trade.reasons,
+        lotSize: trade.openVolume || trade.initialVolume,
+        riskAmountUsd: trade.riskAmountUsd,
+      }
+    }
+
+    const pos = metaPositions.find((p) => p.id === lockedPositionId)
+    const order = pos ? null : pendingOrders.find((o) => o.id === lockedPositionId)
+    const src = pos ?? order
+    if (!src || src.symbol !== symbol || !src.sl || !src.tp) return null
+    const isBuy = (pos?.direction ?? src.type).toUpperCase().includes('BUY')
+    const tSec = src.time ? Math.floor(new Date(src.time).getTime() / 1000) : null
+    return {
+      id: src.id,
+      entry: src.openPrice,
+      sl: src.sl,
+      tp: pos?.tp1 ?? src.tp,
+      tp2: pos?.tp2 ?? null,
+      exitMode: pos?.exitMode,
+      entryType: order ? (src.type.includes('STOP') ? 'STOP' : 'LIMIT') : 'MARKET',
+      status: order ? 'position_pending' : 'position_open',
+      action: isBuy ? 'BUY' : 'SELL',
+      entryTime: (tSec ?? undefined) as UTCTimestamp | undefined,
+      locked: true,
+      strategyLabel: pos?.strategyLabel ?? src.comment,
+      lotSize: src.volume,
+    }
+  }, [lockedPositionId, metaPositions, paperTrades, pendingOrders, symbol])
+
+  // Hover previews any marker (even while something is locked); lock wins otherwise.
+  const hoverPreviewSignal =
+    hoveredSignal && hoveredSignal.id !== lockedSignal?.id ? hoveredSignal : null
+  const activeSignalForChart: StoredSignal | null =
+    hoverPreviewSignal ?? (lockedPositionSetup ? null : lockedSignal ?? activeLiveSignal)
+
+  const chartActiveSignal: ChartPanelActiveSignal | null = (() => {
+    if (manualPlanner.activeOnChart && inspectorTab === 'planner') return null
+    if (!activeSignalForChart) return lockedPositionSetup
+    const confPct =
+      activeSignalForChart.confidence <= 1
+        ? Math.round(activeSignalForChart.confidence * 100)
+        : Math.round(activeSignalForChart.confidence)
+    const lotSize = calculateLots(
+      symbol,
+      activeSignalForChart.entry,
+      activeSignalForChart.sl,
+      activeRiskUsd
+    )
+    const tp2 =
+      typeof activeSignalForChart.tp2 === 'number' &&
+      Number.isFinite(activeSignalForChart.tp2) &&
+      activeSignalForChart.tp2 > 0
+        ? activeSignalForChart.tp2
+        : null
+    const tier =
+      activeSignalForChart.tier ??
+      activeSignalForChart.confluence?.tier ??
+      (confPct >= 82 ? 'PRIME' : confPct >= 72 ? 'STANDARD' : 'AGGRESSIVE')
+    const entryType =
+      activeSignalForChart.rawEntryType ?? activeSignalForChart.entryType ?? 'MARKET'
+    const exitMode =
+      activeSignalForChart.exitMode ??
+      resolveSignalExitMode({
+        strategyId: activeSignalForChart.strategyId,
+        market: activeSignalForChart.market,
+        symbol,
+        tier,
+        volume: lotSize,
+        tp2,
+      })
+
+    return {
+      id: activeSignalForChart.id,
+      entry: activeSignalForChart.entry,
+      sl: activeSignalForChart.sl,
+      tp: activeSignalForChart.tp,
+      tp2,
+      exitMode,
+      entryType,
+      tier,
+      status: isSignalLive(activeSignalForChart.status) ? 'live' : activeSignalForChart.status,
+      confluence: activeSignalForChart.confluence ?? null,
+      action: activeSignalForChart.direction,
+      entryTime: activeSignalForChart.time as UTCTimestamp,
+      confidence: confPct,
+      rr: activeSignalForChart.rr,
+      locked: Boolean(lockedSignal && lockedSignal.id === activeSignalForChart.id),
+      strategyLabel: activeSignalForChart.strategyLabel,
+      risk: activeSignalForChart.risk,
+      reason: activeSignalForChart.reason,
+      lotSize,
+      riskAmountUsd: activeRiskUsd,
+    }
+  })()
 
   const chartManualSetup: ChartPanelManualSetup | null =
     manualPlanner.activeOnChart && inspectorTab === 'planner'
@@ -809,14 +1002,10 @@ export default function Dashboard() {
         }
       : null
 
-  // Chart interactions
-  const handleCrosshairMove = useCallback(
-    (time: UTCTimestamp | null) => {
-      if (chartSignals.length === 0 || time == null) {
-        if (!lockedSignalId) setHoveredSignalId(null)
-        return
-      }
-
+  // Pick the signal under the cursor. When several signals sit on the same / adjacent
+  // candles, disambiguate by the price closest to the cursor (BUY arrows below, SELL above).
+  const pickSignalAt = useCallback(
+    (time: number, price: number | null | undefined): StoredSignal | null => {
       const tfMap: Record<string, number> = {
         '1m': 60,
         '5m': 300,
@@ -826,15 +1015,67 @@ export default function Dashboard() {
         '1D': 86400,
       }
       const tolerance = (tfMap[timeframe] || 900) * 0.9
-      const closest = chartSignals.find((s) => Math.abs(s.time - time) <= tolerance) ?? null
-
-      if (closest) {
-        setHoveredSignalId(closest.id)
-      } else if (!lockedSignalId) {
-        setHoveredSignalId(null)
+      const candidates = chartSignals.filter((s) => {
+        const tSec = s.time > 1e12 ? Math.floor(s.time / 1000) : s.time
+        return Math.abs(tSec - time) <= tolerance
+      })
+      if (candidates.length === 0) return null
+      if (candidates.length === 1 || price == null || !Number.isFinite(price)) {
+        return [...candidates].sort((a, b) => Math.abs(a.time - time) - Math.abs(b.time - time))[0]
       }
+      const candle = candles.find((c) => Math.abs(c.time - time) <= tolerance)
+      const scoreOf = (s: StoredSignal) => {
+        // Marker anchor ≈ candle low for BUY (arrow below bar), candle high for SELL
+        const anchor = candle ? (s.direction === 'BUY' ? candle.low : candle.high) : s.entry
+        return Math.min(Math.abs(anchor - price), Math.abs(s.entry - price))
+      }
+      return [...candidates].sort((a, b) => scoreOf(a) - scoreOf(b))[0]
     },
-    [chartSignals, lockedSignalId, timeframe]
+    [candles, chartSignals, timeframe]
+  )
+
+  // Chart interactions
+  const handleCrosshairMove = useCallback(
+    (time: UTCTimestamp | null, price?: number | null) => {
+      if (chartSignals.length === 0 || time == null) {
+        setHoveredSignalId(null)
+        return
+      }
+      const closest = pickSignalAt(time, price)
+      setHoveredSignalId(closest ? closest.id : null)
+    },
+    [chartSignals.length, pickSignalAt]
+  )
+
+  // Explicit selection from the multi-signal chooser strip
+  const handlePreviewSignal = useCallback((id: string | null) => {
+    setHoveredSignalId(id)
+  }, [])
+
+  const handleLockSignal = useCallback(
+    (id: string) => {
+      const sig = chartSignals.find((s) => s.id === id)
+      if (!sig) return
+      setManualPlanner((prev) => ({ ...prev, activeOnChart: false }))
+      setLockedPositionId(null)
+      setLockedSignalId(id)
+      setHoveredSignalId(null)
+      setFocusTime((sig.time > 1e12 ? Math.floor(sig.time / 1000) : sig.time) as UTCTimestamp)
+      setFocusNonce((n) => n + 1)
+    },
+    [chartSignals]
+  )
+
+  const signalChoices = useMemo(
+    () =>
+      liveChartSignals.map((s) => ({
+        id: s.id,
+        label: formatShortEngineTag(s.strategyId, s.strategyLabel),
+        action: s.direction,
+        confidence: s.confidence <= 1 ? Math.round(s.confidence * 100) : Math.round(s.confidence),
+        entryBadge: formatEntryTypeBadge(s.rawEntryType || s.entryType),
+      })),
+    [liveChartSignals]
   )
 
   const handleChartClick = useCallback(
@@ -843,10 +1084,11 @@ export default function Dashboard() {
       const clickedTime = typeof time === 'number' ? (time as UTCTimestamp) : null
 
       if (clickedTime != null) {
-        const nearestSignal = chartSignals.find((s) => s.time === clickedTime) ?? null
+        const nearestSignal = pickSignalAt(clickedTime, price)
         if (nearestSignal) {
+          setLockedPositionId(null)
           setLockedSignalId(nearestSignal.id)
-          setHoveredSignalId(nearestSignal.id)
+          setHoveredSignalId(null)
           setFocusTime(nearestSignal.time as UTCTimestamp)
           setFocusNonce((n) => n + 1)
           setInspectorOpen(true)
@@ -876,6 +1118,7 @@ export default function Dashboard() {
       const levels = generateManualLevels(entry, action, range, digits)
 
       setLockedSignalId(null)
+      setLockedPositionId(null)
       setHoveredSignalId(null)
       setManualPlanner({
         time: anchorTime,
@@ -891,7 +1134,7 @@ export default function Dashboard() {
       setInspectorOpen(true)
       setInspectorTab('planner')
     },
-    [candles, chartSignals, effectiveBid, symbol]
+    [candles, effectiveBid, pickSignalAt, symbol]
   )
 
   // Focus chart on any SignalCard click (cross-symbol capable)
@@ -906,14 +1149,20 @@ export default function Dashboard() {
       ) as UTCTimestamp
 
       if (raw.symbol !== symbol || raw.timeframe !== timeframe) {
+        pendingFocusRef.current = {
+          key: `${raw.symbol}:${raw.timeframe}`,
+          signalId: raw.id,
+          positionId: null,
+        }
         setSymbol(raw.symbol as ChartSymbol)
         setTimeframe(raw.timeframe as ChartTimeframe)
         setSearchParams({ symbol: raw.symbol, timeframe: raw.timeframe }, { replace: true })
       }
 
       setManualPlanner((prev) => ({ ...prev, activeOnChart: false }))
+      setLockedPositionId(null)
       setLockedSignalId(raw.id)
-      setHoveredSignalId(raw.id)
+      setHoveredSignalId(null)
       setFocusTime(targetTime)
       setFocusNonce((n) => n + 1)
       setMobileView('chart')
@@ -921,20 +1170,65 @@ export default function Dashboard() {
     [setSearchParams, setSymbol, setTimeframe, symbol, timeframe]
   )
 
-  // Manual Scan action
-  const handleManualScan = async () => {
-    if (scanning) return
-    setScanning(true)
-    try {
-      void fetch('/api/scanner/trigger', { method: 'POST' }).catch(() => {})
+  // Open position / pending order row → jump to the exact setup on its own chart
+  const handleFocusPosition = useCallback(
+    (posId: string, posSymbol: string, posTime?: string) => {
+      const tfNormalize: Record<string, ChartTimeframe> = {
+        '1m': '1m',
+        '5m': '5m',
+        '15m': '15m',
+        '1h': '1H',
+        '4h': '4H',
+        '1d': '1D',
+      }
+      const trade = paperTrades.find((t) => t.id === posId)
+      const targetSymbol = (trade?.symbol ?? posSymbol) as ChartSymbol
+      const targetTf: ChartTimeframe =
+        (trade?.timeframe && tfNormalize[trade.timeframe.toLowerCase()]) || timeframe
+      const linkedSignalId =
+        trade?.signalId && allSignals.some((s) => s.id === trade.signalId) ? trade.signalId : null
 
-      const [freshCandles, backendGlobal] = await Promise.all([
-        getCandles(symbol, timeframe, 2000),
-        fetch(
-          `/api/global-signals?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`
+      const anchorRaw = trade
+        ? trade.filledAt ?? trade.createdAt
+        : posTime
+          ? Math.floor(new Date(posTime).getTime() / 1000)
+          : null
+
+      setManualPlanner((prev) => ({ ...prev, activeOnChart: false }))
+      setHoveredSignalId(null)
+
+      if (targetSymbol !== symbol || targetTf !== timeframe) {
+        pendingFocusRef.current = {
+          key: `${targetSymbol}:${targetTf}`,
+          signalId: linkedSignalId,
+          positionId: posId,
+        }
+        setSymbol(targetSymbol)
+        setTimeframe(targetTf)
+        setSearchParams({ symbol: targetSymbol, timeframe: targetTf }, { replace: true })
+      } else {
+        setLockedSignalId(linkedSignalId)
+        setLockedPositionId(posId)
+      }
+
+      if (anchorRaw != null && Number.isFinite(anchorRaw)) {
+        setFocusTime(
+          (anchorRaw > 1e12 ? Math.floor(anchorRaw / 1000) : anchorRaw) as UTCTimestamp
         )
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
+        setFocusNonce((n) => n + 1)
+      }
+      setMobileView('chart')
+    },
+    [allSignals, paperTrades, setSearchParams, setSymbol, setTimeframe, symbol, timeframe]
+  )
+
+  // Retry loading candles & account telemetry when feed is empty
+  const handleRetryFeed = async () => {
+    if (retryingFeed) return
+    setRetryingFeed(true)
+    try {
+      const [freshCandles] = await Promise.all([
+        getCandles(symbol, timeframe, 2000),
         refreshAccount(),
         refreshPositions(),
         fetchPendingOrders(),
@@ -944,41 +1238,10 @@ export default function Dashboard() {
       if (freshCandles.length > 0) {
         setCandles(freshCandles)
       }
-
-      const detected = runSignalsForStrategies(freshCandles, symbol, timeframe, activeEngineKebabs)
-      const storedDetected: StoredSignal[] = detected.map((s) => ({
-        ...s,
-        symbol,
-        timeframe,
-        status: 'live',
-      }))
-
-      const backendSignals: StoredSignal[] = Array.isArray(backendGlobal?.signals)
-        ? backendGlobal.signals
-        : []
-
-      const merged = [...storedDetected, ...backendSignals]
-      if (merged.length > 0) {
-        addSignals(merged)
-      }
-
-      if (storedDetected.length > 0) {
-        showToast(
-          'Scan Complete',
-          `${storedDetected.length} live setup(s) detected on ${symbol} ${timeframe}`,
-          'success'
-        )
-      } else {
-        showToast(
-          'Scan Complete',
-          `Candles & MT5 synced — no new active setup on ${symbol} ${timeframe}`,
-          'info'
-        )
-      }
     } catch {
-      showToast('Scan Notice', 'Unable to complete manual scan on current feed', 'error')
+      showToast('Feed Notice', 'Unable to reload market data on current feed', 'error')
     } finally {
-      setScanning(false)
+      setRetryingFeed(false)
     }
   }
 
@@ -986,43 +1249,98 @@ export default function Dashboard() {
   const handleExecuteSignal = async (raw: DashboardSignalItem, lotSize: number) => {
     const direction = 'signal' in raw ? raw.signal : raw.direction
     if (direction === 'NO_TRADE') return
-    const result = await executeManualTrade({
-      symbol: raw.symbol,
-      action: direction,
-      volume: lotSize,
-      sl: raw.sl,
-      tp: raw.tp,
-    })
-    if (result?.success) {
-      showToast(
-        'Trade Executed',
-        `${direction} ${lotSize}L ${raw.symbol} placed on Exness MT5`,
-        'success'
-      )
-      await fetchPendingOrders()
-    } else {
-      showToast(
-        'MT5 Notice',
-        result?.error || `Calculated ${lotSize}L — MetaApi terminal standby`,
-        'info'
-      )
+
+    if (executingSignalIdsRef.current.has(raw.id)) return
+    if (executedSignalIdSet.has(raw.id)) {
+      showToast('Already Executed', 'This setup has already been executed', 'info')
+      return
+    }
+
+    executingSignalIdsRef.current.add(raw.id)
+    setExecutingSignalIds((prev) => (prev.includes(raw.id) ? prev : [...prev, raw.id]))
+
+    try {
+      const isLegacy = 'signal' in raw
+      const strategyId = isLegacy ? raw.strategy_id : raw.strategyId
+      const strategyLabel = isLegacy ? undefined : raw.strategyLabel
+      const rawConf = raw.confidence
+      const confidence = rawConf <= 1 ? Math.round(rawConf * 100) : Math.round(rawConf)
+      const rawEntry = isLegacy ? undefined : raw.rawEntryType || raw.entryType
+      const entryUpper = String(rawEntry || 'MARKET').toUpperCase()
+      const normalizedEntryType: 'market' | 'limit' | 'stop' =
+        entryUpper === 'LIMIT' ? 'limit' : entryUpper === 'STOP' ? 'stop' : 'market'
+      const signalTimeRaw = isLegacy ? new Date(raw.timestamp).getTime() : raw.time
+
+      const result = await executeManualTrade({
+        signalId: raw.id,
+        symbol: raw.symbol,
+        timeframe: raw.timeframe,
+        market: isLegacy ? undefined : raw.market,
+        strategyId,
+        strategyLabel,
+        tier: isLegacy ? undefined : raw.tier,
+        action: direction,
+        volume: lotSize,
+        sl: raw.sl,
+        tp: raw.tp,
+        tp2: !isLegacy && typeof raw.tp2 === 'number' ? raw.tp2 : undefined,
+        entryType: normalizedEntryType,
+        rawEntryType: rawEntry ? String(rawEntry) : undefined,
+        price: raw.entry,
+        referencePrice: raw.entry,
+        riskAmountUsd: activeRiskUsd,
+        rr: isLegacy ? raw.rr_ratio : raw.rr,
+        confidence,
+        signalTime: Number.isFinite(signalTimeRaw) ? signalTimeRaw : undefined,
+        reasons: raw.reason,
+        confluence: isLegacy ? undefined : raw.confluence,
+      })
+
+      if (result?.success) {
+        setLocalExecutedSignalIds((prev) => (prev.includes(raw.id) ? prev : [...prev, raw.id]))
+        showToast(
+          isPaperMode ? 'Paper Trade Executed' : 'Trade Executed',
+          `${direction} ${lotSize}L ${raw.symbol} placed on ${executionVenueLabel}`,
+          'success'
+        )
+        await fetchPendingOrders()
+      } else if (result?.duplicate) {
+        setLocalExecutedSignalIds((prev) => (prev.includes(raw.id) ? prev : [...prev, raw.id]))
+        showToast(
+          'Already Executed',
+          result.error || 'This setup has already been executed',
+          'info'
+        )
+      } else {
+        showToast(
+          isPaperMode ? 'Paper Broker Notice' : 'Execution Notice',
+          result?.error || `Calculated ${lotSize}L — ${executionVenueLabel} standby`,
+          'info'
+        )
+      }
+    } catch {
+      showToast('Execution Error', 'Unable to reach execution endpoint', 'error')
+    } finally {
+      executingSignalIdsRef.current.delete(raw.id)
+      setExecutingSignalIds((prev) => prev.filter((id) => id !== raw.id))
     }
   }
 
   const handleExecuteChartSignal = async () => {
-    if (!activeSignalForChart || executingChartSignal) return
+    if (
+      !activeSignalForChart ||
+      executingSignalIdsRef.current.has(activeSignalForChart.id) ||
+      executedSignalIdSet.has(activeSignalForChart.id)
+    ) {
+      return
+    }
     const lotSize = calculateLots(
       symbol,
       activeSignalForChart.entry,
       activeSignalForChart.sl,
       activeRiskUsd
     )
-    try {
-      setExecutingChartSignal(true)
-      await handleExecuteSignal(activeSignalForChart, lotSize)
-    } finally {
-      setExecutingChartSignal(false)
-    }
+    await handleExecuteSignal(activeSignalForChart, lotSize)
   }
 
   // Log decision helper
@@ -1111,40 +1429,60 @@ export default function Dashboard() {
   }
 
   const handleExecutePlanner = async () => {
-    if (!plannerValid || executingTrade) return
+    if (!plannerValid || executingPlannerRef.current || isPlannerJustPlaced) return
+    executingPlannerRef.current = true
+    setExecutingTrade(true)
     try {
-      setExecutingTrade(true)
-      const res = await fetch('/api/metaapi/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          symbol,
-          action: manualPlanner.action,
-          volume: plannerLots,
-          sl: manualPlanner.sl,
-          tp: manualPlanner.tp,
-          entryType: manualPlanner.entryType,
-          price: manualPlanner.entryType === 'limit' ? manualPlanner.entry : undefined,
-        }),
+      const result = await executeManualTrade({
+        symbol,
+        action: manualPlanner.action,
+        volume: plannerLots,
+        sl: manualPlanner.sl,
+        tp: manualPlanner.tp,
+        entryType: manualPlanner.entryType,
+        rawEntryType: manualPlanner.entryType.toUpperCase(),
+        price: manualPlanner.entry,
+        referencePrice: manualPlanner.entry,
+        timeframe,
+        strategyId: 'manual_order',
+        strategyLabel:
+          manualPlanner.entryType === 'limit' ? 'Manual Limit Order' : 'Manual Market Order',
+        riskAmountUsd: activeRiskUsd,
+        rr: plannerRR,
       })
-      const data = await res.json()
-      if (data.success) {
+
+      if (result?.success) {
+        if (plannerCooldownTimerRef.current) {
+          clearTimeout(plannerCooldownTimerRef.current)
+        }
+        setPlannerCooldownKey(plannerFingerprint)
+        plannerCooldownTimerRef.current = setTimeout(() => {
+          setPlannerCooldownKey(null)
+        }, 3000)
+
         showToast(
-          'Order Placed',
-          `${manualPlanner.entryType.toUpperCase()} ${manualPlanner.action} ${plannerLots}L ${symbol} sent to MT5`,
+          isPaperMode ? 'Paper Order Placed' : 'Order Placed',
+          `${manualPlanner.entryType.toUpperCase()} ${manualPlanner.action} ${plannerLots}L ${symbol} placed on ${executionVenueLabel}`,
           'success'
         )
-        await Promise.all([refreshPositions(), refreshAccount(), fetchPendingOrders()])
+        await fetchPendingOrders()
+      } else if (result?.duplicate) {
+        showToast(
+          'Order Already Placed',
+          result.error || 'Duplicate order ignored — already placed',
+          'info'
+        )
       } else {
         showToast(
-          'Exness MT5 Notice',
-          data.error || `Lot Size ${plannerLots}L — broker bridge standby`,
+          isPaperMode ? 'Paper Broker Notice' : 'Broker Notice',
+          result?.error || `Lot Size ${plannerLots}L — ${executionVenueLabel} standby`,
           'info'
         )
       }
     } catch {
-      showToast('Execution Error', 'Unable to connect to MT5 execution endpoint', 'error')
+      showToast('Execution Error', 'Unable to connect to execution endpoint', 'error')
     } finally {
+      executingPlannerRef.current = false
       setExecutingTrade(false)
     }
   }
@@ -1152,10 +1490,10 @@ export default function Dashboard() {
   const handleCancelPendingOrder = async (orderId: string) => {
     try {
       setCancelingOrderId(orderId)
-      const res = await fetch('/api/metaapi/orders/cancel', {
+      const res = await dashboardApiFetch('/api/metaapi/orders/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId }),
+        body: JSON.stringify({ orderId, uid: getDashboardActiveUid() }),
       })
       const data = await res.json()
       if (data.success || data.ok) {
@@ -1248,7 +1586,7 @@ export default function Dashboard() {
     <div className="h-full min-h-0 bg-[#09090B] text-[#FAFAFA] flex flex-col overflow-hidden">
       {/* 1. SLEEK CONTROL HEADER */}
       <div className="px-3 sm:px-4 py-2 lg:py-1.5 lg:min-h-[52px] bg-[#09090B] border-b border-white/[0.06] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 lg:gap-3 shrink-0 z-30">
-        {/* Top Row on Mobile / Left Cluster on Desktop: Symbol Picker + Mobile Scan + Desktop Timeframes */}
+        {/* Top Row on Mobile / Left Cluster on Desktop: Symbol Picker + Mobile Venue + Desktop Timeframes */}
         <div className="flex items-center justify-between lg:justify-start gap-2 sm:gap-2.5 min-w-0">
           <div className="relative shrink-0" ref={symbolPickerRef}>
             <button
@@ -1290,7 +1628,7 @@ export default function Dashboard() {
                     type="text"
                     value={symbolSearch}
                     onChange={(e) => setSymbolSearch(e.target.value)}
-                    placeholder="Search EURUSD, XAUUSD, NVDA..."
+                    placeholder="Search EURUSD, XAUUSD, MNQ..."
                     className="w-full h-10 lg:h-9 pl-9 pr-3 rounded-xl bg-[#161619] border border-white/[0.06] text-[13px] text-[#FAFAFA] placeholder-[#71717A] focus:outline-none focus:border-white/[0.18]"
                     autoFocus
                   />
@@ -1360,21 +1698,19 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Mobile Scan Action (aligned on Row 1 with Symbol Picker) */}
-          <button
-            type="button"
-            disabled={scanning}
-            onClick={() => void handleManualScan()}
-            className="lg:hidden h-10 rounded-full bg-[#141417] border border-white/[0.08] hover:border-white/[0.18] px-3.5 text-[13px] font-medium text-[#FAFAFA] flex items-center gap-1.5 transition-colors disabled:opacity-50 shrink-0"
-            title="Run multi-strategy scan & refresh MT5"
+          {/* Mobile Execution Mode Indicator (aligned on Row 1 with Symbol Picker) */}
+          <div
+            className="lg:hidden flex items-center gap-1.5 text-[12px] text-[#A1A1AA] shrink-0"
+            title={account?.connected ? `${executionVenueLabel} Active` : `${executionVenueLabel} Standby`}
           >
-            {scanning ? (
-              <PiSpinnerGap size={15} className="animate-spin text-[#FAFAFA]" />
-            ) : (
-              <PiBroadcast size={15} className="text-[#A1A1AA]" />
-            )}
-            <span>{scanning ? 'Scanning...' : 'Scan'}</span>
-          </button>
+            <span
+              className={cn(
+                'w-1.5 h-1.5 rounded-full shrink-0',
+                account?.connected ? 'bg-[#34D399]' : 'bg-[#71717A]'
+              )}
+            />
+            <span>{isPaperMode ? 'Paper' : 'MT5'}</span>
+          </div>
         </div>
 
         {/* Mobile Row 2: Touch-Friendly Full-Width Timeframe Strip */}
@@ -1401,7 +1737,13 @@ export default function Dashboard() {
           <div className="flex items-center gap-4 text-[13px]">
             <span
               className="flex items-center gap-1.5"
-              title={liveQuote.source === 'mt5' ? 'Live MT5 Quote' : 'Market Feed Quote'}
+              title={
+                liveQuote.source === 'mt5'
+                  ? isPaperMode
+                    ? 'Paper Broker Quote'
+                    : 'Live Broker Quote'
+                  : 'Market Feed Quote'
+              }
             >
               <span
                 className={cn(
@@ -1443,7 +1785,7 @@ export default function Dashboard() {
                 'w-1.5 h-1.5 rounded-full',
                 account?.connected ? 'bg-[#34D399]' : 'bg-[#71717A]'
               )}
-              title={account?.connected ? 'Exness MT5 Connected' : 'Local Account Balance'}
+              title={account?.connected ? `${executionVenueLabel} Connected` : 'Local Account Balance'}
             />
             <span className="text-[12px] text-[#71717A]">Equity</span>
             <span
@@ -1459,21 +1801,6 @@ export default function Dashboard() {
 
         {/* Right: Clean Pill Actions (desktop) */}
         <div className="hidden lg:flex items-center gap-2">
-          <button
-            type="button"
-            disabled={scanning}
-            onClick={() => void handleManualScan()}
-            className="rounded-full bg-[#141417] border border-white/[0.08] hover:border-white/[0.18] px-3.5 py-1.5 text-[13px] font-medium text-[#FAFAFA] flex items-center gap-1.5 transition-colors disabled:opacity-50"
-            title="Run multi-strategy scan & refresh MT5"
-          >
-            {scanning ? (
-              <PiSpinnerGap size={15} className="animate-spin text-[#FAFAFA]" />
-            ) : (
-              <PiBroadcast size={15} className="text-[#A1A1AA]" />
-            )}
-            <span>{scanning ? 'Scanning...' : 'Scan'}</span>
-          </button>
-
           <button
             type="button"
             onClick={() => setDockVisible((v) => !v)}
@@ -1621,15 +1948,16 @@ export default function Dashboard() {
                       No candle data available for {symbol} ({timeframe})
                     </p>
                     <p className="text-[13px] text-[#71717A]">
-                      Reconnect or run a manual scan to refresh the feed.
+                      Reconnect or retry loading the market feed.
                     </p>
                     <button
                       type="button"
-                      onClick={() => void handleManualScan()}
-                      className="h-10 lg:h-9 px-4 rounded-full bg-[#161619] border border-white/[0.08] hover:border-white/[0.18] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center gap-2 transition-colors"
+                      disabled={retryingFeed}
+                      onClick={() => void handleRetryFeed()}
+                      className="h-10 lg:h-9 px-4 rounded-full bg-[#161619] border border-white/[0.08] hover:border-white/[0.18] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center gap-2 transition-colors disabled:opacity-50"
                     >
-                      <PiArrowsClockwise size={15} />
-                      <span>Retry feed</span>
+                      <PiArrowsClockwise size={15} className={cn(retryingFeed && 'animate-spin')} />
+                      <span>{retryingFeed ? 'Retrying...' : 'Retry feed'}</span>
                     </button>
                   </div>
                 )}
@@ -1645,19 +1973,38 @@ export default function Dashboard() {
                 manualSetup={chartManualSetup}
                 onCrosshairMove={handleCrosshairMove}
                 onChartClick={handleChartClick}
+                signalChoices={signalChoices}
+                selectedSignalId={lockedPositionId ? null : lockedSignalId}
+                previewSignalId={hoveredSignalId}
+                onPreviewSignal={handlePreviewSignal}
+                onSelectSignal={handleLockSignal}
                 onTimeframeChange={handleSelectTimeframe}
                 onExecuteActiveSignal={handleExecuteChartSignal}
                 onExecuteManualSetup={handleExecutePlanner}
                 onClearSelection={() => {
                   setLockedSignalId(null)
+                  setLockedPositionId(null)
                   setHoveredSignalId(null)
                   setManualPlanner((prev) => ({ ...prev, activeOnChart: false }))
                 }}
-                executingSetup={executingChartSignal || executingTrade}
+                executingSetup={
+                  chartActiveSignal
+                    ? Boolean(chartActiveSignal.id && executingSignalIdSet.has(chartActiveSignal.id))
+                    : executingTrade
+                }
+                setupExecuted={
+                  chartActiveSignal
+                    ? Boolean(chartActiveSignal.id && executedSignalIdSet.has(chartActiveSignal.id))
+                    : isPlannerJustPlaced
+                }
+                executionMode={executionMode}
+                onLoadMoreHistory={handleLoadMoreHistory}
+                loadingHistory={loadingHistory}
+                hasMoreHistory={hasMoreHistory}
                 livePrice={effectiveBid}
                 focusTime={focusTime}
                 focusNonce={focusNonce}
-                loading={loading || scanning}
+                loading={loading || retryingFeed}
               />
             )}
           </div>
@@ -1787,20 +2134,13 @@ export default function Dashboard() {
                     signals={feedSignals}
                     selectedSignalId={lockedSignalId}
                     riskAmountUsd={activeRiskUsd}
+                    executionMode={executionMode}
+                    executingSignalIds={executingSignalIdSet}
+                    executedSignalIds={executedSignalIdSet}
                     onFocusSignal={handleFocusSignal}
                     onExecuteSignal={handleExecuteSignal}
                     onLogDecision={handleLogSignalDecision}
                     className="flex-1 min-h-0"
-                  />
-                </div>
-
-                {/* Strategy Engines Matrix */}
-                <div className="shrink-0">
-                  <StrategyPanel
-                    compact
-                    strategies={storeStrategies}
-                    onToggle={handleToggleEngine}
-                    signalCounts={engineStats.counts}
                   />
                 </div>
               </div>
@@ -2076,28 +2416,38 @@ export default function Dashboard() {
                 <div className="space-y-2 pt-1">
                   <button
                     type="button"
-                    disabled={!plannerValid || executingTrade}
+                    disabled={!plannerValid || executingTrade || isPlannerJustPlaced}
                     onClick={() => void handleExecutePlanner()}
                     className={cn(
-                      'w-full h-11 lg:h-10 rounded-xl border text-[13px] font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50',
-                      manualPlanner.action === 'BUY'
-                        ? 'bg-[#34D399]/15 border-[#34D399]/30 text-[#34D399] hover:bg-[#34D399]/25'
-                        : 'bg-[#F87171]/15 border-[#F87171]/30 text-[#F87171] hover:bg-[#F87171]/25'
+                      'w-full h-11 lg:h-10 rounded-xl border text-[13px] font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-70',
+                      isPlannerJustPlaced
+                        ? 'bg-[#34D399]/15 border-[#34D399]/35 text-[#34D399] cursor-default'
+                        : manualPlanner.action === 'BUY'
+                        ? 'bg-[#34D399]/15 border-[#34D399]/30 text-[#34D399] hover:bg-[#34D399]/25 disabled:opacity-50'
+                        : 'bg-[#F87171]/15 border-[#F87171]/30 text-[#F87171] hover:bg-[#F87171]/25 disabled:opacity-50'
                     )}
                   >
-                    {executingTrade ? (
+                    {isPlannerJustPlaced ? (
+                      <PiCheck size={16} />
+                    ) : executingTrade ? (
                       <PiSpinnerGap size={16} className="animate-spin" />
                     ) : (
                       <PiLightning size={16} />
                     )}
                     <span>
-                      {executingTrade
-                        ? 'Submitting to MT5...'
+                      {isPlannerJustPlaced
+                        ? isPaperMode
+                          ? 'Paper Order Placed'
+                          : 'Order Placed'
+                        : executingTrade
+                        ? isPaperMode
+                          ? 'Placing Paper Order...'
+                          : 'Submitting to MT5...'
                         : `Execute ${manualPlanner.entryType === 'limit' ? 'Limit' : 'Market'} ${
                             manualPlanner.action === 'BUY' ? 'Buy' : 'Sell'
-                          }`}
+                          } (${isPaperMode ? 'Paper' : 'MT5'})`}
                     </span>
-                    {!executingTrade && (
+                    {!executingTrade && !isPlannerJustPlaced && (
                       <span className="font-mono tabular-nums text-[12px] opacity-85">
                         ({plannerLots}L)
                       </span>
@@ -2156,7 +2506,7 @@ export default function Dashboard() {
             {/* TAB 3: RISK */}
             {inspectorTab === 'risk' && (
               <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
-                <StatsRow compact stats={dashboardStats} />
+                <StatsRow compact stats={dashboardStats} executionMode={executionMode} />
 
                 <RiskPanel
                   maxDailyLoss={maxDailyLossPct}
@@ -2241,7 +2591,7 @@ export default function Dashboard() {
                     account?.connected ? 'bg-[#34D399]' : 'bg-[#71717A]'
                   )}
                 />
-                <span className="text-[13px] font-medium text-[#A1A1AA]">Exness MT5</span>
+                <span className="text-[13px] font-medium text-[#A1A1AA]">{executionDeskBadge}</span>
               </div>
 
               <div className="flex items-center gap-1 rounded-full bg-[#161619] p-0.5 max-w-full overflow-x-auto">
@@ -2305,7 +2655,7 @@ export default function Dashboard() {
                   void fetchPendingOrders()
                 }}
                 className="w-9 h-9 lg:w-auto lg:h-auto lg:p-1.5 rounded-lg flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.05] transition-colors"
-                title="Refresh MT5 positions & orders"
+                title={isPaperMode ? 'Refresh paper positions & orders' : 'Refresh broker positions & orders'}
               >
                 <PiArrowsClockwise size={15} className={cn(metaLoading && 'animate-spin')} />
               </button>
@@ -2327,7 +2677,7 @@ export default function Dashboard() {
               {dockTab === 'positions' ? (
                 metaPositions.length === 0 ? (
                   <div className="py-10 lg:py-6 text-center text-[13px] text-[#71717A]">
-                    No open positions on MT5
+                    {isPaperMode ? 'No open paper positions' : 'No open broker positions'}
                   </div>
                 ) : (
                   <>
@@ -2339,14 +2689,12 @@ export default function Dashboard() {
                         return (
                           <div
                             key={pos.id}
-                            onClick={() => {
-                              setSymbol(pos.symbol as ChartSymbol)
-                              setSearchParams({ symbol: pos.symbol, timeframe }, { replace: true })
-                              setMobileView('chart')
-                            }}
+                            onClick={() => handleFocusPosition(pos.id, pos.symbol, pos.time)}
                             className={cn(
-                              'rounded-xl border p-3.5 space-y-3 transition-colors',
-                              isCurrent
+                              'rounded-xl border p-3.5 space-y-3 transition-colors cursor-pointer',
+                              lockedPositionId === pos.id
+                                ? 'bg-white/[0.06] border-[#38BDF8]/40'
+                                : isCurrent
                                 ? 'bg-white/[0.04] border-white/[0.14]'
                                 : 'bg-[#161619] border-white/[0.06]'
                             )}
@@ -2413,7 +2761,7 @@ export default function Dashboard() {
                                   if (res?.success) {
                                     showToast(
                                       'Position Closed',
-                                      `Closed ${pos.symbol} on Exness MT5`,
+                                      `Closed ${pos.symbol} on ${executionVenueLabel}`,
                                       'success'
                                     )
                                     await refreshPositions()
@@ -2461,13 +2809,15 @@ export default function Dashboard() {
                         return (
                           <tr
                             key={pos.id}
-                            onClick={() => {
-                              setSymbol(pos.symbol as ChartSymbol)
-                              setSearchParams({ symbol: pos.symbol, timeframe }, { replace: true })
-                            }}
+                            onClick={() => handleFocusPosition(pos.id, pos.symbol, pos.time)}
+                            title="Show this setup on the chart"
                             className={cn(
                               'cursor-pointer transition-colors',
-                              isCurrent ? 'bg-white/[0.04]' : 'hover:bg-white/[0.03]'
+                              lockedPositionId === pos.id
+                                ? 'bg-white/[0.07] shadow-[inset_2px_0_0_#38BDF8]'
+                                : isCurrent
+                                  ? 'bg-white/[0.04]'
+                                  : 'hover:bg-white/[0.03]'
                             )}
                           >
                             <td className="py-2.5 px-4 font-semibold text-[#FAFAFA] whitespace-nowrap">
@@ -2516,7 +2866,7 @@ export default function Dashboard() {
                                     if (res?.success) {
                                       showToast(
                                         'Position Closed',
-                                        `Closed ${pos.symbol} on Exness MT5`,
+                                        `Closed ${pos.symbol} on ${executionVenueLabel}`,
                                         'success'
                                       )
                                       await refreshPositions()
@@ -2546,7 +2896,7 @@ export default function Dashboard() {
                 )
               ) : pendingOrders.length === 0 ? (
                 <div className="py-10 lg:py-6 text-center text-[13px] text-[#71717A]">
-                  No pending MT5 limit or stop orders
+                  {isPaperMode ? 'No pending limit or stop orders' : 'No pending broker limit or stop orders'}
                 </div>
               ) : (
                 <>
@@ -2557,12 +2907,13 @@ export default function Dashboard() {
                       return (
                         <div
                           key={order.id}
-                          onClick={() => {
-                            setSymbol(order.symbol as ChartSymbol)
-                            setSearchParams({ symbol: order.symbol, timeframe }, { replace: true })
-                            setMobileView('chart')
-                          }}
-                          className="rounded-xl border border-white/[0.06] bg-[#161619] p-3.5 space-y-3"
+                          onClick={() => handleFocusPosition(order.id, order.symbol, order.time)}
+                          className={cn(
+                            'rounded-xl border p-3.5 space-y-3 cursor-pointer',
+                            lockedPositionId === order.id
+                              ? 'bg-white/[0.06] border-[#38BDF8]/40'
+                              : 'border-white/[0.06] bg-[#161619]'
+                          )}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
@@ -2652,11 +3003,14 @@ export default function Dashboard() {
                       return (
                         <tr
                           key={order.id}
-                          onClick={() => {
-                            setSymbol(order.symbol as ChartSymbol)
-                            setSearchParams({ symbol: order.symbol, timeframe }, { replace: true })
-                          }}
-                          className="cursor-pointer hover:bg-white/[0.03] transition-colors"
+                          onClick={() => handleFocusPosition(order.id, order.symbol, order.time)}
+                          title="Show this order on the chart"
+                          className={cn(
+                            'cursor-pointer transition-colors',
+                            lockedPositionId === order.id
+                              ? 'bg-white/[0.07] shadow-[inset_2px_0_0_#38BDF8]'
+                              : 'hover:bg-white/[0.03]'
+                          )}
                         >
                           <td className="py-2.5 px-4 font-semibold text-[#FAFAFA] whitespace-nowrap">
                             {order.symbol}

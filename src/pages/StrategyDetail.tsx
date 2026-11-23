@@ -6,6 +6,7 @@ import {
   PiCaretUp,
   PiChartBar,
   PiClock,
+  PiPlay,
   PiShieldCheck,
   PiSlidersHorizontal,
   PiTarget,
@@ -23,6 +24,7 @@ import {
   TRAXO_STRATEGY_MAP,
   normalizeTraxoStrategyId,
   type LegacyStrategyCatalogId,
+  type TraxoCatalogStrategyId,
   type TraxoMarketPillar,
 } from '@/lib/traxoStrategies';
 import { useAnalysisSignalStore, type StoredSignal } from '@/stores/useAnalysisSignalStore';
@@ -47,7 +49,7 @@ interface UnifiedDetailSpec {
   takeProfitLogic: string;
   idealSessions: string;
   riskModel: string;
-  backtestTargetId: LegacyStrategyCatalogId;
+  backtestTargetId: TraxoCatalogStrategyId | LegacyStrategyCatalogId;
   isProprietary: boolean;
 }
 
@@ -302,7 +304,7 @@ function resolveDetailSpec(strategyId?: string): UnifiedDetailSpec {
       takeProfitLogic: s.takeProfitLogic,
       idealSessions: s.idealSessions,
       riskModel: s.riskModel,
-      backtestTargetId: s.backtestFallbackId,
+      backtestTargetId: s.id,
       isProprietary: true,
     };
   }
@@ -330,7 +332,7 @@ function resolveDetailSpec(strategyId?: string): UnifiedDetailSpec {
     takeProfitLogic: def.takeProfitLogic,
     idealSessions: def.idealSessions,
     riskModel: def.riskModel,
-    backtestTargetId: def.backtestFallbackId,
+    backtestTargetId: def.id,
     isProprietary: true,
   };
 }
@@ -495,6 +497,19 @@ function SignalItemCard({ signal }: { signal: StoredSignal }) {
                   • {item}
                 </p>
               ))}
+            </div>
+          )}
+
+          {(outcome === 'win' || outcome === 'loss') && (
+            <div className="pt-3 border-t border-white/[0.06] flex items-center justify-end">
+              <Link
+                to={`/replay/${encodeURIComponent(signal.id)}`}
+                state={{ signal }}
+                className="h-8 px-3 rounded-lg bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[12.5px] font-medium text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors"
+              >
+                <PiPlay size={13} className="text-[#34D399]" />
+                <span>Open Outcome Replay</span>
+              </Link>
             </div>
           )}
         </div>

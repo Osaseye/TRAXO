@@ -16,15 +16,24 @@ export function LandingBackgroundAnimation() {
         }}
       />
 
-      {/* ── 2. Deep Obsidian Gradient Wells (No blinding colors) ────────────── */}
-      <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[550px] bg-gradient-to-b from-[#34D399]/[0.06] via-[#141417]/[0.2] to-transparent rounded-full blur-[140px]" />
-      <div className="absolute top-[35%] -left-32 w-[600px] h-[500px] bg-white/[0.02] rounded-full blur-[120px]" />
-      <div className="absolute top-[65%] -right-32 w-[650px] h-[500px] bg-[#34D399]/[0.03] rounded-full blur-[140px]" />
-      <div className="absolute bottom-10 left-1/3 w-[700px] h-[400px] bg-white/[0.015] rounded-full blur-[130px]" />
+      {/* ── 2. Deep Obsidian Gradient Wells (Disabled blurs on mobile iOS GPU) ── */}
+      <div
+        className="md:hidden absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(circle at 50% 0%, rgba(52, 211, 153, 0.08), transparent 55%)',
+        }}
+      />
+      <div className="hidden md:block">
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[550px] bg-gradient-to-b from-[#34D399]/[0.06] via-[#141417]/[0.2] to-transparent rounded-full blur-[140px]" />
+        <div className="absolute top-[35%] -left-32 w-[600px] h-[500px] bg-white/[0.02] rounded-full blur-[120px]" />
+        <div className="absolute top-[65%] -right-32 w-[650px] h-[500px] bg-[#34D399]/[0.03] rounded-full blur-[140px]" />
+        <div className="absolute bottom-10 left-1/3 w-[700px] h-[400px] bg-white/[0.015] rounded-full blur-[130px]" />
+      </div>
 
-      {/* ── 3. Kinetic Candlestick Wicks & Liquidity Order Depth SVG ─────────── */}
+      {/* ── 3. Kinetic Candlestick Wicks & Liquidity Order Depth SVG (Desktop) ─ */}
       <svg
-        className="absolute inset-0 w-full h-full opacity-[0.18]"
+        className="hidden md:block absolute inset-0 w-full h-full opacity-[0.18]"
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
@@ -120,10 +129,10 @@ export function LandingBackgroundAnimation() {
             transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
           >
             <line x1="8%" y1="120" x2="8%" y2="240" stroke="#34D399" strokeWidth="1" />
-            <rect x="calc(8% - 3px)" y="150" width="6" height="50" fill="#34D399" rx="1" opacity="0.6" />
+            <rect x="8%" y="150" width="6" height="50" fill="#34D399" rx="1" opacity="0.6" />
 
             <line x1="10%" y1="180" x2="10%" y2="290" stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
-            <rect x="calc(10% - 3px)" y="210" width="6" height="40" fill="#27272A" rx="1" />
+            <rect x="10%" y="210" width="6" height="40" fill="#27272A" rx="1" />
           </motion.g>
 
           {/* Candle Set Center-Right (Displacement Wick) */}
@@ -132,10 +141,10 @@ export function LandingBackgroundAnimation() {
             transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
           >
             <line x1="88%" y1="260" x2="88%" y2="420" stroke="#34D399" strokeWidth="1" />
-            <rect x="calc(88% - 3px)" y="300" width="6" height="70" fill="#34D399" rx="1" opacity="0.5" />
+            <rect x="88%" y="300" width="6" height="70" fill="#34D399" rx="1" opacity="0.5" />
 
             <line x1="91%" y1="360" x2="91%" y2="480" stroke="#F87171" strokeWidth="1" opacity="0.6" />
-            <rect x="calc(91% - 3px)" y="390" width="6" height="45" fill="#F87171" rx="1" opacity="0.3" />
+            <rect x="91%" y="390" width="6" height="45" fill="#F87171" rx="1" opacity="0.3" />
           </motion.g>
 
           {/* Candle Set Mid-Lower Left */}
@@ -144,10 +153,10 @@ export function LandingBackgroundAnimation() {
             transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}
           >
             <line x1="6%" y1="620" x2="6%" y2="760" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-            <rect x="calc(6% - 3px)" y="660" width="6" height="60" fill="#27272A" rx="1" />
+            <rect x="6%" y="660" width="6" height="60" fill="#27272A" rx="1" />
 
             <line x1="8%" y1="580" x2="8%" y2="700" stroke="#34D399" strokeWidth="1" />
-            <rect x="calc(8% - 3px)" y="610" width="6" height="50" fill="#34D399" rx="1" opacity="0.5" />
+            <rect x="8%" y="610" width="6" height="50" fill="#34D399" rx="1" opacity="0.5" />
           </motion.g>
         </g>
       </svg>

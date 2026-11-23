@@ -1,4 +1,5 @@
 import redis from './redisClient';
+import { queryCandles, upsertCandles } from '../storage/sqliteDb';
 import type { MarketCandle } from './marketDataService';
 
 export const getCandleKey = (symbol: string, interval: string, outputsize = 200): string =>
@@ -43,6 +44,13 @@ export async function cacheCandles(
   candles: MarketCandle[],
   outputsize = 200
 ): Promise<void> {
+  // Always persist permanently in embedded SQLite archive first
+  try {
+    upsertCandles(symbol, interval, candles);
+  } catch (sqliteErr: any) {
+    console.warn(`[candle-archive] Failed to persist candles in SQLite for ${symbol}:${interval}:`, sqliteErr?.message);
+  }
+
   const key = getCandleKey(symbol, interval, outputsize);
   const intervalMinutes = intervalToMinutes(interval);
   const ttlSeconds = intervalMinutes * 60 * 2;
@@ -56,5 +64,17 @@ export async function cacheCandles(
     await redis.set(key, JSON.stringify(candles), 'EX', ttlSeconds);
   } catch (error) {
     console.error(`Error caching candles for ${key} in Redis:`, error);
+  }
+}
+
+export function getArchivedCandlesFallback(
+  symbol: string,
+  interval: string,
+  limit = 200
+): MarketCandle[] {
+  try {
+    return queryCandles({ symbol, timeframe: interval, limit });
+  } catch {
+    return [];
   }
 }

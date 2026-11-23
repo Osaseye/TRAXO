@@ -25,14 +25,14 @@ const TELEMETRY_STATS = [
 
 export function StatsBar() {
   return (
-    <section className="py-12 sm:py-20 px-4 sm:px-6 border-y border-white/[0.06] bg-[#09090B] select-none font-sans">
+    <section className="py-12 sm:py-20 px-4 sm:px-6 border-y border-white/[0.06] bg-[#09090B] font-sans">
       <div className="max-w-7xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-7 sm:gap-12">
         {TELEMETRY_STATS.map((stat, idx) => (
           <motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 14 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
+            viewport={{ once: true, amount: 0.05 }}
             transition={{
               duration: 0.45,
               delay: idx * 0.08,

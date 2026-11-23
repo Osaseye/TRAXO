@@ -17,8 +17,6 @@ export interface RedisLike {
   scanStream(options: { match: string; count?: number }): NodeJS.EventEmitter;
 }
 
-const REDIS_URL = env.upstashRedisUrl;
-
 /**
  * High-fidelity in-memory Redis implementation for offline/local resilience.
  * Supports TTL expiration, list operations, and pub/sub emulation.
@@ -106,7 +104,7 @@ function createMemoryStore(): RedisLike {
       return 1;
     },
 
-    async subscribe(channel: string): Promise<any> {
+    async subscribe(_channel: string): Promise<any> {
       return 'OK';
     },
 
@@ -131,150 +129,165 @@ function createMemoryStore(): RedisLike {
   };
 }
 
-const memoryStore = createMemoryStore();
-let isRemoteHealthy = false;
-let client: Redis | null = null;
+interface ManagedRedisHandle {
+  name: string;
+  client: Redis | null;
+  healthy: boolean;
+}
 
-if (REDIS_URL && !REDIS_URL.includes('localhost:0')) {
+function createManagedClient(
+  url: string,
+  name: string,
+  connectTimeoutMs: number
+): ManagedRedisHandle {
+  const handle: ManagedRedisHandle = { name, client: null, healthy: false };
+  if (!url || url.includes('localhost:0')) {
+    return handle;
+  }
+
   try {
-    client = new Redis(REDIS_URL, {
+    const c = new Redis(url, {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
-      connectTimeout: 3000,
+      connectTimeout: connectTimeoutMs,
       enableOfflineQueue: false,
       retryStrategy(times) {
-        if (times >= 2) {
-          console.warn('[Redis] Remote Upstash host unreachable. Suppressing reconnection loop and using in-memory store.');
-          return null; // Stop reconnecting after 2 tries
+        if ((c as any)?._dnsFailed || times >= 4) {
+          console.warn(
+            `[Redis:${name}] Remote host unreachable; suppressing retries and falling back gracefully.`
+          );
+          return null;
         }
-        return 500;
+        return Math.min(1500, times * 400);
       },
     });
 
-    client.on('connect', () => {
-      isRemoteHealthy = true;
-      console.log('Successfully connected to Upstash Redis.');
+    c.on('connect', () => {
+      handle.healthy = true;
+      console.log(`Successfully connected to Upstash Redis (${name}).`);
     });
 
-    client.on('ready', () => {
-      isRemoteHealthy = true;
+    c.on('ready', () => {
+      handle.healthy = true;
     });
 
-    client.on('error', (error: any) => {
-      isRemoteHealthy = false;
+    c.on('close', () => {
+      handle.healthy = false;
+    });
+
+    c.on('error', (error: any) => {
+      handle.healthy = false;
       const msg = error?.message || String(error);
       if (msg.includes('ENOTFOUND') || msg.includes('getaddrinfo')) {
-        // Suppress DNS failure spam; warn once gracefully
-        if ((client as any)?._dnsWarned) return;
-        (client as any)._dnsWarned = true;
-        console.warn(`[Redis] Remote host unresolvable (${msg}). Seamlessly using in-memory fallback.`);
+        (c as any)._dnsFailed = true;
+        if ((c as any)?._dnsWarned) return;
+        (c as any)._dnsWarned = true;
+        console.warn(`[Redis:${name}] Remote host unresolvable (${msg}). Using fallback.`);
       } else {
-        console.warn('[Redis] Client notice:', msg);
+        console.warn(`[Redis:${name}] Client notice:`, msg);
       }
     });
 
-    // Attempt gentle connect without unhandled rejection
-    client.connect().catch(() => {
-      isRemoteHealthy = false;
+    c.connect().catch(() => {
+      handle.healthy = false;
     });
+
+    handle.client = c;
   } catch (err: any) {
-    console.warn('[Redis] Initialization error, using in-memory cache:', err?.message || err);
-    isRemoteHealthy = false;
+    console.warn(`[Redis:${name}] Initialization error:`, err?.message || err);
+    handle.healthy = false;
   }
-} else {
-  console.log('[Redis] No remote URL configured; using high-fidelity in-memory cache.');
+
+  return handle;
 }
 
-/**
- * Resilient Redis facade: routes to live remote Redis when healthy,
- * or effortlessly to the in-memory store when unreachable.
- */
-const redis: RedisLike = {
-  async get(key: string) {
-    if (isRemoteHealthy && client) {
-      try { return await client.get(key); } catch { return memoryStore.get(key); }
-    }
-    return memoryStore.get(key);
-  },
+const memoryStore = createMemoryStore();
+const primaryHandle = createManagedClient(env.upstashRedisUrl, 'primary', 5_000);
+const backupHandle = createManagedClient(env.upstashBackupRedisUrl, 'backup', 6_000);
 
-  async set(key: string, value: string, ...args: any[]) {
-    if (isRemoteHealthy && client) {
-      try { return await (client as any).set(key, value, ...args); } catch { return memoryStore.set(key, value, ...args); }
+function createRoutedFacade(order: ManagedRedisHandle[]): RedisLike {
+  const pickActive = (): Redis | null => {
+    for (const h of order) {
+      if (h.healthy && h.client) return h.client;
     }
-    return memoryStore.set(key, value, ...args);
-  },
+    return null;
+  };
 
-  async del(...keys: string[]) {
-    if (isRemoteHealthy && client) {
-      try { return await client.del(...keys); } catch { return memoryStore.del(...keys); }
+  async function runChain<T>(
+    op: (client: Redis) => Promise<T>,
+    memOp: () => Promise<T>
+  ): Promise<T> {
+    for (const h of order) {
+      if (h.healthy && h.client) {
+        try {
+          return await op(h.client);
+        } catch {
+          // Fail over to next client in chain
+        }
+      }
     }
-    return memoryStore.del(...keys);
-  },
+    return memOp();
+  }
 
-  async mget(keys: string[]) {
-    if (isRemoteHealthy && client) {
-      try { return await client.mget(keys); } catch { return memoryStore.mget(keys); }
-    }
-    return memoryStore.mget(keys);
-  },
+  return {
+    get: (key) => runChain((c) => c.get(key), () => memoryStore.get(key)),
+    set: (key, value, ...args) =>
+      runChain((c) => (c as any).set(key, value, ...args), () => memoryStore.set(key, value, ...args)),
+    del: (...keys) => runChain((c) => c.del(...keys), () => memoryStore.del(...keys)),
+    mget: (keys) => runChain((c) => c.mget(keys), () => memoryStore.mget(keys)),
+    ping: () => runChain((c) => c.ping(), () => memoryStore.ping()),
+    lpush: (key, ...values) => runChain((c) => c.lpush(key, ...values), () => memoryStore.lpush(key, ...values)),
+    ltrim: (key, start, stop) => runChain((c) => c.ltrim(key, start, stop), () => memoryStore.ltrim(key, start, stop)),
+    lrange: (key, start, stop) => runChain((c) => c.lrange(key, start, stop), () => memoryStore.lrange(key, start, stop)),
+    on(event, listener) {
+      for (const h of order) {
+        if (h.client) {
+          try { h.client.on(event, listener); } catch {}
+        }
+      }
+      memoryStore.on(event, listener);
+      return this;
+    },
+    publish: (channel, message) => runChain((c) => c.publish(channel, message), () => memoryStore.publish(channel, message)),
+    subscribe: (channel) => runChain((c) => c.subscribe(channel), () => memoryStore.subscribe(channel)),
+    scanStream(options) {
+      const c = pickActive();
+      if (c) {
+        try { return c.scanStream(options); } catch {}
+      }
+      return memoryStore.scanStream(options);
+    },
+  };
+}
 
-  async ping() {
-    if (isRemoteHealthy && client) {
-      try { return await client.ping(); } catch { return memoryStore.ping(); }
-    }
-    return memoryStore.ping();
-  },
+/** Primary hot Redis facade: primary (South Africa) -> backup (US-Central) -> memory */
+const redis: RedisLike = createRoutedFacade([primaryHandle, backupHandle]);
 
-  async lpush(key: string, ...values: string[]) {
-    if (isRemoteHealthy && client) {
-      try { return await client.lpush(key, ...values); } catch { return memoryStore.lpush(key, ...values); }
-    }
-    return memoryStore.lpush(key, ...values);
-  },
+/** Offload & cloud backup Redis facade: backup (US-Central) -> primary (South Africa) -> memory */
+export const backupRedis: RedisLike = createRoutedFacade([backupHandle, primaryHandle]);
 
-  async ltrim(key: string, start: number, stop: number) {
-    if (isRemoteHealthy && client) {
-      try { return await client.ltrim(key, start, stop); } catch { return memoryStore.ltrim(key, start, stop); }
-    }
-    return memoryStore.ltrim(key, start, stop);
-  },
+export function getRedisTopologyStatus(): {
+  primaryHealthy: boolean;
+  backupHealthy: boolean;
+  backupConfigured: boolean;
+} {
+  return {
+    primaryHealthy: primaryHandle.healthy,
+    backupHealthy: backupHandle.healthy,
+    backupConfigured: Boolean(env.upstashBackupRedisUrl || env.upstashBackupRedisRestUrl),
+  };
+}
 
-  async lrange(key: string, start: number, stop: number) {
-    if (isRemoteHealthy && client) {
-      try { return await client.lrange(key, start, stop); } catch { return memoryStore.lrange(key, start, stop); }
+export function closeRedis(): void {
+  for (const h of [primaryHandle, backupHandle]) {
+    if (h.client) {
+      try {
+        h.client.disconnect(false);
+      } catch {}
+      h.healthy = false;
     }
-    return memoryStore.lrange(key, start, stop);
-  },
-
-  on(event: string, listener: (...args: any[]) => void) {
-    if (client) {
-      try { client.on(event, listener); } catch {}
-    }
-    memoryStore.on(event, listener);
-    return this;
-  },
-
-  async publish(channel: string, message: string) {
-    if (isRemoteHealthy && client) {
-      try { return await client.publish(channel, message); } catch { return memoryStore.publish(channel, message); }
-    }
-    return memoryStore.publish(channel, message);
-  },
-
-  async subscribe(channel: string) {
-    if (isRemoteHealthy && client) {
-      try { return await client.subscribe(channel); } catch { return memoryStore.subscribe(channel); }
-    }
-    return memoryStore.subscribe(channel);
-  },
-
-  scanStream(options: { match: string; count?: number }) {
-    if (isRemoteHealthy && client) {
-      try { return client.scanStream(options); } catch { return memoryStore.scanStream(options); }
-    }
-    return memoryStore.scanStream(options);
-  },
-};
+  }
+}
 
 export default redis;
 export { redis };

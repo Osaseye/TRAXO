@@ -3,12 +3,14 @@ import { PiArrowRight } from 'react-icons/pi'
 
 export function CTASection() {
   return (
-    <section className="relative py-20 sm:py-32 lg:py-40 px-4 sm:px-6 bg-[#09090B] overflow-hidden select-none text-center font-sans">
+    <section className="relative py-20 sm:py-32 lg:py-40 px-4 sm:px-6 bg-[#09090B] overflow-x-clip text-center font-sans">
       {/* ── Bespoke Atmospheric Depth Background ────────────────────────────── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <img
           src="/brand/cta-ambient-depth.png"
           alt=""
+          loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover opacity-40 select-none"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#09090B] via-[#09090B]/50 to-[#09090B]" />

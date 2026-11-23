@@ -7,6 +7,9 @@ export interface SignalFeedProps {
   signals: DashboardSignalItem[]
   selectedSignalId?: string | null
   riskAmountUsd?: number
+  executionMode?: 'paper' | 'metaapi'
+  executingSignalIds?: Set<string>
+  executedSignalIds?: Set<string>
   onFocusSignal?: (signal: DashboardSignalItem) => void
   onExecuteSignal?: (signal: DashboardSignalItem, lotSize: number) => Promise<void> | void
   onLogDecision?: (signal: DashboardSignalItem, taken: boolean) => void
@@ -27,6 +30,9 @@ export function SignalFeed({
   signals,
   selectedSignalId = null,
   riskAmountUsd = 50,
+  executionMode = 'paper',
+  executingSignalIds,
+  executedSignalIds,
   onFocusSignal,
   onExecuteSignal,
   onLogDecision,
@@ -125,7 +131,7 @@ export function SignalFeed({
             />
             <p className="text-[14px] font-medium text-[#FAFAFA]">No setups matched</p>
             <p className="text-[13px] text-[#71717A] mt-1 leading-relaxed max-w-[240px]">
-              Run a manual scan or adjust your active strategy engines below.
+              Live background scanner is active. Configure engines on the Strategies page.
             </p>
           </div>
         ) : (
@@ -135,6 +141,9 @@ export function SignalFeed({
               signal={signal}
               isSelected={selectedSignalId === signal.id}
               riskAmountUsd={riskAmountUsd}
+              executionMode={executionMode}
+              isExecuting={executingSignalIds?.has(signal.id)}
+              isExecuted={executedSignalIds?.has(signal.id)}
               onFocus={onFocusSignal}
               onExecute={onExecuteSignal}
               onLogDecision={onLogDecision}

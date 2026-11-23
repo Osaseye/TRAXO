@@ -14,6 +14,7 @@ const StrategyDetail = lazy(() => import('@/pages/StrategyDetail'))
 const Settings = lazy(() => import('@/pages/Settings'))
 const Notifications = lazy(() => import('@/pages/Notifications'))
 const JournalDateDetail = lazy(() => import('@/pages/JournalDateDetail'))
+const TradeReplayPage = lazy(() => import('@/pages/TradeReplayPage'))
 const Backtesting = lazy(() => import('@/pages/Backtesting'))
 const AdminPanel = lazy(() => import('@/pages/AdminPanel'))
 const AdminLogin = lazy(() => import('@/pages/AdminLogin'))
@@ -52,6 +53,7 @@ export default function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/journal" element={<TradingJournal />} />
                 <Route path="/journal/:date" element={<JournalDateDetail />} />
+                <Route path="/replay/:replayId" element={<TradeReplayPage />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/strategies" element={<StrategyManager />} />
                 <Route path="/strategies/:strategyId" element={<StrategyDetail />} />
@@ -67,6 +69,7 @@ export default function App() {
               <Route element={<AppLayout />}>
                 <Route path="/admin" element={<AdminPanel />} />
                 <Route path="/admin/signals" element={<AdminSignals />} />
+                <Route path="/admin/replay/:replayId" element={<TradeReplayPage />} />
               </Route>
             </Route>
 

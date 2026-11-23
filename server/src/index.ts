@@ -1,18 +1,39 @@
+import fs from 'fs';
 import http from 'http';
+import path from 'path';
 import cors from 'cors';
 import express from 'express';
-import { env } from './config/env';
+import { env, resolveCorsOrigin } from './config/env';
 import { getScannableInstruments } from './config/instruments';
 import { newsEngine, startNewsPoller, stopNewsPoller } from './services/news/newsEngine';
 import { startCron } from './modules/scanner/scannerCron';
+import { hydratePaperStateFromCloudBackup } from './modules/storage/paperCloudBackup';
 import { broadcast, initWebSocketServer } from './modules/websocket/websocketManager';
 import { registerRoutes } from './routes';
 
 export function createApp() {
   const app = express();
-  app.use(cors());
+  app.use(cors({ origin: resolveCorsOrigin(env.allowedOrigins) }));
   app.use(express.json());
   registerRoutes(app);
+
+  const distDir = path.resolve(__dirname, '../../dist');
+  const distIndexPath = path.resolve(__dirname, '../../dist/index.html');
+  if (fs.existsSync(distIndexPath)) {
+    app.use(express.static(distDir));
+    app.get('*', (req: any, res: any, next: any) => {
+      if (
+        req.path.startsWith('/api') ||
+        req.path === '/health' ||
+        req.path.startsWith('/socket.io')
+      ) {
+        next();
+        return;
+      }
+      res.sendFile(distIndexPath);
+    });
+  }
+
   return app;
 }
 
@@ -33,7 +54,11 @@ export function bootstrapServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
-    startCron();
+    void hydratePaperStateFromCloudBackup()
+      .catch(() => {})
+      .finally(() => {
+        startCron();
+      });
     newsEngine.setTransitionListener(
       (evt) => broadcast({ type: evt.type, payload: evt }),
       getScannableInstruments().map((i) => i.symbol)
@@ -57,6 +82,7 @@ export function bootstrapServer() {
   return { app, server };
 }
 
-if (process.env.TRAXO_NO_LISTEN !== 'true') {
+const isTestProcess = process.argv.some((arg) => /\.test\.[tj]s$/i.test(arg));
+if (process.env.TRAXO_NO_LISTEN !== 'true' && !isTestProcess) {
   bootstrapServer();
 }

@@ -9,7 +9,9 @@ export const VALID_CATEGORIES = new Set<string>(NEWS_CATEGORIES);
 export type NewsSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM';
 
 export const NEWS_TTL_SECONDS = 15 * 60;
-const REDIS_OP_TIMEOUT_MS = 2_000;
+export const CALENDAR_TTL_SECONDS = 30 * 60;
+export const FOREX_FACTORY_CALENDAR_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
+const REDIS_OP_TIMEOUT_MS = 4_500;
 const FINNHUB_TIMEOUT_MS = 8_000;
 
 export const DEFAULT_FREEZE_BEFORE_MINUTES = 30;
@@ -91,10 +93,21 @@ export interface PollResult {
   categories: Record<string, PollCategoryResult>;
 }
 
+export interface RawForexFactoryEvent {
+  title?: string;
+  country?: string;
+  date?: string;
+  impact?: string;
+  forecast?: string;
+  previous?: string;
+}
+
 export interface NewsEngineOptions {
   finnhubApiKey?: string;
+  finnhubApiKeys?: string[];
   redisClient?: UpstashRedisLike | null;
   fetcher?: (category: string, limit?: number) => Promise<NormalizedNewsItem[]>;
+  calendarFetcher?: () => Promise<RawForexFactoryEvent[]>;
   interCategoryDelayMs?: number;
   ttlSeconds?: number;
 }
@@ -106,7 +119,10 @@ export interface UpstashRedisLike {
 }
 
 function createUpstashRedisClient(): UpstashRedisLike | null {
-  if (!env.upstashRedisRestUrl || !env.upstashRedisRestToken) {
+  // Prefer dedicated backup/offload Upstash instance so news polling does not consume primary execution quota
+  const restUrl = env.upstashBackupRedisRestUrl || env.upstashRedisRestUrl;
+  const restToken = env.upstashBackupRedisRestToken || env.upstashRedisRestToken;
+  if (!restUrl || !restToken) {
     console.log('[news-cache] No Redis credentials — using local in-memory cache');
     return null;
   }
@@ -114,10 +130,11 @@ function createUpstashRedisClient(): UpstashRedisLike | null {
   try {
     const { Redis } = require('@upstash/redis');
     const client = new Redis({
-      url: env.upstashRedisRestUrl,
-      token: env.upstashRedisRestToken,
+      url: restUrl,
+      token: restToken,
     });
-    console.log('[news-cache] Connected to Upstash Redis');
+    const roleLabel = env.upstashBackupRedisRestUrl ? 'backup offload' : 'primary';
+    console.log(`[news-cache] Connected to Upstash Redis (${roleLabel})`);
     return client;
   } catch (err: any) {
     console.warn('[news-cache] Failed to initialise Upstash Redis:', err?.message || err);
@@ -142,34 +159,49 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
-function httpsGetJson(url: string, timeoutMs = FINNHUB_TIMEOUT_MS): Promise<unknown> {
+function httpsGetJson(url: string, timeoutMs = FINNHUB_TIMEOUT_MS, provider = 'Finnhub'): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, (res) => {
-      if (res.statusCode === 429) {
-        reject(new Error('Finnhub rate limit reached (429)'));
-        res.resume();
-        return;
-      }
-      if (res.statusCode && res.statusCode >= 400) {
-        reject(new Error(`Finnhub HTTP error (${res.statusCode})`));
-        res.resume();
-        return;
-      }
-      let raw = '';
-      res.on('data', (chunk) => {
-        raw += chunk;
-      });
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(raw));
-        } catch (e: any) {
-          reject(new Error(`JSON parse error: ${e.message}`));
+    const req = https.get(
+      url,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; TRAXO/1.0)',
+          Accept: 'application/json',
+        },
+      },
+      (res) => {
+        if (res.statusCode === 429) {
+          const retryAfter = Number(res.headers['retry-after']) || 300;
+          const err: any = new Error(`${provider} rate limit reached (429, retry after ${retryAfter}s)`);
+          err.statusCode = 429;
+          err.retryAfterSec = retryAfter;
+          reject(err);
+          res.resume();
+          return;
         }
-      });
-    });
+        if (res.statusCode && res.statusCode >= 400) {
+          const err: any = new Error(`${provider} HTTP error (${res.statusCode})`);
+          err.statusCode = res.statusCode;
+          reject(err);
+          res.resume();
+          return;
+        }
+        let raw = '';
+        res.on('data', (chunk) => {
+          raw += chunk;
+        });
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(raw));
+          } catch (e: any) {
+            reject(new Error(`${provider} JSON parse error: ${e.message}`));
+          }
+        });
+      }
+    );
     req.on('error', reject);
     req.setTimeout(timeoutMs, () => {
-      req.destroy(new Error(`Finnhub request timed out (${timeoutMs / 1000}s)`));
+      req.destroy(new Error(`${provider} request timed out (${timeoutMs / 1000}s)`));
     });
   });
 }
@@ -284,7 +316,13 @@ export class NewsEngine {
   private readonly upstashRedis: UpstashRedisLike | null;
   private readonly memoryCache = new Map<string, { data: NormalizedNewsItem[]; expiresAt: number }>();
   private readonly customFetcher?: (category: string, limit?: number) => Promise<NormalizedNewsItem[]>;
+  private readonly customCalendarFetcher?: () => Promise<RawForexFactoryEvent[]>;
+  private calendarCache: { events: Omit<CalendarEvent, 'minutes_away'>[]; expiresAt: number } | null = null;
+  private calendarRetryAfter = 0;
   private readonly apiKeyOverride?: string;
+  private readonly apiKeysOverride?: string[];
+  private finnhubKeyIndex = 0;
+  private readonly finnhubCooldownUntil = new Map<string, number>();
   private readonly interCategoryDelayMs: number;
   private readonly ttlSeconds: number;
 
@@ -314,9 +352,24 @@ export class NewsEngine {
     this.upstashRedis =
       options.redisClient !== undefined ? options.redisClient : createUpstashRedisClient();
     this.customFetcher = options.fetcher;
+    this.customCalendarFetcher = options.calendarFetcher;
     this.apiKeyOverride = options.finnhubApiKey;
+    this.apiKeysOverride = options.finnhubApiKeys;
     this.interCategoryDelayMs = options.interCategoryDelayMs ?? 500;
     this.ttlSeconds = options.ttlSeconds ?? NEWS_TTL_SECONDS;
+  }
+
+  private getFinnhubKeyPool(): string[] {
+    if (this.apiKeysOverride && this.apiKeysOverride.length > 0) {
+      return Array.from(new Set(this.apiKeysOverride.map((k) => k.trim()).filter(Boolean)));
+    }
+    if (this.apiKeyOverride) {
+      return [this.apiKeyOverride.trim()].filter(Boolean);
+    }
+    if (env.finnhubApiKeys && env.finnhubApiKeys.length > 0) {
+      return env.finnhubApiKeys;
+    }
+    return env.finnhubApiKey ? [env.finnhubApiKey] : [];
   }
 
   isRedisAvailable(): boolean {
@@ -327,6 +380,7 @@ export class NewsEngine {
     return {
       started: this.started,
       redisAvailable: this.isRedisAvailable(),
+      finnhubKeyCount: this.getFinnhubKeyPool().length,
       memoryCacheKeys: Array.from(this.memoryCache.keys()),
       lastPolledAt: this.lastPolledAt,
       lastPollResult: this.lastPollResult,
@@ -404,17 +458,160 @@ export class NewsEngine {
       return customItems.slice(0, limit).map(normaliseNewsItem);
     }
 
-    const token = this.apiKeyOverride ?? env.finnhubApiKey;
-    if (!token) {
+    const keys = this.getFinnhubKeyPool();
+    if (keys.length === 0) {
       throw new Error('FINNHUB_API_KEY is not set on the server');
     }
 
-    const url = `https://finnhub.io/api/v1/news?category=${cat}&token=${token}`;
-    const items = await httpsGetJson(url, FINNHUB_TIMEOUT_MS);
-    if (!Array.isArray(items)) {
-      throw new Error(`Unexpected Finnhub response: ${JSON.stringify(items).slice(0, 200)}`);
+    const now = Date.now();
+    const startIdx = this.finnhubKeyIndex % keys.length;
+    this.finnhubKeyIndex = (this.finnhubKeyIndex + 1) % keys.length;
+
+    const orderedKeys: string[] = [];
+    for (let i = 0; i < keys.length; i++) {
+      orderedKeys.push(keys[(startIdx + i) % keys.length]);
     }
-    return items.slice(0, limit).map(normaliseNewsItem);
+
+    // Prefer keys not currently in a 429 cooldown window first
+    const availableFirst = [
+      ...orderedKeys.filter((k) => (this.finnhubCooldownUntil.get(k) || 0) <= now),
+      ...orderedKeys.filter((k) => (this.finnhubCooldownUntil.get(k) || 0) > now),
+    ];
+
+    let lastErr: Error | null = null;
+    for (const token of availableFirst) {
+      const url = `https://finnhub.io/api/v1/news?category=${cat}&token=${token}`;
+      try {
+        const items = await httpsGetJson(url, FINNHUB_TIMEOUT_MS);
+        if (!Array.isArray(items)) {
+          throw new Error(`Unexpected Finnhub response: ${JSON.stringify(items).slice(0, 200)}`);
+        }
+        return items.slice(0, limit).map(normaliseNewsItem);
+      } catch (err: any) {
+        lastErr = err instanceof Error ? err : new Error(String(err));
+        const msg = lastErr.message || '';
+        if (msg.includes('429')) {
+          this.finnhubCooldownUntil.set(token, Date.now() + 60_000);
+          console.warn(`[news-engine] Finnhub key rate-limited (429); rotating to next key...`);
+          continue;
+        }
+        if (msg.includes('401') && availableFirst.length > 1) {
+          console.warn(`[news-engine] Finnhub key rejected (401); trying fallback key...`);
+          continue;
+        }
+        if (availableFirst.length > 1) {
+          continue;
+        }
+        throw lastErr;
+      }
+    }
+
+    throw lastErr || new Error('Failed to fetch news from all configured Finnhub keys');
+  }
+
+  async fetchForexFactoryCalendar(forceRefresh = false): Promise<Omit<CalendarEvent, 'minutes_away'>[]> {
+    // Preserve isolated deterministic unit tests when a mock news fetcher is injected without a calendar mock
+    if (this.customFetcher && !this.customCalendarFetcher) {
+      return [];
+    }
+
+    if (!forceRefresh && this.calendarCache && Date.now() <= this.calendarCache.expiresAt) {
+      return this.calendarCache.events;
+    }
+
+    // Check distributed Redis calendar cache across server restarts before hitting ForexFactory CDN
+    if (!forceRefresh && !this.customCalendarFetcher && this.upstashRedis && Date.now() >= this.upstashRetryAfter) {
+      try {
+        const cachedRaw = await withTimeout(
+          this.upstashRedis.get('calendar:ff_thisweek'),
+          REDIS_OP_TIMEOUT_MS,
+          'Upstash Calendar GET'
+        );
+        if (cachedRaw) {
+          const parsed = typeof cachedRaw === 'string' ? JSON.parse(cachedRaw) : cachedRaw;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.calendarCache = {
+              events: parsed,
+              expiresAt: Date.now() + CALENDAR_TTL_SECONDS * 1000,
+            };
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+
+    if (Date.now() < this.calendarRetryAfter) {
+      return this.calendarCache?.events ?? [];
+    }
+
+    let rawList: unknown;
+    try {
+      rawList = this.customCalendarFetcher
+        ? await this.customCalendarFetcher()
+        : await httpsGetJson(FOREX_FACTORY_CALENDAR_URL, FINNHUB_TIMEOUT_MS, 'ForexFactory');
+    } catch (err: any) {
+      const cooldownSec = Number(err?.retryAfterSec) || 600;
+      this.calendarRetryAfter = Date.now() + cooldownSec * 1000;
+      if (this.calendarCache?.events) {
+        return this.calendarCache.events;
+      }
+      throw err;
+    }
+
+    if (!Array.isArray(rawList)) {
+      return this.calendarCache?.events ?? [];
+    }
+
+    const mapped: Omit<CalendarEvent, 'minutes_away'>[] = [];
+    for (const item of rawList as RawForexFactoryEvent[]) {
+      const impactLower = String(item?.impact || '').trim().toLowerCase();
+      if (impactLower !== 'high' && impactLower !== 'medium') continue;
+
+      const parsedMs = item?.date ? Date.parse(item.date) : NaN;
+      if (!Number.isFinite(parsedMs)) continue;
+
+      const dt = Math.floor(parsedMs / 1000);
+      const title = String(item?.title || 'Scheduled Economic Release').trim();
+      const country = String(item?.country || 'USD').trim().toUpperCase();
+      const headline = `${country} ${title}`;
+      const severity: NewsSeverity =
+        impactLower === 'high'
+          ? CRITICAL_NEWS_RE.test(headline.toUpperCase())
+            ? 'CRITICAL'
+            : 'HIGH'
+          : 'MEDIUM';
+
+      mapped.push({
+        id: `ff:${dt}:${country}:${title.slice(0, 24)}`,
+        name: headline.slice(0, 80),
+        headline,
+        category: 'forex',
+        severity,
+        impact: severity,
+        currencies: [country],
+        timestamp_utc: new Date(dt * 1000).toISOString(),
+        datetime: dt,
+        source: 'ForexFactory',
+        url: 'https://www.forexfactory.com/calendar',
+      });
+    }
+
+    this.calendarCache = {
+      events: mapped,
+      expiresAt: Date.now() + CALENDAR_TTL_SECONDS * 1000,
+    };
+
+    if (!this.customCalendarFetcher && this.upstashRedis && mapped.length > 0 && Date.now() >= this.upstashRetryAfter) {
+      try {
+        await withTimeout(
+          this.upstashRedis.set('calendar:ff_thisweek', JSON.stringify(mapped), { ex: CALENDAR_TTL_SECONDS }),
+          REDIS_OP_TIMEOUT_MS,
+          'Upstash Calendar SET'
+        );
+      } catch {}
+    }
+
+    return mapped;
   }
 
   async pollAllCategories(categories?: readonly string[]): Promise<PollResult> {
@@ -459,6 +656,11 @@ export class NewsEngine {
         totalItems,
         categories: results,
       };
+      try {
+        await this.fetchForexFactoryCalendar(false);
+      } catch (ffErr: any) {
+        console.warn('[news-poller] ForexFactory calendar refresh notice:', ffErr?.message || ffErr);
+      }
       this.lastPolledAt = summary.polledAt;
       this.lastPollResult = summary;
       console.log('[news-poller] Cache warm-up complete');
@@ -546,13 +748,29 @@ export class NewsEngine {
     const { canonical, categories, tokens } = getSymbolQueryPlan(symbol);
 
     const items = await this.collectCachedItems(categories);
+    const ffRaw = await this.fetchForexFactoryCalendar().catch(() => []);
     const relevantEvents: CalendarEvent[] = [];
+    const seenEventKeys = new Set<string>();
 
     for (const item of items) {
       if (!isItemRelevantToTokens(item, tokens)) continue;
       const evt = toCalendarEvent(item, nowSec);
       if (evt.minutes_away >= -60 && evt.minutes_away <= 180) {
+        const key = `${evt.datetime}:${evt.name}`;
+        seenEventKeys.add(key);
         relevantEvents.push(evt);
+      }
+    }
+
+    for (const ffEvt of ffRaw) {
+      const hay = `${ffEvt.headline} ${ffEvt.currencies.join(' ')}`.toUpperCase();
+      if (!tokens.some((token) => hay.includes(token))) continue;
+      const minutesAway = Math.floor((ffEvt.datetime - nowSec) / 60);
+      if (minutesAway >= -60 && minutesAway <= 180) {
+        const key = `${ffEvt.datetime}:${ffEvt.name}`;
+        if (seenEventKeys.has(key)) continue;
+        seenEventKeys.add(key);
+        relevantEvents.push({ ...ffEvt, minutes_away: minutesAway });
       }
     }
 
@@ -681,15 +899,34 @@ export class NewsEngine {
 
     const symbolPlan = filters.symbol ? getSymbolQueryPlan(filters.symbol) : null;
     const items = await this.collectCachedItems(categories);
+    const ffRaw = await this.fetchForexFactoryCalendar().catch(() => []);
     const maxMinutes = hoursAhead * 60;
     const events: CalendarEvent[] = [];
+    const seenEventKeys = new Set<string>();
 
     for (const item of items) {
       if (symbolPlan && !isItemRelevantToTokens(item, symbolPlan.tokens)) continue;
       const evt = toCalendarEvent(item, nowSec);
       if (!allowedImpacts.has(evt.severity)) continue;
       if (evt.minutes_away < -includePastMinutes || evt.minutes_away > maxMinutes) continue;
+      const key = `${evt.datetime}:${evt.name}`;
+      seenEventKeys.add(key);
       events.push(evt);
+    }
+
+    for (const ffEvt of ffRaw) {
+      if (filters.category && filters.category.toLowerCase() !== 'forex') continue;
+      if (symbolPlan) {
+        const hay = `${ffEvt.headline} ${ffEvt.currencies.join(' ')}`.toUpperCase();
+        if (!symbolPlan.tokens.some((token) => hay.includes(token))) continue;
+      }
+      if (!allowedImpacts.has(ffEvt.severity)) continue;
+      const minutesAway = Math.floor((ffEvt.datetime - nowSec) / 60);
+      if (minutesAway < -includePastMinutes || minutesAway > maxMinutes) continue;
+      const key = `${ffEvt.datetime}:${ffEvt.name}`;
+      if (seenEventKeys.has(key)) continue;
+      seenEventKeys.add(key);
+      events.push({ ...ffEvt, minutes_away: minutesAway });
     }
 
     events.sort((a, b) => a.minutes_away - b.minutes_away);

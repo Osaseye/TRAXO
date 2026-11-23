@@ -103,7 +103,7 @@ export function FeaturesSection() {
   const stopPipsPct = ((stopPips - 5) / 45) * 100
 
   return (
-    <section id="engines" className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 overflow-hidden select-none font-sans">
+    <section id="engines" className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 overflow-x-clip font-sans">
       {/* ── Background Grid & Vignette ──────────────────────────────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
@@ -170,6 +170,8 @@ export function FeaturesSection() {
                     key={activeEngine.id}
                     src={activeEngine.image}
                     alt={activeEngine.name}
+                    loading="lazy"
+                    decoding="async"
                     initial={{ opacity: 0, scale: 1.02 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.98 }}
@@ -177,7 +179,7 @@ export function FeaturesSection() {
                     className="w-full aspect-[16/10] sm:aspect-[16/9] object-cover"
                   />
                 </AnimatePresence>
-                <div className="absolute inset-0 bg-gradient-to-t from-[#09090B] via-transparent to-transparent opacity-80" />
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#09090B] via-transparent to-transparent opacity-80" />
               </div>
 
               {/* Metadata bar: stacked cleanly below image on mobile, overlaid on sm+ */}

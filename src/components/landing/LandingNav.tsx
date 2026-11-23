@@ -70,10 +70,10 @@ export function LandingNav() {
         )}
       </AnimatePresence>
 
-      <div className="relative z-10 max-w-6xl mx-auto pointer-events-auto">
+      <div className="relative z-10 max-w-6xl mx-auto pointer-events-none">
         <nav
           aria-label="Primary navigation"
-          className="h-14 px-3.5 sm:px-6 rounded-full backdrop-blur-2xl bg-[#09090B]/85 border border-white/[0.08] shadow-[0_16px_40px_rgba(0,0,0,0.6)] flex items-center justify-between gap-3 sm:gap-4 font-sans"
+          className="pointer-events-auto touch-manipulation h-14 px-3.5 sm:px-6 rounded-full backdrop-blur-2xl bg-[#09090B]/85 border border-white/[0.08] shadow-[0_16px_40px_rgba(0,0,0,0.6)] flex items-center justify-between gap-3 sm:gap-4 font-sans"
         >
           {/* Brand mark - NO BOX CONTAINER! */}
           <Link
@@ -165,7 +165,7 @@ export function LandingNav() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.98 }}
               transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="md:hidden mt-2.5 rounded-2xl backdrop-blur-2xl bg-[#09090B]/95 border border-white/[0.1] p-3.5 shadow-[0_24px_60px_rgba(0,0,0,0.85)] font-sans"
+              className="pointer-events-auto touch-manipulation md:hidden mt-2.5 rounded-2xl backdrop-blur-2xl bg-[#09090B]/95 border border-white/[0.1] p-3.5 shadow-[0_24px_60px_rgba(0,0,0,0.85)] font-sans"
             >
               <div className="space-y-1">
                 {NAV_LINKS.map((link) => {

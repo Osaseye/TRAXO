@@ -225,6 +225,31 @@ async function runTests() {
     await new Promise<void>((resolve) => mainServer.close(() => resolve()));
   }
 
+  // 6. Verify ForexFactory scheduled calendar integration & pre-event freeze for XAUUSD + MNQ
+  const ffEngine = new NewsEngine({
+    redisClient: null,
+    calendarFetcher: async () => [
+      {
+        title: 'CPI m/m',
+        country: 'USD',
+        date: new Date((nowSec + 12 * 60) * 1000).toISOString(),
+        impact: 'High',
+      },
+    ],
+  });
+  const xauFfFreeze = await ffEngine.getFreezeStatus('XAUUSD', { nowMs });
+  assert.equal(xauFfFreeze.isFrozen, true, 'ForexFactory USD CPI (+12m) should freeze XAUUSD');
+  assert.equal(xauFfFreeze.activeEvents[0].source, 'ForexFactory');
+  const mnqFfFreeze = await ffEngine.getFreezeStatus('MNQ', { nowMs });
+  assert.equal(mnqFfFreeze.isFrozen, true, 'ForexFactory USD CPI (+12m) should freeze MNQ');
+
+  // 7. Verify multi-key Finnhub rotation pool status
+  const multiKeyEngine = new NewsEngine({
+    redisClient: null,
+    finnhubApiKeys: ['key_alpha', 'key_beta', 'key_alpha'],
+  });
+  assert.equal(multiKeyEngine.getStatus().finnhubKeyCount, 2, 'Deduplicates multi-key Finnhub pool');
+
   console.log('All newsService tests passed!');
   process.exit(0);
 }

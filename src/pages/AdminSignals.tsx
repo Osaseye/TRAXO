@@ -7,10 +7,10 @@ import {
   PiDownloadSimple,
   PiMagnifyingGlass,
   PiGauge,
+  PiPlay,
   PiShieldCheck,
 } from 'react-icons/pi'
-import { getHistoricalSignals, getLiveSignals, getScannerRejects } from '@/lib/api'
-import { auth } from '@/lib/firebase'
+import { apiFetch, getHistoricalSignals, getLiveSignals, getScannerRejects } from '@/lib/api'
 import { normalizeStrategyId } from '@/lib/strategyId'
 import { ONBOARDING_STRATEGIES } from '@/stores/useOnboardingStore'
 
@@ -51,11 +51,9 @@ const REJECT_SWEEP_PAIRS = [
   { symbol: 'USDJPY', timeframe: '1H' },
   { symbol: 'XAUUSD', timeframe: '15m' },
   { symbol: 'XAUUSD', timeframe: '1H' },
-  { symbol: 'BTCUSD', timeframe: '1H' },
-  { symbol: 'AAPL', timeframe: '1H' },
+  { symbol: 'MNQ', timeframe: '15m' },
+  { symbol: 'MNQ', timeframe: '1H' },
 ]
-
-const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/$/, '')
 
 function formatPrice(val: number): string {
   if (!Number.isFinite(val)) return '—'
@@ -193,9 +191,6 @@ export default function AdminSignals() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const token = await auth.currentUser?.getIdToken().catch(() => null)
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
-
       const [liveRes, histRes] = await Promise.allSettled([
         getLiveSignals(),
         getHistoricalSignals(),
@@ -255,10 +250,7 @@ export default function AdminSignals() {
 
       let globalOk = false
       try {
-        const res = await fetch(
-          API_BASE ? `${API_BASE}/api/scanner/rejects` : '/api/scanner/rejects',
-          { headers }
-        )
+        const res = await apiFetch('/api/scanner/rejects')
         if (res.ok) {
           const body = await res.json()
           const parsed = parseRejects(body)
@@ -647,6 +639,19 @@ export default function AdminSignals() {
                         <span>R:R {s.rr.toFixed(2)}R</span>
                         <span className="text-[#FAFAFA]">Conf {s.confidence}%</span>
                       </div>
+
+                      {(s.status === 'WIN' || s.status === 'LOSS') && (
+                        <div className="pt-1">
+                          <Link
+                            to={`/replay/${encodeURIComponent(s.id)}`}
+                            state={{ signal: s }}
+                            className="w-full min-h-[40px] rounded-xl bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[12.5px] font-medium text-[#FAFAFA] inline-flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <PiPlay className="h-3.5 w-3.5 text-[#34D399]" />
+                            <span>Replay Outcome</span>
+                          </Link>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -711,6 +716,7 @@ export default function AdminSignals() {
                             <PiArrowsDownUp className="h-3.5 w-3.5" />
                           </button>
                         </th>
+                        <th className="py-3.5 px-4 text-right">Replay</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
@@ -770,6 +776,20 @@ export default function AdminSignals() {
                             >
                               {s.status}
                             </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            {s.status === 'WIN' || s.status === 'LOSS' ? (
+                              <Link
+                                to={`/replay/${encodeURIComponent(s.id)}`}
+                                state={{ signal: s }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[12px] font-medium text-[#FAFAFA] transition-colors"
+                              >
+                                <PiPlay className="h-3 w-3 text-[#34D399]" />
+                                <span>Replay</span>
+                              </Link>
+                            ) : (
+                              <span className="text-[12px] text-[#52525B]">—</span>
+                            )}
                           </td>
                         </tr>
                       ))}

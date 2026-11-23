@@ -46,7 +46,7 @@ export function CustomEngineSection() {
   const [activeModule, setActiveModule] = useState(MODULAR_RULES[0].id)
 
   return (
-    <section id="custom-engine" className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 bg-[#09090B] overflow-hidden select-none font-sans">
+    <section id="custom-engine" className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 bg-[#09090B] overflow-x-clip font-sans">
       {/* ── Background Coordinate Grid ──────────────────────────────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
@@ -123,9 +123,11 @@ export function CustomEngineSection() {
               <img
                 src="/brand/custom-engine-builder.png"
                 alt="TRAXO Custom Algorithmic Engine Studio"
+                loading="lazy"
+                decoding="async"
                 className="w-full aspect-[16/10] object-cover opacity-90"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#09090B] via-transparent to-transparent opacity-60" />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#09090B] via-transparent to-transparent opacity-60" />
             </div>
           </div>
         </div>

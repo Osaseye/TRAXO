@@ -13,7 +13,7 @@ import { LandingFooter } from '@/components/landing/LandingFooter'
 
 export default function Landing() {
   return (
-    <div className="relative min-h-screen bg-[#09090B] text-[#FAFAFA] font-sans overflow-x-hidden selection:bg-white/20 selection:text-[#FAFAFA]">
+    <div className="relative min-h-screen bg-[#09090B] text-[#FAFAFA] font-sans overflow-x-clip selection:bg-white/20 selection:text-[#FAFAFA]">
       {/* ── Minimalist Full-Page Kinetic Market Background Canvas ──────────── */}
       <LandingBackgroundAnimation />
 

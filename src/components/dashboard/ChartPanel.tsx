@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import {
   CandlestickSeries,
   ColorType,
@@ -11,11 +12,12 @@ import {
 import type {
   IPriceLine,
   ISeriesMarkersPluginApi,
+  LogicalRange,
   SeriesMarker,
   Time,
   UTCTimestamp,
 } from 'lightweight-charts'
-import { PiLightning, PiSpinnerGap, PiX } from 'react-icons/pi'
+import { PiCheck, PiDotsSixVertical, PiLightning, PiSpinnerGap, PiX } from 'react-icons/pi'
 import { priceDigits, type Candle } from '@/lib/signalDetection'
 import { cn, formatPrice } from '@/lib/utils'
 import type { ChartTimeframe } from '@/stores/useTradingContextStore'
@@ -27,6 +29,18 @@ export interface ChartPanelActiveSignal {
   entry: number
   sl: number
   tp: number
+  tp2?: number | null
+  exitMode?: 'FULL_TP1' | 'SCALE_50_TP1_BE_TP2'
+  entryType?: 'MARKET' | 'LIMIT' | 'STOP' | 'market' | 'limit' | string
+  tier?: 'PRIME' | 'STANDARD' | 'AGGRESSIVE' | string
+  status?: string
+  confluence?: {
+    score?: number
+    maxScore?: number
+    tier?: string
+    passedCriteria?: string[]
+    checks?: Array<{ key?: string; label: string; passed: boolean; detail?: string }>
+  } | null
   action: 'BUY' | 'SELL'
   entryTime?: UTCTimestamp
   confidence?: number
@@ -54,6 +68,14 @@ export interface ChartPanelManualSetup {
   reason?: string[]
 }
 
+export interface ChartSignalChoice {
+  id: string
+  label: string
+  action: 'BUY' | 'SELL'
+  confidence: number
+  entryBadge: string
+}
+
 export interface ChartPanelProps {
   symbol: string
   timeframe: ChartTimeframe
@@ -61,13 +83,23 @@ export interface ChartPanelProps {
   markers?: ChartPanelMarker[]
   activeSignal?: ChartPanelActiveSignal | null
   manualSetup?: ChartPanelManualSetup | null
-  onCrosshairMove?: (time: UTCTimestamp | null) => void
+  signalChoices?: ChartSignalChoice[]
+  selectedSignalId?: string | null
+  previewSignalId?: string | null
+  onPreviewSignal?: (id: string | null) => void
+  onSelectSignal?: (id: string) => void
+  onCrosshairMove?: (time: UTCTimestamp | null, price?: number | null) => void
   onChartClick?: (payload: { point?: { x: number; y: number }; time?: Time; price?: number | null }) => void
   onTimeframeChange?: (timeframe: ChartTimeframe) => void
   onExecuteActiveSignal?: () => Promise<void> | void
   onExecuteManualSetup?: () => Promise<void> | void
   onClearSelection?: () => void
   executingSetup?: boolean
+  setupExecuted?: boolean
+  executionMode?: 'paper' | 'metaapi'
+  onLoadMoreHistory?: () => Promise<void> | void
+  loadingHistory?: boolean
+  hasMoreHistory?: boolean
   livePrice?: number | null
   hideHeader?: boolean
   focusTime?: UTCTimestamp | null
@@ -86,6 +118,36 @@ const TIMEFRAME_SECONDS: Record<ChartTimeframe, number> = {
   '1D': 86400,
 }
 
+const CONFLUENCE_SHORT_LABELS: Record<string, string> = {
+  htf_bias: 'HTF Alignment',
+  liquidity_sweep: 'Liquidity Sweep',
+  displacement: 'Displacement',
+  structural_imbalance: 'Imbalance / FVG',
+  optimal_value: 'Optimal Value',
+  volume_confirmation: 'Volume RVOL',
+  session_killzone: 'Session',
+  asymmetric_rr: 'Asymmetric R:R',
+  news_clearance: 'News Clear',
+}
+
+function isLiveStatus(status?: string): boolean {
+  const st = String(status || 'live').trim().toLowerCase()
+  return st === 'live' || st === 'active' || st === 'open' || st === 'pending'
+}
+
+function isPositionStatus(status?: string): boolean {
+  const st = String(status || '').trim().toLowerCase()
+  return st === 'position_open' || st === 'position_pending'
+}
+
+function formatSignalStatusBadge(status?: string): string {
+  const st = String(status || 'live').trim().toLowerCase()
+  if (st === 'position_open') return 'OPEN POS'
+  if (st === 'position_pending') return 'PENDING ORD'
+  if (isLiveStatus(st)) return 'LIVE'
+  return 'PAST'
+}
+
 function formatCountdown(secondsLeft: number): string {
   const safe = Math.max(0, Math.floor(secondsLeft))
   const h = Math.floor(safe / 3600)
@@ -101,6 +163,10 @@ interface PositionOverlayData {
   entryY: number
   slY: number
   tpY: number
+  tp2Y: number | null
+  showTp2Runner: boolean
+  anchorX: number | null
+  isBuy: boolean
   startX: number
   endX: number
 }
@@ -121,6 +187,11 @@ export function ChartPanel({
   markers = [],
   activeSignal = null,
   manualSetup = null,
+  signalChoices = [],
+  selectedSignalId = null,
+  previewSignalId = null,
+  onPreviewSignal,
+  onSelectSignal,
   onCrosshairMove,
   onChartClick,
   onTimeframeChange,
@@ -128,6 +199,11 @@ export function ChartPanel({
   onExecuteManualSetup,
   onClearSelection,
   executingSetup = false,
+  setupExecuted = false,
+  executionMode = 'paper',
+  onLoadMoreHistory,
+  loadingHistory = false,
+  hasMoreHistory = true,
   livePrice = null,
   hideHeader = false,
   focusTime = null,
@@ -141,11 +217,27 @@ export function ChartPanel({
   const activeEntryLineRef = useRef<IPriceLine | null>(null)
   const activeSlLineRef = useRef<IPriceLine | null>(null)
   const activeTpLineRef = useRef<IPriceLine | null>(null)
+  const activeTp2LineRef = useRef<IPriceLine | null>(null)
   const manualEntryLineRef = useRef<IPriceLine | null>(null)
   const manualSlLineRef = useRef<IPriceLine | null>(null)
   const manualTpLineRef = useRef<IPriceLine | null>(null)
   const hasSetInitialDataRef = useRef(false)
   const isOverBriefingRef = useRef(false)
+  const executeClickLockRef = useRef(false)
+  const prevCandlesMetaRef = useRef<{ firstTime: number | null; length: number }>({
+    firstTime: null,
+    length: 0,
+  })
+  const onLoadMoreHistoryRef = useRef(onLoadMoreHistory)
+  const loadingHistoryRef = useRef(loadingHistory)
+  const hasMoreHistoryRef = useRef(hasMoreHistory)
+  const lastHistoryTriggerAtRef = useRef(0)
+
+  useEffect(() => {
+    onLoadMoreHistoryRef.current = onLoadMoreHistory
+    loadingHistoryRef.current = loadingHistory
+    hasMoreHistoryRef.current = hasMoreHistory
+  }, [onLoadMoreHistory, loadingHistory, hasMoreHistory])
 
   const [overlayData, setOverlayData] = useState<PositionOverlayData | null>(null)
   const [hoveredState, setHoveredState] = useState<{
@@ -154,6 +246,57 @@ export function ChartPanel({
   } | null>(null)
   const [dismissedBriefingKey, setDismissedBriefingKey] = useState<string | null>(null)
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000))
+  const [dragState, setDragState] = useState<{ key: string; x: number; y: number }>({
+    key: '',
+    x: 0,
+    y: 0,
+  })
+  const dragPointerRef = useRef<{
+    dragging: boolean
+    startX: number
+    startY: number
+    origX: number
+    origY: number
+  } | null>(null)
+
+  const activeChartKey = `${symbol}:${timeframe}`
+  const dragOffset =
+    dragState.key === activeChartKey ? { x: dragState.x, y: dragState.y } : { x: 0, y: 0 }
+
+  const handleDragPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement)?.closest('button')) return
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragPointerRef.current = {
+      dragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: dragOffset.x,
+      origY: dragOffset.y,
+    }
+  }
+
+  const handleDragPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const st = dragPointerRef.current
+    if (!st || !st.dragging) return
+    setDragState({
+      key: activeChartKey,
+      x: st.origX + (e.clientX - st.startX),
+      y: st.origY + (e.clientY - st.startY),
+    })
+  }
+
+  const handleDragPointerEnd = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragPointerRef.current?.dragging) return
+    dragPointerRef.current = null
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
+    } catch {
+      // ignore if capture already released
+    }
+  }
 
   const digits = useMemo(() => priceDigits(symbol), [symbol])
 
@@ -254,7 +397,36 @@ export function ChartPanel({
 
   useEffect(() => {
     hasSetInitialDataRef.current = false
+    prevCandlesMetaRef.current = { firstTime: null, length: 0 }
+    lastHistoryTriggerAtRef.current = 0
   }, [symbol, timeframe])
+
+  // Subscribe once on mount to detect scroll-left near start of loaded history
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) return
+    const timeScale = chart.timeScale()
+
+    const handleLogicalRangeChange = (range: LogicalRange | null) => {
+      if (
+        hasSetInitialDataRef.current &&
+        range &&
+        range.from < 20 &&
+        onLoadMoreHistoryRef.current &&
+        hasMoreHistoryRef.current &&
+        !loadingHistoryRef.current &&
+        Date.now() - lastHistoryTriggerAtRef.current > 350
+      ) {
+        lastHistoryTriggerAtRef.current = Date.now()
+        void onLoadMoreHistoryRef.current()
+      }
+    }
+
+    timeScale.subscribeVisibleLogicalRangeChange(handleLogicalRangeChange)
+    return () => {
+      timeScale.unsubscribeVisibleLogicalRangeChange(handleLogicalRangeChange)
+    }
+  }, [])
 
   // Sanitized candles: deduplicated and sorted ascending by Unix seconds
   const sanitizedCandles = useMemo<NormalizedCandle[]>(() => {
@@ -291,8 +463,12 @@ export function ChartPanel({
     const candleTimeSet = new Set(candleTimes)
 
     const mapped = markers.map((m) => {
-      const tNum = m.time as number
-      if (candleTimeSet.has(tNum)) return m
+      const rawT =
+        typeof m.time === 'string' ? Math.floor(new Date(m.time).getTime() / 1000) : Number(m.time)
+      const tNum = rawT > 1e12 ? Math.floor(rawT / 1000) : Math.floor(rawT)
+      const normalizedMarker =
+        tNum === (m.time as number) ? m : { ...m, time: tNum as UTCTimestamp }
+      if (candleTimeSet.has(tNum)) return normalizedMarker
 
       let closest = candleTimes[0]
       let minDiff = Math.abs(candleTimes[0] - tNum)
@@ -303,7 +479,7 @@ export function ChartPanel({
           closest = candleTimes[i]
         }
       }
-      return { ...m, time: closest as UTCTimestamp }
+      return { ...normalizedMarker, time: closest as UTCTimestamp }
     })
 
     const seen = new Set<string>()
@@ -325,6 +501,15 @@ export function ChartPanel({
     if (sanitizedCandles.length === 0) return
 
     const timeScale = chartRef.current?.timeScale()
+    const prevRange = hasSetInitialDataRef.current ? timeScale?.getVisibleLogicalRange() ?? null : null
+    const prevFirstTime = prevCandlesMetaRef.current.firstTime
+    const newFirstTime = Number(sanitizedCandles[0].time)
+    const prependedCount =
+      hasSetInitialDataRef.current && prevFirstTime !== null && newFirstTime < prevFirstTime
+        ? sanitizedCandles.filter((c) => Number(c.time) < prevFirstTime).length
+        : 0
+    prevCandlesMetaRef.current = { firstTime: newFirstTime, length: sanitizedCandles.length }
+
     seriesRef.current.setData(sanitizedCandles as any)
     markersPluginRef.current?.setMarkers(validMarkers)
 
@@ -342,7 +527,12 @@ export function ChartPanel({
       return
     }
 
-    if ((timeScale?.scrollPosition() ?? 0) === 0) {
+    if (prependedCount > 0 && prevRange && timeScale) {
+      timeScale.setVisibleLogicalRange({
+        from: prevRange.from + prependedCount,
+        to: prevRange.to + prependedCount,
+      })
+    } else if ((timeScale?.scrollPosition() ?? 0) === 0) {
       timeScale?.scrollToRealTime()
     }
   }, [sanitizedCandles, validMarkers])
@@ -382,16 +572,39 @@ export function ChartPanel({
       series.removePriceLine(activeTpLineRef.current)
       activeTpLineRef.current = null
     }
+    if (activeTp2LineRef.current) {
+      series.removePriceLine(activeTp2LineRef.current)
+      activeTp2LineRef.current = null
+    }
 
     if (!activeSignal) return
 
+    const rawEntryType = String(activeSignal.entryType || 'MARKET').toUpperCase()
+    const entryTitle =
+      rawEntryType === 'LIMIT' || rawEntryType === 'LMT' || rawEntryType.includes('LIMIT')
+        ? activeSignal.locked
+          ? 'Entry · Limit · Locked'
+          : 'Entry · Limit'
+        : rawEntryType === 'STOP' || rawEntryType === 'STP' || rawEntryType.includes('STOP')
+        ? activeSignal.locked
+          ? 'Entry · Stop · Locked'
+          : 'Entry · Stop'
+        : activeSignal.locked
+        ? 'Entry · Locked'
+        : 'Entry'
+
+    const hasTp2 =
+      activeSignal.tp2 != null &&
+      Number.isFinite(activeSignal.tp2) &&
+      activeSignal.tp2 > 0
+
     activeEntryLineRef.current = series.createPriceLine({
       price: activeSignal.entry,
-      color: 'rgba(250, 250, 250, 0.55)',
-      lineWidth: 1,
-      lineStyle: LineStyle.SparseDotted,
+      color: '#38BDF8',
+      lineWidth: 2,
+      lineStyle: LineStyle.Solid,
       axisLabelVisible: true,
-      title: activeSignal.locked ? 'Entry · Locked' : 'Entry',
+      title: entryTitle,
     })
 
     activeSlLineRef.current = series.createPriceLine({
@@ -409,8 +622,19 @@ export function ChartPanel({
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
       axisLabelVisible: true,
-      title: 'TP',
+      title: hasTp2 ? 'TP1' : 'TP',
     })
+
+    if (hasTp2 && activeSignal.tp2 != null) {
+      activeTp2LineRef.current = series.createPriceLine({
+        price: activeSignal.tp2,
+        color: '#22D3EE',
+        lineWidth: 1,
+        lineStyle: LineStyle.Dotted,
+        axisLabelVisible: true,
+        title: 'TP2',
+      })
+    }
   }, [activeSignal])
 
   // Price Lines for Manual Setup
@@ -435,8 +659,8 @@ export function ChartPanel({
 
     manualEntryLineRef.current = series.createPriceLine({
       price: manualSetup.entry,
-      color: 'rgba(250, 250, 250, 0.7)',
-      lineWidth: 1,
+      color: '#38BDF8',
+      lineWidth: 2,
       lineStyle: LineStyle.Solid,
       axisLabelVisible: true,
       title: `Plan ${manualSetup.action}`,
@@ -498,6 +722,7 @@ export function ChartPanel({
     const width = container.clientWidth || 600
     const timeScale = chart.timeScale()
     let startX = width * 0.2
+    let anchorX: number | null = null
 
     let rawTime = (active as any).time ?? (active as any).entryTime ?? null
     if (typeof rawTime === 'string') {
@@ -522,9 +747,18 @@ export function ChartPanel({
         xCoord = timeScale.timeToCoordinate(closestCandle.time)
       }
       if (xCoord !== null) {
+        anchorX = xCoord
         startX = Math.max(0, xCoord)
       }
     }
+
+    const tp2Val = (active as any).tp2
+    const tp2Y =
+      typeof tp2Val === 'number' && Number.isFinite(tp2Val) && tp2Val > 0
+        ? series.priceToCoordinate(tp2Val)
+        : null
+    const showTp2Runner = Boolean(tp2Y !== null && (active as any).exitMode !== 'FULL_TP1')
+    const isBuy = active.action === 'BUY'
 
     const rightMargin = 62
     const endX = Math.max(startX + 110, width - rightMargin)
@@ -533,6 +767,10 @@ export function ChartPanel({
       entryY,
       slY,
       tpY,
+      tp2Y,
+      showTp2Runner,
+      anchorX,
+      isBuy,
       startX,
       endX,
     })
@@ -581,7 +819,7 @@ export function ChartPanel({
     if (!chart || !series) return
 
     const hoverKey = `${symbol}:${timeframe}`
-    const handleMove = (param: { time?: Time; seriesData: Map<any, any> }) => {
+    const handleMove = (param: { point?: { x: number; y: number }; time?: Time; seriesData: Map<any, any> }) => {
       const point = param.seriesData?.get(series)
       if (point && typeof point.open === 'number') {
         setHoveredState({
@@ -599,7 +837,9 @@ export function ChartPanel({
       }
       if (onCrosshairMove) {
         if (param.time == null && isOverBriefingRef.current) return
-        onCrosshairMove(typeof param.time === 'number' ? (param.time as UTCTimestamp) : null)
+        const price =
+          param.point && seriesRef.current ? seriesRef.current.coordinateToPrice(param.point.y) : null
+        onCrosshairMove(typeof param.time === 'number' ? (param.time as UTCTimestamp) : null, price)
       }
     }
 
@@ -649,10 +889,69 @@ export function ChartPanel({
   const showBriefing = Boolean(briefingKey && briefingKey !== dismissedBriefingKey)
 
   const briefingData = useMemo(() => {
+    const rawEntryType = String(
+      activeSignal?.entryType || manualSetup?.entryType || 'MARKET'
+    ).toUpperCase()
+    const entryTypeBadge =
+      rawEntryType.includes('LIM') || rawEntryType === 'LMT'
+        ? 'LMT'
+        : rawEntryType.includes('STP') || rawEntryType.includes('STOP')
+        ? 'STP'
+        : 'MKT'
+
     if (activeSignal) {
       const riskDist = Math.abs(activeSignal.entry - activeSignal.sl)
       const rewardDist = Math.abs(activeSignal.tp - activeSignal.entry)
       const rr = activeSignal.rr ?? (riskDist > 0 ? rewardDist / riskDist : 0)
+      const tp2 =
+        activeSignal.tp2 && Number.isFinite(activeSignal.tp2) && activeSignal.tp2 > 0
+          ? activeSignal.tp2
+          : null
+      const exitMode = activeSignal.exitMode ?? null
+
+      let confluence: {
+        score: number
+        maxScore: number
+        tier: string
+        chips: string[]
+      }
+
+      if (activeSignal.confluence) {
+        const rawChips =
+          Array.isArray(activeSignal.confluence.checks) &&
+          activeSignal.confluence.checks.length > 0
+            ? activeSignal.confluence.checks
+                .filter((c) => c.passed)
+                .map((c) => CONFLUENCE_SHORT_LABELS[c.key || ''] || c.label)
+            : Array.isArray(activeSignal.confluence.passedCriteria)
+            ? activeSignal.confluence.passedCriteria
+            : []
+        confluence = {
+          score: activeSignal.confluence.score ?? 7,
+          maxScore: activeSignal.confluence.maxScore ?? 9,
+          tier: String(
+            activeSignal.tier || activeSignal.confluence.tier || 'STANDARD'
+          ).toUpperCase(),
+          chips: Array.from(new Set(rawChips)),
+        }
+      } else {
+        const conf = activeSignal.confidence ?? 75
+        confluence = {
+          score: conf >= 85 ? 8 : conf >= 75 ? 7 : 6,
+          maxScore: 9,
+          tier: String(
+            activeSignal.tier || (conf >= 82 ? 'PRIME' : conf >= 72 ? 'STANDARD' : 'AGGRESSIVE')
+          ).toUpperCase(),
+          chips: [
+            'Session',
+            'Structure',
+            rr >= 1.5 ? 'Asymmetric R:R' : 'Momentum',
+            'Spread Clear',
+            'News Clear',
+          ],
+        }
+      }
+
       return {
         mode: 'signal' as const,
         action: activeSignal.action,
@@ -662,6 +961,10 @@ export function ChartPanel({
         entry: activeSignal.entry,
         sl: activeSignal.sl,
         tp: activeSignal.tp,
+        tp2,
+        exitMode,
+        entryTypeBadge,
+        confluence,
         rr,
         lotSize: activeSignal.lotSize,
         riskAmountUsd: activeSignal.riskAmountUsd,
@@ -686,6 +989,10 @@ export function ChartPanel({
         entry: manualSetup.entry,
         sl: manualSetup.sl,
         tp: manualSetup.tp,
+        tp2: null,
+        exitMode: null,
+        entryTypeBadge,
+        confluence: null,
         rr,
         lotSize: manualSetup.lotSize,
         riskAmountUsd: manualSetup.riskAmountUsd,
@@ -705,6 +1012,8 @@ export function ChartPanel({
 
     return null
   }, [activeSignal, manualSetup, onExecuteActiveSignal, onExecuteManualSetup])
+
+  const isPaperMode = executionMode !== 'metaapi'
 
   return (
     <div className="flex flex-col h-full bg-[#09090B] overflow-hidden relative">
@@ -775,6 +1084,12 @@ export function ChartPanel({
             </span>
 
             {loading && <span className="text-[12px] text-[#71717A]">Syncing...</span>}
+            {loadingHistory && (
+              <span className="inline-flex items-center gap-1 text-[12px] text-[#A1A1AA]">
+                <PiSpinnerGap className="h-3.5 w-3.5 animate-spin" />
+                <span>Loading older history...</span>
+              </span>
+            )}
           </div>
 
           {hudCandle && (
@@ -799,9 +1114,68 @@ export function ChartPanel({
               </span>
             </div>
           )}
+
+          {/* Multi-Signal Chooser Strip when 2+ active setups exist on this chart */}
+          {signalChoices.length > 1 && (
+            <div className="pt-1 flex flex-wrap items-center gap-1.5 pointer-events-auto">
+              <span className="text-[11px] font-mono text-[#71717A] mr-0.5">
+                {signalChoices.length} Active Setups:
+              </span>
+              {signalChoices.map((choice) => {
+                const isLocked = selectedSignalId === choice.id
+                const isPreview = previewSignalId === choice.id
+                const isBuyChoice = choice.action === 'BUY'
+                return (
+                  <button
+                    key={choice.id}
+                    type="button"
+                    onMouseEnter={() => {
+                      isOverBriefingRef.current = true
+                      onPreviewSignal?.(choice.id)
+                    }}
+                    onMouseLeave={() => {
+                      isOverBriefingRef.current = false
+                      onPreviewSignal?.(null)
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectSignal?.(choice.id)
+                    }}
+                    className={cn(
+                      'h-6 px-2 rounded-md text-[11px] font-mono inline-flex items-center gap-1.5 border transition-colors',
+                      isLocked
+                        ? 'bg-[#FAFAFA] text-[#09090B] border-[#FAFAFA] font-semibold'
+                        : isPreview
+                        ? 'bg-[#18181B] text-[#FAFAFA] border-white/[0.24]'
+                        : 'bg-[#0D0D10]/90 text-[#A1A1AA] hover:text-[#FAFAFA] border-white/[0.09]'
+                    )}
+                    title="Hover to preview setup · Click to lock setup on chart"
+                  >
+                    <span
+                      className={cn(
+                        'font-semibold',
+                        isLocked
+                          ? isBuyChoice
+                            ? 'text-[#059669]'
+                            : 'text-[#DC2626]'
+                          : isBuyChoice
+                          ? 'text-[#34D399]'
+                          : 'text-[#F87171]'
+                      )}
+                    >
+                      {choice.action === 'BUY' ? '▲' : '▼'} {choice.label}
+                    </span>
+                    <span className={isLocked ? 'text-[#27272A]' : 'text-[#71717A]'}>
+                      {choice.entryBadge} {choice.confidence}%
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Ultra-Subtle Translucent TP / SL Zone Shading */}
+        {/* Distinct Translucent TP1 / TP2 / SL Zone Shading + Entry Baseline & Anchor Arrow */}
         {overlayData && (
           <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
             <svg className="w-full h-full">
@@ -810,20 +1184,96 @@ export function ChartPanel({
                 y={Math.min(overlayData.entryY, overlayData.tpY)}
                 width={Math.max(20, overlayData.endX - overlayData.startX)}
                 height={Math.max(2, Math.abs(overlayData.tpY - overlayData.entryY))}
-                fill="rgba(52, 211, 153, 0.045)"
+                fill="rgba(52, 211, 153, 0.14)"
+                stroke="rgba(52, 211, 153, 0.32)"
+                strokeWidth="1"
               />
+              {overlayData.showTp2Runner && overlayData.tp2Y !== null && (
+                <rect
+                  x={overlayData.startX}
+                  y={Math.min(overlayData.tpY, overlayData.tp2Y)}
+                  width={Math.max(20, overlayData.endX - overlayData.startX)}
+                  height={Math.max(2, Math.abs(overlayData.tp2Y - overlayData.tpY))}
+                  fill="rgba(34, 211, 238, 0.11)"
+                  stroke="rgba(34, 211, 238, 0.28)"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                />
+              )}
               <rect
                 x={overlayData.startX}
                 y={Math.min(overlayData.entryY, overlayData.slY)}
                 width={Math.max(20, overlayData.endX - overlayData.startX)}
                 height={Math.max(2, Math.abs(overlayData.slY - overlayData.entryY))}
-                fill="rgba(248, 113, 113, 0.045)"
+                fill="rgba(248, 113, 113, 0.14)"
+                stroke="rgba(248, 113, 113, 0.32)"
+                strokeWidth="1"
               />
+              <line
+                x1={overlayData.startX}
+                x2={overlayData.endX}
+                y1={overlayData.entryY}
+                y2={overlayData.entryY}
+                stroke="#38BDF8"
+                strokeOpacity="0.75"
+                strokeWidth="1.5"
+              />
+              {overlayData.anchorX !== null &&
+                (() => {
+                  const ax = overlayData.anchorX
+                  const ey = overlayData.entryY
+                  const dirAccent = overlayData.isBuy ? '#34D399' : '#F87171'
+                  const minY = Math.min(
+                    ey,
+                    overlayData.slY,
+                    overlayData.tpY,
+                    overlayData.tp2Y ?? overlayData.tpY
+                  )
+                  const maxY = Math.max(
+                    ey,
+                    overlayData.slY,
+                    overlayData.tpY,
+                    overlayData.tp2Y ?? overlayData.tpY
+                  )
+                  const arrowPoints = overlayData.isBuy
+                    ? `${ax},${ey - 13} ${ax - 6},${ey - 3} ${ax + 6},${ey - 3}`
+                    : `${ax},${ey + 13} ${ax - 6},${ey + 3} ${ax + 6},${ey + 3}`
+                  return (
+                    <g>
+                      <line
+                        x1={ax}
+                        x2={ax}
+                        y1={minY}
+                        y2={maxY}
+                        stroke="#38BDF8"
+                        strokeOpacity="0.45"
+                        strokeWidth="1"
+                        strokeDasharray="2 3"
+                      />
+                      <circle cx={ax} cy={ey} r="9" fill="#38BDF8" fillOpacity="0.16" />
+                      <polygon
+                        points={arrowPoints}
+                        fill={dirAccent}
+                        stroke="#38BDF8"
+                        strokeWidth="1.2"
+                        strokeLinejoin="round"
+                      />
+                      <circle
+                        cx={ax}
+                        cy={ey}
+                        r="3.2"
+                        fill="#38BDF8"
+                        stroke="#09090B"
+                        strokeWidth="1.5"
+                      />
+                    </g>
+                  )
+                })()}
             </svg>
           </div>
         )}
 
-        {/* Floating Obsidian Briefing Card (signal-chart.png inspired) */}
+        {/* Minimalist Draggable Obsidian Briefing Modal */}
         {showBriefing && briefingData && (
           <div
             onMouseEnter={() => {
@@ -832,176 +1282,225 @@ export function ChartPanel({
             onMouseLeave={() => {
               isOverBriefingRef.current = false
             }}
-            className="hidden sm:flex flex-col absolute bottom-4 right-[76px] z-20 w-[348px] max-w-[calc(100%-6rem)] max-h-[calc(100%-5.5rem)] overflow-y-auto rounded-2xl bg-[#111113]/95 border border-white/[0.08] p-5 space-y-4"
+            style={{
+              transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)`,
+            }}
+            className="flex flex-col absolute inset-x-2.5 bottom-2.5 sm:inset-x-auto sm:bottom-4 sm:right-[76px] z-20 sm:w-[332px] sm:max-w-[calc(100%-6rem)] max-h-[60%] sm:max-h-[calc(100%-5.5rem)] overflow-y-auto rounded-xl bg-[#0D0D10]/95 backdrop-blur-md border border-white/[0.08] p-3.5 sm:p-4 space-y-2.5 shadow-[0_12px_36px_rgba(0,0,0,0.65)]"
           >
-            {/* Header: Direction + Symbol + Confidence + Dismiss */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span
-                  className={cn(
-                    'px-2.5 py-0.5 rounded-md text-[12px] font-semibold shrink-0',
-                    briefingData.action === 'BUY'
-                      ? 'bg-[#34D399]/15 text-[#34D399]'
-                      : 'bg-[#F87171]/15 text-[#F87171]'
-                  )}
-                >
-                  {briefingData.action}
-                </span>
-                <span className="text-[15px] font-semibold text-[#FAFAFA] truncate">
-                  {symbol}
-                </span>
-              </div>
+            {/* Draggable Header */}
+            <div
+              onPointerDown={handleDragPointerDown}
+              onPointerMove={handleDragPointerMove}
+              onPointerUp={handleDragPointerEnd}
+              onPointerCancel={handleDragPointerEnd}
+              onDoubleClick={() => setDragState({ key: activeChartKey, x: 0, y: 0 })}
+              title="Drag to move · Double-click to reset position"
+              className="cursor-grab active:cursor-grabbing select-none touch-none space-y-1"
+            >
+              <div className="sm:hidden w-9 h-1 rounded-full bg-white/[0.14] mx-auto -mt-1 mb-0.5 shrink-0" />
 
-              <div className="flex items-center gap-2 shrink-0">
-                {briefingData.confidence != null && (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <PiDotsSixVertical size={15} className="text-[#52525B] shrink-0" />
                   <span
                     className={cn(
-                      'text-[14px] font-mono tabular-nums font-semibold',
-                      briefingData.action === 'BUY' ? 'text-[#34D399]' : 'text-[#FAFAFA]'
+                      'text-[12px] font-semibold tracking-wide shrink-0',
+                      briefingData.action === 'BUY' ? 'text-[#34D399]' : 'text-[#F87171]'
                     )}
                   >
-                    {briefingData.confidence}%
+                    {briefingData.action}
                   </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (briefingData.locked && onClearSelection) {
-                      onClearSelection()
-                    } else if (briefingKey) {
-                      setDismissedBriefingKey(briefingKey)
-                    }
-                  }}
-                  className="p-1 rounded-lg text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.06] transition-colors"
-                  aria-label="Hide setup briefing"
-                  title="Hide setup briefing"
-                >
-                  <PiX size={16} />
-                </button>
+                  <span className="text-[14px] font-semibold text-[#FAFAFA] truncate">
+                    {symbol}
+                  </span>
+                  {briefingData.mode === 'signal' && (
+                    <span
+                      className={cn(
+                        'text-[11px] font-mono font-medium shrink-0',
+                        isPositionStatus(activeSignal?.status)
+                          ? 'text-[#38BDF8]'
+                          : isLiveStatus(activeSignal?.status)
+                          ? 'text-[#34D399]'
+                          : 'text-[#71717A]'
+                      )}
+                    >
+                      {formatSignalStatusBadge(activeSignal?.status)}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {briefingData.confidence != null && (
+                    <span className="text-[13px] font-mono tabular-nums font-medium text-[#FAFAFA]">
+                      {briefingData.confidence}%
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (briefingData.locked && onClearSelection) {
+                        onClearSelection()
+                      } else if (briefingKey) {
+                        setDismissedBriefingKey(briefingKey)
+                      }
+                    }}
+                    className="p-1 rounded-lg text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.06] transition-colors"
+                    aria-label="Hide setup briefing"
+                    title="Hide setup briefing"
+                  >
+                    <PiX size={15} />
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Strategy & Risk Chips */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-[#161619] border border-white/[0.06] px-2.5 py-0.5 text-[12px] font-medium text-[#A1A1AA]">
-                {briefingData.strategyLabel}
-              </span>
-              {briefingData.risk && (
-                <span
-                  className={cn(
-                    'rounded-full px-2.5 py-0.5 text-[12px] font-medium',
-                    briefingData.risk === 'High'
-                      ? 'bg-[#F87171]/12 text-[#F87171]'
-                      : briefingData.risk === 'Low'
-                      ? 'bg-[#34D399]/12 text-[#34D399]'
-                      : 'bg-[#161619] border border-white/[0.06] text-[#A1A1AA]'
-                  )}
-                >
-                  {briefingData.risk} risk
-                </span>
-              )}
+            {/* Single Dot-Separated Metadata Line + Quiet Criteria Summary */}
+            <div className="space-y-0.5">
+              <p className="text-[11.5px] text-[#A1A1AA] truncate">
+                {briefingData.strategyLabel} · {briefingData.entryTypeBadge}
+                {briefingData.mode === 'signal' && briefingData.confluence
+                  ? ` · ${briefingData.confluence.score}/${briefingData.confluence.maxScore} ${briefingData.confluence.tier}`
+                  : ''}
+                {briefingData.exitMode
+                  ? ` · ${
+                      briefingData.exitMode === 'SCALE_50_TP1_BE_TP2'
+                        ? '50/50 TP1→TP2'
+                        : '100% TP1'
+                    }`
+                  : ''}
+              </p>
+              {briefingData.mode === 'signal' &&
+                briefingData.confluence &&
+                briefingData.confluence.chips.length > 0 && (
+                  <p className="text-[11px] text-[#71717A] truncate">
+                    {briefingData.confluence.chips.slice(0, 4).join(' · ')}
+                  </p>
+                )}
             </div>
 
-            {/* 4-Column Entry / SL / TP / R:R Strip */}
-            <div className="grid grid-cols-4 gap-2 bg-[#161619] rounded-xl p-3">
+            {/* Unboxed Hairline Price Grid matching chart line colors */}
+            <div
+              className={cn(
+                'grid gap-2 border-y border-white/[0.06] py-2',
+                briefingData.tp2 != null ? 'grid-cols-5' : 'grid-cols-4'
+              )}
+            >
               <div className="min-w-0">
-                <span className="block text-[12px] text-[#71717A]">Entry</span>
-                <span className="block text-[13px] font-mono tabular-nums font-medium text-[#FAFAFA] truncate mt-0.5">
+                <span className="block text-[11px] text-[#38BDF8]/80">Entry</span>
+                <span className="block text-[12.5px] font-mono tabular-nums font-medium text-[#38BDF8] truncate mt-0.5">
                   {formatPrice(briefingData.entry, digits, symbol)}
                 </span>
               </div>
               <div className="min-w-0">
-                <span className="block text-[12px] text-[#71717A]">SL</span>
-                <span className="block text-[13px] font-mono tabular-nums font-medium text-[#F87171] truncate mt-0.5">
+                <span className="block text-[11px] text-[#F87171]/80">SL</span>
+                <span className="block text-[12.5px] font-mono tabular-nums font-medium text-[#F87171] truncate mt-0.5">
                   {briefingData.sl != null ? formatPrice(briefingData.sl, digits, symbol) : '—'}
                 </span>
               </div>
               <div className="min-w-0">
-                <span className="block text-[12px] text-[#71717A]">TP</span>
-                <span className="block text-[13px] font-mono tabular-nums font-medium text-[#34D399] truncate mt-0.5">
+                <span className="block text-[11px] text-[#34D399]/80">
+                  {briefingData.tp2 != null ? 'TP1' : 'TP'}
+                </span>
+                <span className="block text-[12.5px] font-mono tabular-nums font-medium text-[#34D399] truncate mt-0.5">
                   {briefingData.tp != null ? formatPrice(briefingData.tp, digits, symbol) : '—'}
                 </span>
               </div>
+              {briefingData.tp2 != null && (
+                <div className="min-w-0">
+                  <span className="block text-[11px] text-[#22D3EE]/80">TP2</span>
+                  <span className="block text-[12.5px] font-mono tabular-nums font-medium text-[#22D3EE] truncate mt-0.5">
+                    {formatPrice(briefingData.tp2, digits, symbol)}
+                  </span>
+                </div>
+              )}
               <div className="min-w-0">
-                <span className="block text-[12px] text-[#71717A]">R:R</span>
-                <span className="block text-[13px] font-mono tabular-nums font-medium text-[#FAFAFA] truncate mt-0.5">
+                <span className="block text-[11px] text-[#71717A]">R:R</span>
+                <span className="block text-[12.5px] font-mono tabular-nums font-medium text-[#FAFAFA] truncate mt-0.5">
                   {briefingData.rr > 0 ? `${briefingData.rr.toFixed(2)}R` : '—'}
                 </span>
               </div>
             </div>
 
-            {/* Suggested Sizing Row */}
-            {(briefingData.lotSize != null || briefingData.riskAmountUsd != null) && (
-              <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/[0.06] text-[13px]">
-                <span className="text-[#71717A]">Suggested sizing</span>
-                <span className="font-mono tabular-nums font-medium text-[#FAFAFA]">
-                  {briefingData.lotSize != null ? `${briefingData.lotSize.toFixed(2)} lots` : ''}
-                  {briefingData.lotSize != null && briefingData.riskAmountUsd != null ? ' · ' : ''}
-                  {briefingData.riskAmountUsd != null
-                    ? `$${briefingData.riskAmountUsd.toFixed(2)}`
-                    : ''}
-                </span>
-              </div>
-            )}
-
-            {/* Plain-English Confluence Reasons */}
+            {/* Concise Key Notes (max 2 bullets) + Inline Sizing */}
             {briefingData.reasons.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-[12px] font-medium text-[#71717A]">
-                  {briefingData.mode === 'signal'
-                    ? `Why ${briefingData.strategyLabel} picked this setup`
-                    : 'Plan summary'}
-                </p>
-                <ul className="space-y-1.5">
-                  {briefingData.reasons.slice(0, 4).map((reason, idx) => (
-                    <li
-                      key={idx}
-                      className="text-[13px] leading-relaxed text-[#A1A1AA] flex items-start gap-2"
-                    >
-                      <span className="text-[#71717A] mt-[2px]">·</span>
-                      <span>{reason}</span>
-                    </li>
-                  ))}
-                </ul>
+              <ul className="space-y-1">
+                {briefingData.reasons.slice(0, 2).map((reason, idx) => (
+                  <li
+                    key={idx}
+                    className="text-[12px] leading-snug text-[#A1A1AA] flex items-start gap-1.5"
+                  >
+                    <span className="text-[#52525B] shrink-0">·</span>
+                    <span className="line-clamp-2">{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {(briefingData.lotSize != null || briefingData.riskAmountUsd != null) && (
+              <div className="text-[11.5px] font-mono tabular-nums text-[#71717A]">
+                {briefingData.lotSize != null ? `Size ${briefingData.lotSize.toFixed(2)}L` : ''}
+                {briefingData.lotSize != null && briefingData.riskAmountUsd != null ? ' · ' : ''}
+                {briefingData.riskAmountUsd != null
+                  ? `Risk $${briefingData.riskAmountUsd.toFixed(2)}`
+                  : ''}
               </div>
             )}
 
-            {/* One-Click MT5 Execution Action */}
-            {briefingData.canExecute && (
-              <button
-                type="button"
-                disabled={executingSetup}
-                onClick={() => {
-                  if (briefingData.mode === 'signal' && onExecuteActiveSignal) {
-                    void onExecuteActiveSignal()
-                  } else if (briefingData.mode === 'manual' && onExecuteManualSetup) {
-                    void onExecuteManualSetup()
-                  }
-                }}
-                className={cn(
-                  'w-full h-10 rounded-xl border text-[13px] font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50',
-                  briefingData.action === 'BUY'
-                    ? 'bg-[#34D399]/15 hover:bg-[#34D399]/25 border-[#34D399]/30 text-[#34D399]'
-                    : 'bg-[#F87171]/15 hover:bg-[#F87171]/25 border-[#F87171]/30 text-[#F87171]'
-                )}
-              >
-                {executingSetup ? (
-                  <PiSpinnerGap size={16} className="animate-spin" />
-                ) : (
-                  <PiLightning size={16} />
-                )}
-                <span>
-                  {executingSetup
-                    ? 'Submitting to MT5...'
-                    : `Execute ${briefingData.action} on MT5`}
-                </span>
-                {briefingData.lotSize != null && !executingSetup && (
-                  <span className="font-mono tabular-nums text-[12px] opacity-85">
-                    ({briefingData.lotSize.toFixed(2)}L)
+            {/* Clean Monochrome Execution Action (only for Live Signals or Manual Setup, not already-open positions) */}
+            {briefingData.canExecute &&
+              !isPositionStatus(activeSignal?.status) &&
+              (briefingData.mode === 'manual' || isLiveStatus(activeSignal?.status)) && (
+                <button
+                  type="button"
+                  disabled={executingSetup || setupExecuted}
+                  onClick={() => {
+                    if (executeClickLockRef.current || executingSetup || setupExecuted) return
+                    const actionPromise =
+                      briefingData.mode === 'signal' && onExecuteActiveSignal
+                        ? onExecuteActiveSignal()
+                        : briefingData.mode === 'manual' && onExecuteManualSetup
+                        ? onExecuteManualSetup()
+                        : undefined
+                    if (actionPromise !== undefined) {
+                      executeClickLockRef.current = true
+                      void Promise.resolve(actionPromise).finally(() => {
+                        executeClickLockRef.current = false
+                      })
+                    }
+                  }}
+                  className={cn(
+                    'w-full h-9 rounded-lg text-[12.5px] font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-70',
+                    setupExecuted
+                      ? 'bg-[#34D399]/15 border border-[#34D399]/30 text-[#34D399] cursor-default'
+                      : 'bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] disabled:opacity-50'
+                  )}
+                >
+                  {setupExecuted ? (
+                    <PiCheck size={15} />
+                  ) : executingSetup ? (
+                    <PiSpinnerGap size={15} className="animate-spin" />
+                  ) : (
+                    <PiLightning size={15} />
+                  )}
+                  <span>
+                    {setupExecuted
+                      ? briefingData.mode === 'manual'
+                        ? isPaperMode
+                          ? 'Paper Order Placed'
+                          : 'Order Placed'
+                        : isPaperMode
+                        ? 'Executed in Paper'
+                        : 'Executed in MT5'
+                      : executingSetup
+                      ? isPaperMode
+                        ? 'Placing Paper Trade...'
+                        : 'Submitting to MT5...'
+                      : isPaperMode
+                      ? `Execute ${briefingData.action} in Paper`
+                      : `Execute ${briefingData.action} in MT5`}
                   </span>
-                )}
-              </button>
-            )}
+                </button>
+              )}
           </div>
         )}
       </div>

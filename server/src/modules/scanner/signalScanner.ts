@@ -10,7 +10,7 @@ import * as marketDataService from '../market-data/marketDataService';
 import * as candleCache from '../market-data/candleCache';
 import { getAvailableCount } from '../market-data/keyRotator';
 import { newsServiceClient } from '../../services/news/NewsServiceClient';
-import redis from '../market-data/redisClient';
+import { backupRedis } from '../market-data/redisClient';
 import { broadcast } from '../websocket/websocketManager';
 import { buildLiveStrategyContext, normalizeCandle, type RawCandleInput } from '../algorithms/contextBuilder';
 import {
@@ -33,6 +33,10 @@ import {
   getOpenPositions,
   getSymbolQuote,
 } from '../execution/metaApiService';
+import { paperBrokerService } from '../execution/paperBrokerService';
+import { isWinningPaperStatus } from '../execution/executionBroker';
+import { evaluateSignalDeterministically } from '../execution/tradeResolutionEngine';
+import { queryCandles } from '../storage/sqliteDb';
 import * as signalStore from './signalStore';
 import { updateScanState } from './globalSignalScanner';
 import {
@@ -346,34 +350,99 @@ async function resolveActiveSignalsForCandle(
   frontTimeframe: string,
   latestCandle: marketDataService.MarketCandle
 ): Promise<void> {
+  const cfg = await loadGuardrailConfig().catch(() => null);
+
+  // 1. Resolve all open/pending Internal Paper Broker trades deterministically across archived bars
+  try {
+    const { newlyClosedTrades } = await paperBrokerService.resolveSymbolOnCandle(
+      frontSymbol,
+      frontTimeframe,
+      latestCandle
+    );
+
+    for (const trade of newlyClosedTrades) {
+      if (trade.status === 'EXPIRED' || trade.status === 'CANCELLED') continue;
+      const isWin = isWinningPaperStatus(trade.status);
+      const outcome: 'WIN' | 'LOSS' = isWin ? 'WIN' : 'LOSS';
+
+      if (trade.signalId) {
+        await signalStore.updateSignalStatus(trade.signalId, outcome).catch(() => {});
+        broadcast({
+          type: 'SIGNAL_UPDATED',
+          payload: {
+            id: trade.signalId,
+            symbol: trade.symbol,
+            timeframe: trade.timeframe,
+            strategyId: trade.strategyId,
+            status: outcome,
+            realizedPnlUsd: trade.realizedPnlUsd,
+            realizedR: trade.realizedR,
+          },
+        });
+      }
+
+      const optPayload = {
+        id: trade.signalId || trade.id,
+        strategyId: trade.strategyId,
+        symbol: trade.symbol,
+        timeframe: trade.timeframe,
+        direction: trade.direction,
+        entry: trade.fillPrice ?? trade.requestedEntry,
+        sl: trade.slPrice,
+        tp: trade.tp1Price,
+      };
+
+      if (isWin) {
+        await processResolvedWin(optPayload).catch(() => {});
+        await recordTradeResolutionForRisk('WIN', Math.abs(trade.realizedPnlUsd), cfg || undefined).catch(() => {});
+      } else {
+        await processResolvedLoss(optPayload).catch(() => {});
+        await recordTradeResolutionForRisk(
+          'LOSS',
+          Math.abs(trade.realizedPnlUsd || cfg?.riskAmountUsd || 500),
+          cfg || undefined
+        ).catch(() => {});
+      }
+    }
+  } catch (err: any) {
+    console.error(`[PaperResolver] Failed resolving ${frontSymbol} ${frontTimeframe}:`, err?.message);
+  }
+
+  // 2. Deterministic resolution for un-executed live signals remaining in Firestore
   const activeSignals = await signalStore.getActiveLiveSignals(frontSymbol, frontTimeframe);
   if (!activeSignals.length) return;
 
-  const cfg = await loadGuardrailConfig().catch(() => null);
+  const archivedTail = queryCandles({
+    symbol: frontSymbol,
+    timeframe: frontTimeframe,
+    toTime: latestCandle.time,
+    limit: 60,
+  });
+  const evalBars = archivedTail.some((b) => b.time === latestCandle.time)
+    ? archivedTail
+    : [...archivedTail, latestCandle].sort((a, b) => a.time - b.time);
 
   for (const sig of activeSignals) {
     if (sig.time && latestCandle.time && latestCandle.time <= sig.time) {
       continue;
     }
 
-    let outcome: 'WIN' | 'LOSS' | null = null;
-    if (sig.direction === 'BUY') {
-      if (latestCandle.low <= sig.sl) outcome = 'LOSS';
-      else if (latestCandle.high >= sig.tp) outcome = 'WIN';
-    } else if (sig.direction === 'SELL') {
-      if (latestCandle.high >= sig.sl) outcome = 'LOSS';
-      else if (latestCandle.low <= sig.tp) outcome = 'WIN';
-    }
+    const res = evaluateSignalDeterministically({
+      signal: sig,
+      candles: evalBars,
+    });
 
-    if (outcome) {
-      console.log(`[Evaluation] Signal ${sig.id} resolved as ${outcome}`);
-      await signalStore.updateSignalStatus(sig.id, outcome);
+    if (res.outcome) {
+      console.log(
+        `[Evaluation] Signal ${sig.id} resolved as ${res.outcome} (${res.resolutionMethod || 'candle_ohlc'})`
+      );
+      await signalStore.updateSignalStatus(sig.id, res.outcome);
       broadcast({
         type: 'SIGNAL_UPDATED',
-        payload: { ...sig, status: outcome },
+        payload: { ...sig, status: res.outcome, resolutionMethod: res.resolutionMethod },
       });
 
-      if (outcome === 'WIN') {
+      if (res.outcome === 'WIN') {
         await processResolvedWin(sig).catch(() => {});
         await recordTradeResolutionForRisk('WIN', 0, cfg || undefined).catch(() => {});
       } else {
@@ -469,10 +538,10 @@ export async function runScan(): Promise<void> {
           }
         );
 
-        // Preserve any recent guardrail events in scan_rejects while updating strategy rejects
+        // Preserve any recent guardrail events in scan_rejects while updating strategy rejects (offloaded to backupRedis)
         try {
           const rejectKey = `scan_rejects:${frontSymbol}:${frontTimeframe}`;
-          const existingRaw = await redis.get(rejectKey).catch(() => null);
+          const existingRaw = await backupRedis.get(rejectKey).catch(() => null);
           let prevGuardrailEvents: any[] = [];
           if (existingRaw) {
             try {
@@ -486,9 +555,9 @@ export async function runScan(): Promise<void> {
             prevGuardrailEvents.length > 0
               ? { ...rejects, _guardrailEvents: prevGuardrailEvents }
               : rejects;
-          await redis.set(rejectKey, JSON.stringify(payload), 'EX', 7200);
+          await backupRedis.set(rejectKey, JSON.stringify(payload), 'EX', 7200);
         } catch (err) {
-          console.error(`Failed to save scan rejects for ${frontSymbol} to Redis:`, err);
+          console.error(`Failed to save scan rejects for ${frontSymbol} to backup Redis:`, err);
         }
 
         // 4. Deduplicate, store, broadcast, and evaluate atomic pre-trade guardrails
@@ -561,13 +630,28 @@ export async function runScan(): Promise<void> {
               );
 
               const execRes = await executeTrade({
+                signalId: signal.id,
                 symbol: signal.symbol,
+                timeframe: signal.timeframe,
+                market: signal.market,
+                strategyId: signal.strategyId,
+                strategyLabel: signal.strategyLabel,
+                tier: signal.tier,
                 action: signal.direction,
                 volume: dynamicLots,
                 sl: signal.sl,
                 tp: signal.tp,
+                tp2: signal.tp2,
+                riskAmountUsd: cfg.riskAmountUsd,
+                rr: signal.rr,
+                confidence: signal.confidence,
                 entryType,
+                rawEntryType: signal.rawEntryType,
                 price: execPrice,
+                referencePrice: latestCandle.close,
+                signalTime: latestCandle.time,
+                reasons: signal.reason,
+                confluence: signal.confluence,
                 comment: `TRAXO ${signal.strategyId || 'Auto'}`.slice(0, 26),
               });
 

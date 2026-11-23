@@ -8,8 +8,19 @@ import {
 } from '@/lib/traxoStrategies'
 
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'pro'
-export type Instrument = 'forex' | 'crypto' | 'stocks' | 'commodities'
+export type Instrument = 'forex' | 'commodities' | 'futures'
 export type SubscriptionPlan = 'free' | 'pro'
+
+const VALID_INSTRUMENTS: readonly Instrument[] = ['forex', 'commodities', 'futures']
+
+function sanitizeInstruments(raw: unknown): Instrument[] {
+  if (!Array.isArray(raw)) return ['forex']
+  const mapped = raw
+    .map((item) => (item === 'stocks' ? 'futures' : item))
+    .filter((item): item is Instrument => VALID_INSTRUMENTS.includes(item as Instrument))
+  const unique = Array.from(new Set(mapped))
+  return unique.length > 0 ? unique : ['forex']
+}
 
 export interface OnboardingStrategyItem {
   id: TraxoCatalogStrategyId
@@ -104,7 +115,7 @@ export const useOnboardingStore = create<OnboardingState>()(
 
               set({
                 experienceLevel: prefs.experienceLevel ?? null,
-                instruments: (prefs.instruments as Instrument[]) ?? ['forex'],
+                instruments: sanitizeInstruments(prefs.instruments),
                 plan: 'pro',
                 selectedStrategyId:
                   prefs.selectedStrategyId && ALL_STRATEGY_IDS.includes(prefs.selectedStrategyId)
@@ -236,7 +247,7 @@ export const useOnboardingStore = create<OnboardingState>()(
     }),
     {
       name: 'traxo-onboarding',
-      version: 3,
+      version: 4,
       migrate: (persistedState) => {
         const state = (persistedState ?? {}) as Partial<OnboardingState>
         const existingIds = Array.isArray(state.selectedStrategyIds)
@@ -253,6 +264,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         return {
           ...initialState,
           ...state,
+          instruments: sanitizeInstruments(state.instruments),
           plan: 'pro' as SubscriptionPlan,
           selectedStrategyId: nextPrimary,
           selectedStrategyIds: nextIds,

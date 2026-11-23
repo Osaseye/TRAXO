@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/api'
 import { useAuthStore } from '@/stores/useAuthStore'
 
 export type NewsCategory = 'general' | 'forex' | 'crypto' | 'merger'
@@ -16,13 +17,11 @@ export interface NewsItem {
   related: string
 }
 
-const SERVER_BASE = (import.meta.env.VITE_SERVER_URL as string | undefined) ?? 'http://localhost:8080'
-
 async function fetchNews(category: NewsCategory, idToken: string | null): Promise<NewsItem[]> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const headers: Record<string, string> = {}
   if (idToken) headers['Authorization'] = `Bearer ${idToken}`
 
-  const res = await fetch(`${SERVER_BASE}/api/news?category=${category}`, { headers })
+  const res = await apiFetch(`/api/news?category=${encodeURIComponent(category)}`, { headers })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`)

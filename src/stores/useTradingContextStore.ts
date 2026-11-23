@@ -1,13 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { postJournalEntry, postTradingContext, updateJournalEntry } from '@/lib/api'
+import { apiFetch, postJournalEntry, postTradingContext, updateJournalEntry } from '@/lib/api'
 
 export type ChartSymbol =
   | 'EURUSD'
   | 'GBPUSD'
   | 'USDJPY'
   | 'XAUUSD'
-  | 'XAGUSD'
+  | 'MNQ'
   | 'AUDUSD'
   | 'USDCAD'
   | 'USDCHF'
@@ -15,18 +15,37 @@ export type ChartSymbol =
   | 'EURJPY'
   | 'GBPJPY'
   | 'EURGBP'
-  | 'AAPL'
-  | 'MSFT'
-  | 'NVDA'
-  | 'TSLA'
-  | 'AMZN'
-  | 'META'
-  | 'GOOGL'
-  | 'NFLX'
-  | 'AMD'
-  | 'COIN'
-  | 'MSTR'
-  | 'SMCI'
+
+export const VALID_CHART_SYMBOLS: readonly ChartSymbol[] = [
+  'EURUSD',
+  'GBPUSD',
+  'USDJPY',
+  'XAUUSD',
+  'MNQ',
+  'AUDUSD',
+  'USDCAD',
+  'USDCHF',
+  'NZDUSD',
+  'EURJPY',
+  'GBPJPY',
+  'EURGBP',
+]
+
+export function isValidChartSymbol(value: unknown): value is ChartSymbol {
+  return typeof value === 'string' && (VALID_CHART_SYMBOLS as readonly string[]).includes(value)
+}
+
+const VALID_ALLOWED_CATEGORIES = ['forex', 'metals', 'indices'] as const
+
+function sanitizeAllowedCategories(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [...VALID_ALLOWED_CATEGORIES]
+  const normalized = raw
+    .map((item) => (item === 'stocks' ? 'indices' : String(item || '').trim().toLowerCase()))
+    .filter((item) => (VALID_ALLOWED_CATEGORIES as readonly string[]).includes(item))
+  const unique = Array.from(new Set(normalized))
+  return unique.length > 0 ? unique : [...VALID_ALLOWED_CATEGORIES]
+}
+
 export type ChartTimeframe = '1m' | '5m' | '15m' | '1H' | '4H' | '1D'
 
 export type JournalOutcome = 'pending' | 'skipped' | 'win' | 'loss' | 'breakeven'
@@ -179,7 +198,7 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
   autoTradeMaxPositions: 3,
   autoTradeMinRR: 1.8,
   autoTradeSessionFilter: 'all',
-  autoTradeAllowedCategories: ['forex', 'metals', 'stocks'],
+  autoTradeAllowedCategories: ['forex', 'metals', 'indices'],
   autoTradeCooldownOnLoss: true,
 
   setAutoTradeMinConfidence: (v) => {
@@ -297,7 +316,7 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
     postTradingContext({ maxDailyLossPct: nextVal }).catch(() => {})
     set({ maxDailyLossPct: nextVal })
   },
-  setChartSymbol: (value) => set({ chartSymbol: value }),
+  setChartSymbol: (value) => set({ chartSymbol: isValidChartSymbol(value) ? value : 'EURUSD' }),
   setChartTimeframe: (value) => set({ chartTimeframe: value }),
 
   logSuggestionDecision: (entry) =>
@@ -379,9 +398,8 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
       postTradingContext({ accountBalance: nextBalance }).catch(() => {})
 
       if (outcome === 'loss') {
-        fetch('/api/strategy-optimization/analyze-loss', {
+        apiFetch('/api/strategy-optimization/analyze-loss', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(target),
         }).catch(() => {})
       }
@@ -393,6 +411,21 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
     }),
 }), {
   name: 'traxo-trading-context',
+  version: 2,
+  migrate: (persistedState) => {
+    const state = (persistedState ?? {}) as Partial<TradingContextState>
+    const nextChartSymbol: ChartSymbol = isValidChartSymbol(state.chartSymbol) ? state.chartSymbol : 'EURUSD'
+    const nextNotifSymbols: ChartSymbol[] = Array.isArray(state.notifSymbolFilters)
+      ? state.notifSymbolFilters.filter((sym): sym is ChartSymbol => isValidChartSymbol(sym))
+      : []
+
+    return {
+      ...state,
+      chartSymbol: nextChartSymbol,
+      notifSymbolFilters: nextNotifSymbols,
+      autoTradeAllowedCategories: sanitizeAllowedCategories(state.autoTradeAllowedCategories),
+    } as TradingContextState
+  },
   partialize: (state) => ({
     accountBalance: state.accountBalance,
     riskPerTradePct: state.riskPerTradePct,

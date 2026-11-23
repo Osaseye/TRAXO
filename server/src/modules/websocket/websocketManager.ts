@@ -1,12 +1,13 @@
 import type http from 'http';
 import { Server } from 'socket.io';
+import { env, resolveCorsOrigin } from '../../config/env';
 
 let io: Server | null = null;
 
 export function initWebSocketServer(server: http.Server): Server {
   io = new Server(server, {
     cors: {
-      origin: '*',
+      origin: resolveCorsOrigin(env.allowedOrigins),
       methods: ['GET', 'POST'],
     },
   });
@@ -35,13 +36,17 @@ export interface BroadcastMessage {
     | 'NEWS_FREEZE_ENTER'
     | 'NEWS_RELEASED'
     | 'NEWS_FREEZE_EXIT'
+    | 'PAPER_TRADE_UPDATED'
+    | 'REPLAY_TICK'
     | string;
   payload?: any;
 }
 
 export function broadcast(message: BroadcastMessage): void {
   if (!io) {
-    console.error('Socket.io server is not initialized. Cannot broadcast message.');
+    if (process.env.TRAXO_NO_LISTEN !== 'true') {
+      console.error('Socket.io server is not initialized. Cannot broadcast message.');
+    }
     return;
   }
 
@@ -52,6 +57,8 @@ export function broadcast(message: BroadcastMessage): void {
     NEWS_FREEZE_ENTER: ['news-freeze-enter'],
     NEWS_RELEASED: ['news-released'],
     NEWS_FREEZE_EXIT: ['news-freeze-exit'],
+    PAPER_TRADE_UPDATED: ['paper-trade-updated'],
+    REPLAY_TICK: ['replay-tick'],
   };
 
   const events = EVENT_MAP[message.type];

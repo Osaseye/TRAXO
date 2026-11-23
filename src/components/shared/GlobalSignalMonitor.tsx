@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect } from 'react';
+import { useLocation } from 'react-router';
 import { useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore';
 import { notifySignal } from '@/hooks/useSignalNotification';
 import webSocketService from '@/lib/websocket';
 import { useNotificationStore } from '@/stores/useNotificationStore';
 import { useTradingContextStore } from '@/stores/useTradingContextStore';
-import { getHistoricalSignals, getLiveSignals } from '@/lib/api';
+import { apiFetch, getHistoricalSignals, getLiveSignals } from '@/lib/api';
 
 function signalToNotification(s: any) {
   const ms = typeof s.createdAt === 'string'
@@ -42,8 +43,21 @@ function signalToNotification(s: any) {
  * 1. On mount → fetches existing live/historical signals from the REST API (hydration).
  * 2. Subscribes to WebSocket events so new signals trigger instant toasts + notifications.
  */
+const PUBLIC_ROUTES = new Set([
+  '/',
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/verify-otp',
+  '/admin/login',
+]);
+
 export function GlobalSignalMonitor() {
+  const location = useLocation();
+  const isPublicRoute = PUBLIC_ROUTES.has(location.pathname);
+
   useEffect(() => {
+    if (isPublicRoute) return;
     let cancelled = false;
 
     // ── Hydrate existing signals from REST API ──
@@ -60,9 +74,19 @@ export function GlobalSignalMonitor() {
         const histArr = historical?.signals || [];
 
         const liveIds = new Set(liveArr.map((s: any) => s.id));
+        const nowSec = Math.floor(Date.now() / 1000);
         const previousSignals = histArr
           .filter((s: any) => s?.id && !liveIds.has(s.id))
-          .map((s: any) => ({ ...s, status: (s.status && s.status !== 'live') ? s.status : 'expired' }));
+          .map((s: any) => {
+            const rawStatus = String(s.status || '').toLowerCase();
+            const rawTime = typeof s.time === 'number' ? s.time : Number(s.time || 0);
+            const timeSec = rawTime > 1e12 ? Math.floor(rawTime / 1000) : rawTime;
+            const keepLive = rawStatus === 'live' && timeSec > 0 && nowSec - timeSec < 86_400;
+            return {
+              ...s,
+              status: keepLive ? 'live' : s.status && s.status !== 'live' ? s.status : 'expired',
+            };
+          });
 
         useAnalysisSignalStore.getState().addSignals([
           ...liveArr.map((s: any) => ({ ...s, status: 'live' })),
@@ -99,9 +123,8 @@ export function GlobalSignalMonitor() {
               }
 
               if (statusStr === 'loss') {
-                fetch('/api/strategy-optimization/analyze-loss', {
+                apiFetch('/api/strategy-optimization/analyze-loss', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(signal),
                 }).catch(() => {});
               }
@@ -176,7 +199,7 @@ export function GlobalSignalMonitor() {
       unsub2();
       unsub3();
     };
-  }, []);
+  }, [isPublicRoute]);
 
   return null;
 }

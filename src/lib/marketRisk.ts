@@ -14,12 +14,14 @@ export interface MarketRiskContext {
 }
 
 const FOREX_SYMBOLS = new Set(['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'NZDUSD', 'USDCAD', 'USDCHF', 'EURJPY', 'GBPJPY', 'EURGBP'])
-const METAL_SYMBOLS = new Set(['XAUUSD', 'XAGUSD'])
+const METAL_SYMBOLS = new Set(['XAUUSD'])
+const FUTURES_SYMBOLS = new Set(['MNQ'])
 
 export function getMarketTypeForSymbol(symbol: string): MarketType {
   if (FOREX_SYMBOLS.has(symbol)) return 'forex'
   if (METAL_SYMBOLS.has(symbol)) return 'commodities'
-  return 'stocks'
+  if (FUTURES_SYMBOLS.has(symbol)) return 'futures'
+  return 'futures'
 }
 
 function getTimeframeFactor(timeframe: Timeframe) {

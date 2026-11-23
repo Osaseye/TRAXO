@@ -4,7 +4,7 @@ import { analyzeOrderBlock } from '../../server/algorithms/orderBlockStrategy';
 import { analyzeSupplyDemand } from '../../server/algorithms/supplyDemandStrategy';
 import { analyzeTrendFollowing } from '../../server/algorithms/trendFollowingStrategy';
 import { analyzeWickRejection } from '../../server/algorithms/wickRejection';
-import { getTraxoStrategy } from '../../server/algorithms/traxo';
+import { evaluateNinePointConfluence, getTraxoStrategy } from '../../server/algorithms/traxo';
 
 export interface Candle {
   time: number | string;
@@ -31,19 +31,114 @@ export interface AnalysisSignal {
   risk: RiskLabel;
   reason: string[];
   status?: 'live' | 'expired' | 'WIN' | 'LOSS' | 'tp_hit' | 'sl_hit' | string;
+  tp2?: number | null;
+  entryType?: 'MARKET' | 'LIMIT' | 'STOP' | 'market' | 'limit' | string;
+  rawEntryType?: 'MARKET' | 'LIMIT' | 'STOP' | string;
+  exitMode?: 'FULL_TP1' | 'SCALE_50_TP1_BE_TP2';
+  tier?: 'PRIME' | 'STANDARD' | 'AGGRESSIVE' | string;
+  market?: 'FOREX' | 'METALS' | 'FUTURES' | string;
+  confluence?: {
+    score: number;
+    maxScore?: number;
+    tier?: string;
+    riskScalePct?: number;
+    passedCriteria?: string[];
+    checks?: Array<{ key: string; point?: number; label: string; passed: boolean; detail?: string }>;
+  } | null;
+}
+
+const SHORT_ENGINE_TAGS: Record<string, string> = {
+  traxo_london_apex: 'LONDON',
+  traxo_tokyo_yield: 'TOKYO',
+  traxo_sovereign_fix: 'SOV FIX',
+  traxo_barrier_grid: 'BARRIER',
+  traxo_macro_vector: 'MACRO',
+  traxo_aurum_sweep: 'AURUM',
+  traxo_bullion_strike: 'BULLION',
+  traxo_ny_bullet: 'NY BULLET',
+  traxo_aurum_fix: 'FIX',
+  traxo_kinetic_nr7: 'NR7',
+  traxo_globex_sweep: 'GLOBEX',
+  traxo_velocity_orb: 'ORB',
+  traxo_initial_balance: 'IB',
+  traxo_mean_equilibrium: 'VWAP',
+  traxo_power_hour_moc: 'MOC',
+  supply_demand: 'S&D',
+  wick_rejection: 'WICK',
+  order_block: 'OB',
+  trend_following: 'TREND',
+  breakout: 'BRK',
+};
+
+const TWO_WORD_TAG_SUFFIXES = new Set(['FIX', 'BULLET', 'NR7', 'ORB', 'MOC']);
+
+export function formatShortEngineTag(strategyId?: string, strategyLabel?: string): string {
+  const normId = (strategyId || '').trim().toLowerCase().replace(/-/g, '_');
+  if (normId && SHORT_ENGINE_TAGS[normId]) {
+    return SHORT_ENGINE_TAGS[normId];
+  }
+
+  const raw = strategyLabel?.trim() || strategyId?.trim() || 'SIGNAL';
+  const cleaned = raw.replace(/^traxo[\s_-]+/i, '').trim() || raw;
+  const words = cleaned.toUpperCase().split(/[\s_-]+/).filter(Boolean);
+  if (words.length === 0) return 'SIGNAL';
+
+  const [w1, w2] = words;
+  if (w2 && TWO_WORD_TAG_SUFFIXES.has(w2)) {
+    return `${w1} ${w2}`;
+  }
+  return w1;
+}
+
+export function formatEntryTypeBadge(entryType?: string | null): 'MKT' | 'LMT' | 'STP' {
+  const upper = String(entryType || 'MARKET').trim().toUpperCase();
+  if (upper === 'LIMIT' || upper === 'LMT') return 'LMT';
+  if (upper === 'STOP' || upper === 'STP') return 'STP';
+  return 'MKT';
+}
+
+const FULL_TP1_STRATEGIES = new Set([
+  'traxo_mean_equilibrium',
+  'traxo_sovereign_fix',
+  'traxo_aurum_fix',
+  'traxo_barrier_grid',
+  'traxo_power_hour_moc',
+]);
+
+export function resolveSignalExitMode(params: {
+  strategyId?: string;
+  market?: string;
+  symbol?: string;
+  tier?: string;
+  volume: number;
+  tp2?: number | null;
+}): 'FULL_TP1' | 'SCALE_50_TP1_BE_TP2' {
+  const id = (params.strategyId || '').trim().replace(/-/g, '_').toLowerCase();
+  if (FULL_TP1_STRATEGIES.has(id)) return 'FULL_TP1';
+
+  const isFutures =
+    (params.market || '').toUpperCase() === 'FUTURES' ||
+    (params.symbol || '').toUpperCase().includes('MNQ');
+  if ((isFutures && params.volume < 2) || (!isFutures && params.volume < 0.02)) {
+    return 'FULL_TP1';
+  }
+
+  if ((params.tier || '').toUpperCase() === 'AGGRESSIVE') return 'FULL_TP1';
+  if (!params.tp2 || !Number.isFinite(params.tp2) || params.tp2 <= 0) return 'FULL_TP1';
+
+  return 'SCALE_50_TP1_BE_TP2';
 }
 
 export function priceDigits(symbol: string): number {
   if (symbol.includes('JPY')) return 3
-  if (['XAUUSD', 'XAGUSD'].some(s => symbol.includes(s))) return 2
-  if (['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'].some(s => symbol.includes(s))) return 2
+  if (symbol.includes('XAU') || symbol.includes('MNQ')) return 2
   return 5
 }
 
-const STOCK_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'];
-
 function getAssetType(symbol: string): any {
-  if (STOCK_SYMBOLS.includes(symbol)) return 'STOCKS';
+  const upper = symbol.toUpperCase();
+  if (upper.includes('MNQ')) return 'FUTURES';
+  if (upper.includes('XAU')) return 'COMMODITY';
   return 'FOREX';
 }
 
@@ -129,6 +224,12 @@ export function runSignalsForStrategies(
             const traxoRisk = Math.abs(traxoSig.entryPrice - traxoSig.slPrice);
             const traxoReward = Math.abs(traxoSig.tp1Price - traxoSig.entryPrice);
             const traxoRr = traxoRisk > 0 ? Number((traxoReward / traxoRisk).toFixed(2)) : traxoSig.riskRewardRatio;
+            const confluence = evaluateNinePointConfluence(traxoSig, {
+              symbol,
+              timeframe,
+              candles: strategyContextCandles,
+              currentPrice: strategyContextCandles[strategyContextCandles.length - 1]?.close,
+            });
             results.push({
               id: [
                 'sig',
@@ -146,10 +247,20 @@ export function runSignalsForStrategies(
               entry: traxoSig.entryPrice,
               sl: traxoSig.slPrice,
               tp: traxoSig.tp1Price,
+              tp2: traxoSig.tp2Price,
               rr: traxoRr,
               confidence: traxoSig.confidencePct,
               risk: riskFromConfidence(traxoSig.confidencePct),
               reason: traxoSig.reasons || [],
+              entryType: traxoSig.entryType,
+              rawEntryType: traxoSig.entryType,
+              tier: confluence.tier === 'DISCARD' ? traxoSig.tier : confluence.tier || traxoSig.tier,
+              market: traxoSig.market,
+              confluence: {
+                ...confluence,
+                passedCriteria: confluence.checks.filter((c) => c.passed).map((c) => c.label),
+              },
+              status: 'live',
             });
           }
         }
@@ -227,10 +338,15 @@ export function runSignalsForStrategies(
           entry,
           sl,
           tp,
+          tp2: rawSignal.tp2_price ?? null,
           rr,
           confidence,
           risk: riskFromConfidence(confidence),
-          reason: rawSignal.reason || []
+          reason: rawSignal.reason || [],
+          entryType: rawSignal.entry_type === 'limit' ? 'LIMIT' : 'MARKET',
+          rawEntryType: rawSignal.entry_type === 'limit' ? 'LIMIT' : 'MARKET',
+          tier: confidence >= 82 ? 'PRIME' : confidence >= 72 ? 'STANDARD' : 'AGGRESSIVE',
+          status: 'live',
         });
       }
     } catch (error) {

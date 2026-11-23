@@ -513,7 +513,7 @@ export default function StrategyManager() {
                         </Link>
 
                         <Link
-                          to={`/backtesting?strategy=${meta.backtestFallbackId}`}
+                          to={`/backtesting?strategy=${meta.id}`}
                           className="h-9 sm:h-8 px-3.5 sm:px-3 rounded-xl bg-[#18181B] border border-white/[0.08] hover:border-white/[0.16] text-[12.5px] font-medium text-[#A1A1AA] hover:text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors"
                         >
                           <PiChartBar size={13} />

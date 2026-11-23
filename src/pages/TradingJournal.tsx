@@ -5,15 +5,19 @@ import {
   PiCalendarBlank,
   PiCaretLeft,
   PiCaretRight,
+  PiChartLineUp,
   PiCoins,
   PiDownloadSimple,
+  PiFastForward,
   PiMagnifyingGlass,
   PiNotebook,
+  PiPlay,
   PiShield,
   PiTrash,
   PiTrophy,
   PiWarningCircle,
 } from 'react-icons/pi'
+import { useMetaApi } from '@/hooks/useMetaApi'
 import { updateJournalEntry } from '@/lib/api'
 import {
   useTradingContextStore,
@@ -37,8 +41,8 @@ function toDateKey(ts: number): string {
   return `${y}-${m}-${day}`
 }
 
-function formatPrice(val: number): string {
-  if (!Number.isFinite(val)) return '—'
+function formatPrice(val: number | null | undefined): string {
+  if (val === null || val === undefined || !Number.isFinite(val)) return '—'
   if (val >= 100) return val.toFixed(2)
   if (val >= 10) return val.toFixed(3)
   return val.toFixed(5)
@@ -89,6 +93,38 @@ export default function TradingJournal() {
   const editJournalEntry = useTradingContextStore((s) => s.editJournalEntry)
   const deleteJournalEntry = useTradingContextStore((s) => s.deleteJournalEntry)
   const triggerBreakEven = useTradingContextStore((s) => s.triggerBreakEven)
+
+  const [activeTab, setActiveTab] = useState<'paper' | 'manual'>('paper')
+  const [paperStatusFilter, setPaperStatusFilter] = useState<'ALL' | 'ACTIVE' | 'WINS' | 'LOSSES' | 'EXPIRED'>('ALL')
+  const [paperSearch, setPaperSearch] = useState('')
+  const [showBalanceModal, setShowBalanceModal] = useState(false)
+  const [balanceInput, setBalanceInput] = useState('10000')
+  const [clearPaperTrades, setClearPaperTrades] = useState(false)
+
+  const {
+    account,
+    paperTrades,
+    paperSummary,
+    replayStatus,
+    loading: paperLoading,
+    resetPaperBalance,
+    stepOfflineReplay,
+  } = useMetaApi()
+
+  const filteredPaperTrades = useMemo(() => {
+    const q = paperSearch.trim().toLowerCase()
+    return paperTrades.filter((t) => {
+      if (paperStatusFilter === 'ACTIVE' && !['PENDING', 'OPEN', 'PARTIAL_TP1'].includes(t.status)) return false
+      if (paperStatusFilter === 'WINS' && !['WIN_TP1', 'WIN_TP2', 'WIN_TP1_BE'].includes(t.status)) return false
+      if (paperStatusFilter === 'LOSSES' && t.status !== 'LOSS_SL') return false
+      if (paperStatusFilter === 'EXPIRED' && !['EXPIRED', 'CANCELLED'].includes(t.status)) return false
+      if (q) {
+        const hay = `${t.symbol} ${t.strategyLabel} ${t.strategyId} ${t.timeframe} ${t.status}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [paperTrades, paperStatusFilter, paperSearch])
 
   const [scope, setScope] = useState<JournalScope>('taken')
   const [search, setSearch] = useState('')
@@ -409,59 +445,426 @@ export default function TradingJournal() {
     <div className="min-h-full bg-[#09090B] text-[#FAFAFA] overflow-x-hidden">
       <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-5 sm:py-8 space-y-6 sm:space-y-8">
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div className="space-y-1.5 min-w-0">
-            <p className="text-[12px] font-medium text-[#71717A]">Execution Journal</p>
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+          <div className="space-y-2 min-w-0">
+            <p className="text-[12px] font-medium text-[#71717A]">Execution &amp; Paper Ledger</p>
             <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
               <h1 className="text-[24px] sm:text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
                 Trading Journal
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-[#18181B] text-[12px] font-mono tabular-nums text-[#A1A1AA]">
-                {scopedEntries.length}
-              </span>
+              <div className="inline-flex items-center rounded-full bg-[#111113] border border-white/[0.08] p-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('paper')}
+                  className={`px-3 py-1 rounded-full text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors ${
+                    activeTab === 'paper'
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  <span>Paper Ledger (Auto-Trader)</span>
+                  <span className="font-mono text-[11px] opacity-75">{paperTrades.length}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('manual')}
+                  className={`px-3 py-1 rounded-full text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors ${
+                    activeTab === 'manual'
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  <span>Manual Journal</span>
+                  <span className="font-mono text-[11px] opacity-75">{scopedEntries.length}</span>
+                </button>
+              </div>
             </div>
             <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA]">
-              Monthly performance matrix, trade execution history, and outcome attribution.
+              {activeTab === 'paper'
+                ? 'Deterministic internal paper execution, dynamic TP1/BE/TP2 management, and bar-by-bar candle replay proof.'
+                : 'Monthly performance matrix, trade execution history, and outcome attribution.'}
             </p>
           </div>
 
-          <div className="flex items-center justify-between sm:justify-end gap-2.5 sm:gap-3 w-full sm:w-auto shrink-0">
-            <div className="inline-flex items-center rounded-full bg-[#111113] border border-white/[0.07] p-1">
+          {activeTab === 'manual' ? (
+            <div className="flex items-center justify-between sm:justify-end gap-2.5 sm:gap-3 w-full sm:w-auto shrink-0">
+              <div className="inline-flex items-center rounded-full bg-[#111113] border border-white/[0.07] p-1">
+                <button
+                  type="button"
+                  onClick={() => setScope('taken')}
+                  className={`px-3.5 py-1.5 rounded-full text-[12.5px] sm:text-[13px] font-medium transition-colors ${
+                    scope === 'taken'
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  Taken
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScope('all')}
+                  className={`px-3.5 py-1.5 rounded-full text-[12.5px] sm:text-[13px] font-medium transition-colors ${
+                    scope === 'all'
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  All
+                </button>
+              </div>
+
               <button
                 type="button"
-                onClick={() => setScope('taken')}
-                className={`px-3.5 py-1.5 rounded-full text-[12.5px] sm:text-[13px] font-medium transition-colors ${
-                  scope === 'taken'
-                    ? 'bg-[#FAFAFA] text-[#09090B]'
-                    : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
-                }`}
+                onClick={handleExportCsv}
+                disabled={filteredTableEntries.length === 0}
+                className="h-9 sm:h-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] disabled:opacity-40 text-[12.5px] sm:text-[13px] font-medium text-[#FAFAFA] transition-colors whitespace-nowrap"
               >
-                Taken
-              </button>
-              <button
-                type="button"
-                onClick={() => setScope('all')}
-                className={`px-3.5 py-1.5 rounded-full text-[12.5px] sm:text-[13px] font-medium transition-colors ${
-                  scope === 'all'
-                    ? 'bg-[#FAFAFA] text-[#09090B]'
-                    : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
-                }`}
-              >
-                All
+                <PiDownloadSimple className="h-4 w-4 text-[#A1A1AA]" />
+                <span>Export CSV</span>
               </button>
             </div>
-
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              disabled={filteredTableEntries.length === 0}
-              className="h-9 sm:h-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] disabled:opacity-40 text-[12.5px] sm:text-[13px] font-medium text-[#FAFAFA] transition-colors whitespace-nowrap"
-            >
-              <PiDownloadSimple className="h-4 w-4 text-[#A1A1AA]" />
-              <span>Export CSV</span>
-            </button>
-          </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setBalanceInput(String(paperSummary?.account.balance ?? account?.balance ?? 10000))
+                  setShowBalanceModal((v) => !v)
+                }}
+                className="h-9 px-3.5 rounded-xl bg-[#18181B] border border-white/[0.08] hover:border-white/[0.2] text-[12.5px] font-medium text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors"
+              >
+                <PiCoins className="h-4 w-4 text-[#A1A1AA]" />
+                Set Paper Capital
+              </button>
+              <button
+                type="button"
+                onClick={() => void stepOfflineReplay(5)}
+                disabled={paperLoading}
+                className="h-9 px-3.5 rounded-xl bg-[#34D399]/10 border border-[#34D399]/25 hover:bg-[#34D399]/15 text-[12.5px] font-medium text-[#34D399] inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              >
+                <PiFastForward className="h-4 w-4" />
+                Step +5 Replay Bars
+              </button>
+            </div>
+          )}
         </div>
+
+        {activeTab === 'paper' && (
+          <div className="space-y-6">
+            {showBalanceModal && (
+              <div className="rounded-2xl bg-[#111113] border border-white/[0.08] p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-[14px] font-medium text-[#FAFAFA]">Set / Reset Internal Paper Account Capital</p>
+                  <p className="text-[12px] text-[#71717A]">
+                    Adjust starting equity for position sizing &amp; drawdown testing without connecting a live broker.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {[10000, 25000, 50000, 100000].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setBalanceInput(String(v))}
+                      className="px-2.5 py-1.5 rounded-lg bg-[#18181B] border border-white/[0.07] text-[12px] font-mono text-[#A1A1AA] hover:text-[#FAFAFA]"
+                    >
+                      ${(v / 1000).toFixed(0)}k
+                    </button>
+                  ))}
+                  <input
+                    type="number"
+                    min={100}
+                    step={500}
+                    value={balanceInput}
+                    onChange={(e) => setBalanceInput(e.target.value)}
+                    className="h-9 w-36 px-3 rounded-lg bg-[#18181B] border border-white/[0.1] text-[13px] font-mono text-[#FAFAFA] focus:outline-none"
+                  />
+                  <label className="inline-flex items-center gap-1.5 text-[12px] text-[#A1A1AA] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={clearPaperTrades}
+                      onChange={(e) => setClearPaperTrades(e.target.checked)}
+                    />
+                    Clear ledger
+                  </label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const bal = Number(balanceInput)
+                      if (Number.isFinite(bal) && bal >= 100) {
+                        await resetPaperBalance(bal, clearPaperTrades)
+                        setShowBalanceModal(false)
+                      }
+                    }}
+                    disabled={paperLoading}
+                    className="h-9 px-3.5 rounded-lg bg-[#FAFAFA] text-[#09090B] text-[12.5px] font-semibold hover:bg-[#E4E4E7]"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Paper Account KPI Strip */}
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+              <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 space-y-1">
+                <span className="text-[11.5px] text-[#71717A]">Virtual Balance</span>
+                <div className="text-[20px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+                  ${(paperSummary?.account.balance ?? account?.balance ?? 10000).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </div>
+                <span className="text-[11px] font-mono text-[#71717A]">
+                  Start ${(paperSummary?.account.startingBalance ?? 10000).toLocaleString()}
+                </span>
+              </div>
+
+              <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 space-y-1">
+                <span className="text-[11.5px] text-[#71717A]">Net Realized P&amp;L</span>
+                <div
+                  className={`text-[20px] font-mono font-semibold tabular-nums ${
+                    (paperSummary?.netRealizedUsd ?? 0) > 0
+                      ? 'text-[#34D399]'
+                      : (paperSummary?.netRealizedUsd ?? 0) < 0
+                        ? 'text-[#F87171]'
+                        : 'text-[#FAFAFA]'
+                  }`}
+                >
+                  {formatSignedUsd(paperSummary?.netRealizedUsd ?? 0)}
+                </div>
+                <span className="text-[11px] font-mono text-[#71717A]">
+                  {(paperSummary?.netReturnPct ?? 0) >= 0 ? '+' : ''}
+                  {(paperSummary?.netReturnPct ?? 0).toFixed(2)}% return
+                </span>
+              </div>
+
+              <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 space-y-1">
+                <span className="text-[11.5px] text-[#71717A]">Win Rate</span>
+                <div className="text-[20px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+                  {(paperSummary?.winRate ?? 0).toFixed(1)}%
+                </div>
+                <span className="text-[11px] font-mono text-[#71717A]">
+                  {paperSummary?.winTp2Count ?? 0} TP2 · {paperSummary?.winTp1Count ?? 0} TP1 · {paperSummary?.winTp1BeCount ?? 0} BE
+                </span>
+              </div>
+
+              <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 space-y-1">
+                <span className="text-[11.5px] text-[#71717A]">Profit Factor</span>
+                <div className="text-[20px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+                  {paperSummary?.profitFactor ?? '0.00'}
+                </div>
+                <span className="text-[11px] font-mono text-[#71717A]">
+                  {paperSummary?.wins ?? 0}W / {paperSummary?.losses ?? 0}L
+                </span>
+              </div>
+
+              <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 space-y-1">
+                <span className="text-[11.5px] text-[#71717A]">Max Drawdown</span>
+                <div className="text-[20px] font-mono font-semibold tabular-nums text-[#F87171]">
+                  {(paperSummary?.account.maxDrawdownPct ?? 0).toFixed(2)}%
+                </div>
+                <span className="text-[11px] font-mono text-[#71717A]">
+                  Peak ${(paperSummary?.account.peakEquity ?? 10000).toLocaleString()}
+                </span>
+              </div>
+
+              <div className="rounded-2xl bg-[#111113] border border-white/[0.07] p-4 space-y-1">
+                <span className="text-[11.5px] text-[#71717A]">Active / Replay</span>
+                <div className="text-[20px] font-mono font-semibold tabular-nums text-[#FAFAFA]">
+                  {(paperSummary?.openCount ?? 0) + (paperSummary?.pendingCount ?? 0)}
+                </div>
+                <span className="text-[11px] font-mono text-[#71717A]">
+                  Replay {replayStatus?.state || 'IDLE'} ({replayStatus?.cursorIndex ?? 0}/{replayStatus?.totalBars ?? 0})
+                </span>
+              </div>
+            </div>
+
+            {/* Paper Ledger Table Section */}
+            <section className="rounded-2xl bg-[#111113] border border-white/[0.07] overflow-hidden">
+              <div className="p-4 sm:p-6 border-b border-white/[0.06] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3.5">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+                      Paper Execution Ledger
+                    </h2>
+                    <span className="text-[13px] font-mono tabular-nums text-[#71717A]">
+                      {filteredPaperTrades.length}
+                    </span>
+                  </div>
+                  <p className="text-[12.5px] text-[#71717A]">
+                    Click any trade row to launch the bar-by-bar Visual Trade Replay proof drawer.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1 lg:max-w-xl lg:justify-end">
+                  <div className="relative flex-1 min-w-0">
+                    <PiMagnifyingGlass className="h-4 w-4 text-[#71717A] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={paperSearch}
+                      onChange={(e) => setPaperSearch(e.target.value)}
+                      placeholder="Filter symbol, strategy, or status..."
+                      className="w-full h-10 sm:h-auto pl-9 pr-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] focus:border-white/[0.2] focus:outline-none text-[13px] text-[#FAFAFA] placeholder:text-[#71717A]"
+                    />
+                  </div>
+                  <select
+                    value={paperStatusFilter}
+                    onChange={(e) =>
+                      setPaperStatusFilter(
+                        e.target.value as 'ALL' | 'ACTIVE' | 'WINS' | 'LOSSES' | 'EXPIRED'
+                      )
+                    }
+                    aria-label="Filter paper trade status"
+                    className="h-10 sm:h-auto px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] focus:outline-none"
+                  >
+                    <option value="ALL">All states</option>
+                    <option value="ACTIVE">Open / Partial / Pending</option>
+                    <option value="WINS">Wins (TP2 / TP1 / BE)</option>
+                    <option value="LOSSES">Losses (SL)</option>
+                    <option value="EXPIRED">Expired / Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              {filteredPaperTrades.length === 0 ? (
+                <div className="p-10 text-center space-y-3">
+                  <PiChartLineUp className="h-8 w-8 text-[#71717A] mx-auto" />
+                  <p className="text-[15px] font-medium text-[#FAFAFA]">No paper trades in ledger yet</p>
+                  <p className="text-[13px] text-[#71717A] max-w-md mx-auto">
+                    Use <span className="text-[#FAFAFA]">Step +5 Replay Bars</span> above or keep Auto-Trade ON during live scans to execute strategies onto the SQLite Paper Ledger.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/[0.06] text-[12px] font-medium text-[#71717A]">
+                        <th className="py-3 px-4">Pair</th>
+                        <th className="py-3 px-4">Strategy</th>
+                        <th className="py-3 px-4">Side &amp; Size</th>
+                        <th className="py-3 px-4">Exit Policy</th>
+                        <th className="py-3 px-4 text-right">Entry → Exit</th>
+                        <th className="py-3 px-4 text-right">MFE / MAE</th>
+                        <th className="py-3 px-4 text-right">Net P&amp;L</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Proof</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.05] text-[13px]">
+                      {filteredPaperTrades.map((t) => {
+                        const isWin = ['WIN_TP1', 'WIN_TP2', 'WIN_TP1_BE'].includes(t.status)
+                        const isLoss = t.status === 'LOSS_SL'
+                        return (
+                          <tr
+                            key={t.id}
+                            onClick={() =>
+                              navigate(`/replay/${encodeURIComponent(t.id)}`, {
+                                state: { trade: t },
+                              })
+                            }
+                            className="hover:bg-white/[0.03] cursor-pointer transition-colors"
+                          >
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <div className="font-semibold text-[#FAFAFA]">
+                                {t.symbol}{' '}
+                                <span className="text-[11.5px] font-normal text-[#71717A]">{t.timeframe}</span>
+                              </div>
+                              <div className="text-[11px] font-mono text-[#71717A]">
+                                {new Date(t.createdAt * 1000).toISOString().replace('T', ' ').slice(5, 16)}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="text-[#FAFAFA] font-medium truncate max-w-[175px]">
+                                {t.strategyLabel}
+                              </div>
+                              <div className="text-[11px] font-mono text-[#71717A]">{t.tier}</div>
+                            </td>
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <span
+                                className={`inline-flex px-2 py-0.5 rounded-full text-[11.5px] font-medium ${
+                                  t.direction === 'BUY'
+                                    ? 'bg-[#34D399]/10 text-[#34D399]'
+                                    : 'bg-[#F87171]/10 text-[#F87171]'
+                                }`}
+                              >
+                                {t.direction} {t.initialVolume}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 whitespace-nowrap text-[11.5px] font-mono text-[#A1A1AA]">
+                              {t.exitMode === 'SCALE_50_TP1_BE_TP2' ? '50/50 TP1→BE→TP2' : '100% TP1'}
+                              {t.tp1HitAt && (
+                                <div className="text-[10.5px] text-[#34D399]">TP1 Banked</div>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-mono tabular-nums whitespace-nowrap">
+                              <div className="text-[#FAFAFA]">
+                                {formatPrice(t.fillPrice ?? t.requestedEntry)} → {formatPrice(t.exitPrice)}
+                              </div>
+                              <div className="text-[11px] text-[#71717A]">
+                                SL {formatPrice(t.currentSl)} · TP1 {formatPrice(t.tp1Price)}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-mono tabular-nums whitespace-nowrap text-[12px]">
+                              <span className="text-[#34D399]">+{t.mfeR.toFixed(1)}R</span>
+                              <span className="text-[#71717A]"> / </span>
+                              <span className="text-[#F87171]">-{t.maeR.toFixed(1)}R</span>
+                            </td>
+                            <td
+                              className={`py-3.5 px-4 text-right font-mono font-semibold tabular-nums whitespace-nowrap ${
+                                t.realizedPnlUsd > 0
+                                  ? 'text-[#34D399]'
+                                  : t.realizedPnlUsd < 0
+                                    ? 'text-[#F87171]'
+                                    : 'text-[#A1A1AA]'
+                              }`}
+                            >
+                              {formatSignedUsd(t.realizedPnlUsd)}
+                              <div className="text-[11px] font-normal text-[#71717A]">
+                                {t.realizedR >= 0 ? '+' : ''}
+                                {t.realizedR.toFixed(2)}R
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-medium ${
+                                  isWin
+                                    ? 'bg-[#34D399]/10 text-[#34D399]'
+                                    : isLoss
+                                      ? 'bg-[#F87171]/10 text-[#F87171]'
+                                      : 'bg-[#18181B] text-[#A1A1AA]'
+                                }`}
+                              >
+                                {t.status}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  navigate(`/replay/${encodeURIComponent(t.id)}`, {
+                                    state: { trade: t },
+                                  })
+                                }}
+                                className="h-8 px-2.5 rounded-lg bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[12px] text-[#FAFAFA] inline-flex items-center gap-1"
+                              >
+                                <PiPlay size={12} className="text-[#34D399]" />
+                                Replay
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {activeTab === 'manual' && (
+        <>
 
         {/* Top 2-Column Calendar + Month Summary / Recent Entries */}
         <div className="grid grid-cols-1 lg:grid-cols-[1.65fr_1fr] gap-5 sm:gap-6 items-start">
@@ -1008,6 +1411,24 @@ export default function TradingJournal() {
                           {entry.taken ? 'Taken' : 'System'}
                         </button>
 
+                        {(entry.outcome === 'win' ||
+                          entry.outcome === 'loss' ||
+                          entry.outcome === 'breakeven') && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigate(`/replay/${encodeURIComponent(entry.id)}`, {
+                                state: { journalEntry: entry },
+                              })
+                            }
+                            title="Open Replay Page"
+                            className="h-9 px-3 rounded-xl bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[12.5px] font-medium text-[#FAFAFA] inline-flex items-center gap-1.5 transition-colors shrink-0"
+                          >
+                            <PiPlay className="h-3.5 w-3.5 text-[#34D399]" />
+                            <span>Replay</span>
+                          </button>
+                        )}
+
                         {entry.outcome === 'pending' && !entry.breakEvenTriggered && (
                           <button
                             type="button"
@@ -1170,6 +1591,23 @@ export default function TradingJournal() {
 
                           <td className="py-3.5 px-4 text-right whitespace-nowrap">
                             <div className="inline-flex items-center gap-1.5">
+                              {(entry.outcome === 'win' ||
+                                entry.outcome === 'loss' ||
+                                entry.outcome === 'breakeven') && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    navigate(`/replay/${encodeURIComponent(entry.id)}`, {
+                                      state: { journalEntry: entry },
+                                    })
+                                  }
+                                  title="Open Replay Page"
+                                  className="h-8 px-2.5 rounded-lg bg-[#18181B] hover:bg-[#222227] border border-white/[0.08] text-[12px] text-[#FAFAFA] inline-flex items-center gap-1 transition-colors"
+                                >
+                                  <PiPlay size={12} className="text-[#34D399]" />
+                                  <span>Replay</span>
+                                </button>
+                              )}
                               {entry.outcome === 'pending' && !entry.breakEvenTriggered && (
                                 <button
                                   type="button"
@@ -1199,6 +1637,8 @@ export default function TradingJournal() {
             </>
           )}
         </section>
+        </>
+        )}
       </div>
     </div>
   )

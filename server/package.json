@@ -7,10 +7,11 @@
     "server": "ts-node index.js",
     "start": "ts-node index.js",
     "dev": "nodemon --exec ts-node index.js",
+    "build": "tsc --noEmit",
     "seed-admin": "node scripts/seedAdmin.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.5.0"
   },
   "dependencies": {
     "@upstash/redis": "^1.34.9",
@@ -22,12 +23,12 @@
     "metaapi.cloud-sdk": "^29.3.3",
     "node-cron": "^3.0.3",
     "socket.io": "^4.8.3",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.0.3",
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1",
-    "ts-node": "^10.9.2",
-    "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.0.3"
+    "nodemon": "^3.0.1"
   }
 }

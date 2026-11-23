@@ -66,7 +66,7 @@ export function HowItWorks() {
   const current = STEPS[activeStep]
 
   return (
-    <section id="how-it-works" className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 overflow-hidden select-none font-sans">
+    <section id="how-it-works" className="relative py-16 sm:py-24 lg:py-32 px-4 sm:px-6 overflow-x-clip font-sans">
       {/* ── Ambient Background Canvas ───────────────────────────────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
@@ -172,16 +172,15 @@ export function HowItWorks() {
               </div>
             </div>
 
-            {/* Right Schematic Visual - Blends directly into canvas */}
+            {/* Right Schematic Visual — sits directly on canvas with no outer boxed container */}
             <div className="lg:col-span-7 relative">
-              <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_32px_90px_rgba(0,0,0,0.8)]">
-                <img
-                  src={current.image}
-                  alt={current.title}
-                  className="w-full aspect-[16/10] object-cover opacity-90"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#09090B] via-transparent to-transparent opacity-60" />
-              </div>
+              <img
+                src={current.image}
+                alt={current.title}
+                loading="lazy"
+                decoding="async"
+                className="w-full aspect-[16/10] object-cover opacity-95"
+              />
             </div>
           </motion.div>
         </AnimatePresence>

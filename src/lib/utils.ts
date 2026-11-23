@@ -13,8 +13,7 @@ export function formatPrice(value: number, decimals?: number, symbol?: string): 
       if (symbol.includes('JPY')) targetDecimals = 3
       else if (['XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'XRPUSD', 'ADAUSD', 'DOGEUSD'].some(s => symbol.includes(s))) targetDecimals = 4
       else if (['BTCUSDT', 'ETHUSD', 'SOLUSDT', 'BNBUSDT', 'BTCUSD', 'SOLUSD', 'BNBUSD'].some(s => symbol.includes(s))) targetDecimals = 2
-      else if (['XAUUSD', 'XAGUSD', 'SPX500', 'NAS100', 'US30', 'DE40', 'UK100', 'JP225', 'WTI', 'BRENT', 'NATGAS'].some(s => symbol.includes(s))) targetDecimals = 2
-      else if (['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'].some(s => symbol.includes(s))) targetDecimals = 2
+      else if (['XAUUSD', 'MNQ'].some(s => symbol.includes(s))) targetDecimals = 2
       else targetDecimals = 5
     } else {
       const absVal = Math.abs(value)
@@ -54,12 +53,10 @@ export function calculateLots(symbol: string, entry: number, sl: number, riskAmo
     lotSize = riskAmount / (riskDist * 650)
   } else if (cleanSymbol.includes('XAU') || cleanSymbol.includes('GOLD')) {
     lotSize = riskAmount / (riskDist * 100)
-  } else if (cleanSymbol.includes('XAG') || cleanSymbol.includes('SILVER')) {
-    lotSize = riskAmount / (riskDist * 5000)
-  } else if (['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AMD', 'COIN', 'MSTR', 'SMCI'].some(s => cleanSymbol.includes(s))) {
-    // US Stocks on MT5 (1 lot = 100 shares)
-    lotSize = riskAmount / (riskDist * 100)
-    lotSize = Math.min(2.0, lotSize)
+  } else if (cleanSymbol.includes('MNQ')) {
+    // Micro E-mini Nasdaq-100 Futures ($2 per point per 1.00 contract)
+    lotSize = riskAmount / (riskDist * 2)
+    lotSize = Math.min(20.0, lotSize)
   } else {
     // Forex standard lot = 100,000 units
     lotSize = riskAmount / (riskDist * 100000)

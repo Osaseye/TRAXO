@@ -6,6 +6,7 @@ import journalRouter from './journal';
 import metaApiRouter from './metaApi';
 import newsRouter from './news';
 import newsV1Router from '../services/news/newsRoutes';
+import replayRouter from './replay';
 import scannerRouter from './scanner';
 import signalsRouter from './signals';
 import strategiesRouter from './strategies';
@@ -34,6 +35,8 @@ export function registerRoutes(app: any): void {
   app.use('/api/journal', journalRouter);
   app.use('/api/metaapi', metaApiRouter);
   app.use('/api/meta-api', metaApiRouter);
+  app.use('/api/execution', metaApiRouter);
+  app.use('/api/replay', replayRouter);
   app.use('/api/strategy-optimization', strategyOptimizationRouter);
   app.use('/api/auth', authRouter);
 

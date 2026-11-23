@@ -1,12 +1,44 @@
 services:
   - type: web
     name: traxo-server
-    env: node
+    runtime: node
     rootDir: server
-    buildCommand: npm install
+    buildCommand: npm install && npm run build
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
-        value: 20
+        value: 22.14.0
+      - key: NODE_ENV
+        value: production
+      - key: EXECUTION_MODE
+        value: paper
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: TWELVEDATA_API_KEY
+        sync: false
+      - key: TWELVEDATA_API_KEY_2
+        sync: false
+      - key: TWELVEDATA_API_KEY_3
+        sync: false
+      - key: TWELVEDATA_API_KEY_4
+        sync: false
+      - key: FINNHUB_API_KEY
+        sync: false
+      - key: FINNHUB_API_KEY_2
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: UPSTASH_REDIS_URL
+        sync: false
+      - key: UPSTASH_BACKUP_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_BACKUP_REDIS_REST_TOKEN
+        sync: false
+      - key: UPSTASH_BACKUP_REDIS_URL
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
