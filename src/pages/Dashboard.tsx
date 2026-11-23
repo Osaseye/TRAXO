@@ -277,6 +277,8 @@ export default function Dashboard() {
     riskPerTradePct,
     setRiskPerTradePct,
     maxDailyLossPct,
+    autoTradeGuardrailsEnabled,
+    setAutoTradeGuardrailsEnabled,
     autoTradeMaxPositions,
     autoTradeSpreadCapPips,
     autoTradeSessionFilter,
@@ -298,6 +300,8 @@ export default function Dashboard() {
     account,
     positions: metaPositions,
     paperTrades,
+    autoTradeEnabled,
+    toggleAutoTrade,
     executeManualTrade,
     closeOpenPosition,
     refreshPositions,
@@ -2554,6 +2558,12 @@ export default function Dashboard() {
                   marketRiskSummary={marketRiskContext.summary}
                   riskMode={riskMode}
                   fixedRiskAmount={fixedRiskAmount}
+                  guardrailsEnabled={autoTradeGuardrailsEnabled}
+                  onToggleGuardrails={() =>
+                    setAutoTradeGuardrailsEnabled(!autoTradeGuardrailsEnabled)
+                  }
+                  autoTradeEnabled={autoTradeEnabled}
+                  onToggleAutoTrade={() => void toggleAutoTrade(!autoTradeEnabled)}
                 />
 
                 {riskNotices.length > 0 && (

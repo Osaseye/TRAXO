@@ -352,6 +352,7 @@ async function resolveActiveSignalsForCandle(
   latestCandle: marketDataService.MarketCandle
 ): Promise<void> {
   const cfg = await loadGuardrailConfig().catch(() => null);
+  const resolvedSignalIds = new Set<string>();
 
   // 1. Resolve all open/pending Internal Paper Broker trades deterministically across archived bars
   try {
@@ -367,7 +368,8 @@ async function resolveActiveSignalsForCandle(
       const outcome: 'WIN' | 'LOSS' = isWin ? 'WIN' : 'LOSS';
 
       if (trade.signalId) {
-        await signalStore.updateSignalStatus(trade.signalId, outcome).catch(() => {});
+        resolvedSignalIds.add(trade.signalId);
+        await signalStore.updateSignalStatus(trade.signalId, outcome, trade.exitPrice).catch(() => {});
         broadcast({
           type: 'SIGNAL_UPDATED',
           payload: {
@@ -400,7 +402,7 @@ async function resolveActiveSignalsForCandle(
         await processResolvedLoss(optPayload).catch(() => {});
         await recordTradeResolutionForRisk(
           'LOSS',
-          Math.abs(trade.realizedPnlUsd || cfg?.riskAmountUsd || 500),
+          Math.abs(trade.realizedPnlUsd || cfg?.riskAmountUsd || 50),
           cfg || undefined
         ).catch(() => {});
       }
@@ -409,27 +411,43 @@ async function resolveActiveSignalsForCandle(
     console.error(`[PaperResolver] Failed resolving ${frontSymbol} ${frontTimeframe}:`, err?.message);
   }
 
-  // 2. Deterministic resolution for un-executed live signals remaining in Firestore
-  const activeSignals = await signalStore.getActiveLiveSignals(frontSymbol, frontTimeframe);
+  // 2. Deterministic resolution for un-executed live signals remaining in SQLite/Firestore
+  const tfSignals = await signalStore.getActiveLiveSignals(frontSymbol, frontTimeframe);
+  const allSymbolSignals =
+    frontTimeframe === '1m' ? await signalStore.getActiveLiveSignals(frontSymbol) : [];
+  const activeById = new Map<string, any>();
+  for (const s of [...tfSignals, ...allSymbolSignals]) {
+    if (s && s.id && !resolvedSignalIds.has(String(s.id))) {
+      activeById.set(String(s.id), s);
+    }
+  }
+  const activeSignals = Array.from(activeById.values());
   if (!activeSignals.length) return;
 
+  const latestTimeSec =
+    latestCandle.time > 1e12 ? Math.floor(latestCandle.time / 1000) : Number(latestCandle.time || 0);
   const archivedTail = queryCandles({
     symbol: frontSymbol,
     timeframe: frontTimeframe,
-    toTime: latestCandle.time,
-    limit: 60,
+    toTime: latestTimeSec,
+    limit: frontTimeframe === '1m' ? 240 : 60,
   });
-  const evalBars = archivedTail.some((b) => b.time === latestCandle.time)
+  const evalBars = archivedTail.some((b) => b.time === latestTimeSec)
     ? archivedTail
-    : [...archivedTail, latestCandle].sort((a, b) => a.time - b.time);
+    : [...archivedTail, { ...latestCandle, time: latestTimeSec }].sort((a, b) => a.time - b.time);
 
   for (const sig of activeSignals) {
-    if (sig.time && latestCandle.time && latestCandle.time <= sig.time) {
+    const sigTimeSec = sig.time > 1e12 ? Math.floor(sig.time / 1000) : Number(sig.time || 0);
+    if (sigTimeSec > 0 && latestTimeSec > 0 && latestTimeSec <= sigTimeSec) {
       continue;
     }
 
     const res = evaluateSignalDeterministically({
-      signal: sig,
+      signal: {
+        ...sig,
+        time: sigTimeSec,
+        timeframe: frontTimeframe,
+      },
       candles: evalBars,
     });
 
@@ -445,10 +463,8 @@ async function resolveActiveSignalsForCandle(
 
       if (res.outcome === 'WIN') {
         await processResolvedWin(sig).catch(() => {});
-        await recordTradeResolutionForRisk('WIN', 0, cfg || undefined).catch(() => {});
       } else {
         await processResolvedLoss(sig).catch(() => {});
-        await recordTradeResolutionForRisk('LOSS', cfg?.riskAmountUsd ?? 500, cfg || undefined).catch(() => {});
       }
     }
   }
@@ -519,8 +535,9 @@ export async function runScan(): Promise<void> {
           })),
         ]);
 
+        const rawSignalMode = guardrailCfg?.guardrailsEnabled === false;
         const rollingDrawdownPct =
-          guardrailCfg && guardrailCfg.accountBalance > 0
+          !rawSignalMode && guardrailCfg && guardrailCfg.accountBalance > 0
             ? Number(((riskState.dailyLossUsd / guardrailCfg.accountBalance) * 100).toFixed(2))
             : 0;
 
@@ -529,14 +546,14 @@ export async function runScan(): Promise<void> {
           candles,
           frontSymbol,
           timeframe,
-          newsCtx.minutesAway,
+          rawSignalMode ? null : newsCtx.minutesAway,
           {
             htfCandles: htfCandles || undefined,
-            newsEvents: newsCtx.newsEvents,
+            newsEvents: rawSignalMode ? [] : newsCtx.newsEvents,
             rollingDrawdownPct,
-            consecutiveLosses: riskState.consecutiveLosses,
+            consecutiveLosses: rawSignalMode ? 0 : riskState.consecutiveLosses,
             accountBalance: guardrailCfg?.accountBalance,
-            bypassMinConfidence: guardrailCfg?.guardrailsEnabled === false,
+            bypassMinConfidence: rawSignalMode,
           }
         );
 
@@ -569,27 +586,35 @@ export async function runScan(): Promise<void> {
             signal.timeframe,
             signal.strategyId
           );
-          if (existingLive && existingLive.id === signal.id) continue;
-
           const existingHistorical = await signalStore.hasHistoricalSignal(signal.id);
-          if (existingHistorical) {
+          const isNewSignal =
+            !(existingLive && existingLive.id === signal.id) && !existingHistorical;
+
+          if (isNewSignal) {
+            console.log(
+              `New signal found! ${signal.direction} ${signal.symbol} ${signal.timeframe} (${signal.strategyLabel} | ${signal.confidence}%)`
+            );
             await signalStore.cacheLiveSignal(signal);
-            continue;
+            await signalStore.saveHistoricalSignal(signal);
+            broadcast({ type: 'NEW_SIGNAL', payload: signal });
+          } else {
+            if (!existingLive || existingLive.id !== signal.id) {
+              await signalStore.cacheLiveSignal(signal);
+            }
+            if (!rawSignalMode) {
+              continue;
+            }
           }
 
-          console.log(
-            `New signal found! ${signal.direction} ${signal.symbol} ${signal.timeframe} (${signal.strategyLabel} | ${signal.confidence}%)`
-          );
-          await signalStore.cacheLiveSignal(signal);
-          await signalStore.saveHistoricalSignal(signal);
-          broadcast({ type: 'NEW_SIGNAL', payload: signal });
-
-          if (getAutoTradeEnabled()) {
+          if (getAutoTradeEnabled() && (isNewSignal || rawSignalMode)) {
+            if (paperBrokerService.hasTradeForSignal(signal.id, 'default_trader')) {
+              continue;
+            }
             try {
               const cfg = guardrailCfg || (await loadGuardrailConfig());
               const currentRisk = await getRiskRuntimeState();
               const [openPositions, quote] = await Promise.all([
-                getOpenPositions(),
+                getOpenPositions('default_trader'),
                 getSymbolQuote(signal.symbol),
               ]);
 
@@ -613,7 +638,8 @@ export async function runScan(): Promise<void> {
                 continue;
               }
 
-              const dynamicLots = calculateLots(signal.symbol, signal.entry, signal.sl, cfg.riskAmountUsd);
+              const riskUsd = cfg.riskAmountUsd || 50;
+              const dynamicLots = calculateLots(signal.symbol, signal.entry, signal.sl, riskUsd);
               let entryType: 'market' | 'limit' = signal.entryType === 'limit' ? 'limit' : 'market';
               let execPrice: number | undefined = signal.limitPrice ?? signal.entry;
 
@@ -628,10 +654,11 @@ export async function runScan(): Promise<void> {
               }
 
               console.log(
-                `[AutoTrader] Executing ${signal.direction} (${entryType.toUpperCase()}) on ${signal.symbol} (${dynamicLots} Lots, $${cfg.riskAmountUsd} Risk, ${signal.confidence}% Conf)...`
+                `[AutoTrader] Executing ${signal.direction} (${entryType.toUpperCase()}) on ${signal.symbol} (${dynamicLots} Lots, $${riskUsd} Risk, ${signal.confidence}% Conf)...`
               );
 
               const execRes = await executeTrade({
+                uid: 'default_trader',
                 signalId: signal.id,
                 symbol: signal.symbol,
                 timeframe: signal.timeframe,
@@ -644,7 +671,7 @@ export async function runScan(): Promise<void> {
                 sl: signal.sl,
                 tp: signal.tp,
                 tp2: signal.tp2,
-                riskAmountUsd: cfg.riskAmountUsd,
+                riskAmountUsd: riskUsd,
                 rr: signal.rr,
                 confidence: signal.confidence,
                 entryType,

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { auth } from './firebase'; // Assuming you have a function to get the user's auth token
+import { useAuthStore } from '@/stores/useAuthStore';
 
 const DEFAULT_LIVE_API_URL = 'https://traxo-backend-1.onrender.com';
 
@@ -21,7 +22,7 @@ export function resolveApiBaseUrl(): string {
 export const API_BASE_URL = resolveApiBaseUrl();
 
 export function getActiveUid(): string {
-  return auth.currentUser?.uid || 'default_trader';
+  return useAuthStore.getState().user?.id || auth.currentUser?.uid || 'default_trader';
 }
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
@@ -73,9 +74,12 @@ async function request(endpoint: string, options: RequestInit = {}) {
 
 // --- API Service Functions ---
 
-export const getHistoricalSignals = (lastVisible = null) => {
-  const endpoint = lastVisible ? `/api/signals/historical?lastVisible=${lastVisible}` : '/api/signals/historical';
-  return request(endpoint);
+export const getHistoricalSignals = (lastVisible: string | null = null, limit = 200) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (lastVisible) {
+    params.set('lastVisible', lastVisible);
+  }
+  return request(`/api/signals/historical?${params.toString()}`);
 };
 
 export const getLiveSignals = () => {

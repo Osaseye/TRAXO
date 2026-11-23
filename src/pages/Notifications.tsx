@@ -16,6 +16,7 @@ import {
   PiLightning,
   PiMagnifyingGlass,
   PiPlay,
+  PiPower,
   PiGauge,
   PiShieldCheck,
   PiSlidersHorizontal,
@@ -37,8 +38,15 @@ import { runSignalsForStrategies } from '@/lib/signalDetection'
 import { normalizeStrategyId } from '@/lib/strategyId'
 import { useMetaApi } from '@/hooks/useMetaApi'
 import { useStrategyOptimizer } from '@/hooks/useStrategyOptimizer'
-import { useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
+import {
+  canonicalSignalKey,
+  normalizeSignalStatus,
+  useAnalysisSignalStore,
+  type CanonicalSignalStatus,
+  type StoredSignal,
+} from '@/stores/useAnalysisSignalStore'
 import { useNotificationStore } from '@/stores/useNotificationStore'
+import { showToast } from '@/stores/useToastStore'
 import { ONBOARDING_STRATEGIES, useOnboardingStore } from '@/stores/useOnboardingStore'
 import {
   useTradingContextStore,
@@ -57,6 +65,7 @@ type DirectionFilter = 'ALL' | 'BUY' | 'SELL'
 interface LedgerSignal {
   key: string
   id: string
+  notificationId?: string
   symbol: string
   timeframe: string
   strategyId: string
@@ -67,7 +76,7 @@ interface LedgerSignal {
   tp: number
   rr: number
   confidence: number
-  status: 'WIN' | 'LOSS' | 'EXPIRED' | 'LIVE'
+  status: CanonicalSignalStatus
   rawStatus: string
   reason: string[]
   timestampMs: number
@@ -210,14 +219,6 @@ function formatRelative(ms: number): string {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
   return `${Math.floor(diff / 86400)}d ago`
-}
-
-function normalizeSignalStatus(raw: unknown): 'WIN' | 'LOSS' | 'EXPIRED' | 'LIVE' {
-  const s = String(raw || '').trim().toLowerCase()
-  if (s === 'win' || s === 'tp_hit' || s === 'tp' || s === 'won') return 'WIN'
-  if (s === 'loss' || s === 'sl_hit' || s === 'sl' || s === 'lost') return 'LOSS'
-  if (s === 'expired' || s === 'stale' || s === 'cancelled' || s === 'closed') return 'EXPIRED'
-  return 'LIVE'
 }
 
 function compactSymbol(sym: string): string {
@@ -398,13 +399,19 @@ export default function Notifications() {
   const storeSignals = useAnalysisSignalStore((s) => s.signals)
   const setChartSymbol = useTradingContextStore((s) => s.setChartSymbol)
   const setChartTimeframe = useTradingContextStore((s) => s.setChartTimeframe)
+  const fixedRiskAmount = useTradingContextStore((s) => s.fixedRiskAmount)
+  const autoTradeGuardrailsEnabled = useTradingContextStore((s) => s.autoTradeGuardrailsEnabled)
+  const setAutoTradeGuardrailsEnabled = useTradingContextStore((s) => s.setAutoTradeGuardrailsEnabled)
   const activeStrategies = useOnboardingStore((s) => s.selectedStrategyIds)
 
   const {
     account: mt5Account,
     positions: mt5Positions,
+    paperTrades,
+    paperSummary,
     autoTradeEnabled,
     loading: mt5Loading,
+    toggleAutoTrade,
     refreshAccount: refreshMt5Account,
   } = useMetaApi()
 
@@ -417,8 +424,6 @@ export default function Notifications() {
   } = useStrategyOptimizer()
 
   // Signal Ledger remote state
-  const [liveRemote, setLiveRemote] = useState<Record<string, unknown>[]>([])
-  const [historicalRemote, setHistoricalRemote] = useState<Record<string, unknown>[]>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
   const [expandedSignalKey, setExpandedSignalKey] = useState<string | null>(null)
 
@@ -475,7 +480,7 @@ export default function Notifications() {
     }
   }, [])
 
-  // Fetch Signals Ledger
+  // Fetch Signals Ledger & sync directly into useAnalysisSignalStore
   const fetchLedgerSignals = useCallback(async () => {
     setLedgerLoading(true)
     try {
@@ -483,11 +488,84 @@ export default function Notifications() {
         getLiveSignals(),
         getHistoricalSignals(),
       ])
-      if (liveRes.status === 'fulfilled' && Array.isArray(liveRes.value)) {
-        setLiveRemote(liveRes.value as Record<string, unknown>[])
+      const liveArr =
+        liveRes.status === 'fulfilled' && Array.isArray(liveRes.value)
+          ? (liveRes.value as Record<string, unknown>[])
+          : []
+      const histArr =
+        histRes.status === 'fulfilled' && Array.isArray(histRes.value?.signals)
+          ? (histRes.value.signals as Record<string, unknown>[])
+          : []
+
+      const liveIds = new Set(liveArr.map((s) => String(s.id || '')))
+      const nowSec = Math.floor(Date.now() / 1000)
+
+      const toStoredSignal = (
+        s: Record<string, unknown>,
+        finalStatus: string
+      ): StoredSignal | null => {
+        const id = String(s.id || '')
+        const symbol = compactSymbol(String(s.symbol || ''))
+        const entry = Number(s.entry ?? 0)
+        const sl = Number(s.sl ?? 0)
+        const tp = Number(s.tp ?? 0)
+        if (!id || !symbol || Math.abs(entry - sl) <= 0.000001) return null
+
+        const timeMs = normalizeTimestampMs(s.time ?? s.createdAt)
+        const timeSec = Math.floor(timeMs / 1000)
+        const strategyId = String(s.strategyId || s.strategy || 'scanner')
+        const riskDist = Math.abs(entry - sl)
+        const rewardDist = Math.abs(tp - entry)
+        const rr = Number(
+          s.rr ?? (riskDist > 0 ? Number((rewardDist / riskDist).toFixed(2)) : 0)
+        )
+
+        return {
+          id,
+          time: timeSec,
+          strategyId,
+          strategyLabel: strategyDisplayName(
+            strategyId,
+            typeof s.strategyLabel === 'string' ? s.strategyLabel : undefined
+          ),
+          direction: String(s.direction || s.action || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
+          entry,
+          sl,
+          tp,
+          tp2: s.tp2 != null ? Number(s.tp2) : null,
+          rr,
+          confidence: Number(s.confidence ?? 0),
+          risk: s.risk === 'Low' || s.risk === 'High' ? s.risk : 'Medium',
+          reason: Array.isArray(s.reason) ? s.reason.map(String) : [],
+          status: finalStatus,
+          symbol,
+          timeframe: String(s.timeframe || '1H'),
+        }
       }
-      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value?.signals)) {
-        setHistoricalRemote(histRes.value.signals as Record<string, unknown>[])
+
+      const normalizedLive = liveArr
+        .map((s) => toStoredSignal(s, 'live'))
+        .filter((s): s is StoredSignal => s !== null)
+
+      const normalizedHist = histArr
+        .filter((s) => s?.id && !liveIds.has(String(s.id)))
+        .map((s) => {
+          const rawStatus = String(s.status || '').toLowerCase()
+          const timeMs = normalizeTimestampMs(s.time ?? s.createdAt)
+          const timeSec = Math.floor(timeMs / 1000)
+          const keepLive = rawStatus === 'live' && timeSec > 0 && nowSec - timeSec < 86_400
+          const finalStatus = keepLive
+            ? 'live'
+            : s.status && rawStatus !== 'live'
+              ? String(s.status)
+              : 'expired'
+          return toStoredSignal(s, finalStatus)
+        })
+        .filter((s): s is StoredSignal => s !== null)
+
+      const combined = [...normalizedLive, ...normalizedHist]
+      if (combined.length > 0) {
+        useAnalysisSignalStore.getState().addSignals(combined)
       }
     } finally {
       setLedgerLoading(false)
@@ -558,8 +636,8 @@ export default function Notifications() {
   }, [])
 
   // Fetch Telemetry (Scanner Status, Global Signal Status, Health)
-  const fetchTelemetry = useCallback(async () => {
-    setTelemetryLoading(true)
+  const fetchTelemetry = useCallback(async (silent = false) => {
+    if (!silent) setTelemetryLoading(true)
     try {
       const [statusRes, globalRes, healthRes] = await Promise.allSettled([
         getScannerStatus(),
@@ -584,7 +662,7 @@ export default function Notifications() {
         setHealthData(healthRes.value as BackendHealthData)
       }
     } finally {
-      setTelemetryLoading(false)
+      if (!silent) setTelemetryLoading(false)
     }
   }, [])
 
@@ -597,166 +675,112 @@ export default function Notifications() {
         void fetchTelemetry()
       }
     })
+    const telemetryInterval = setInterval(() => {
+      if (!cancelled) {
+        void fetchTelemetry(true)
+      }
+    }, 10_000)
     return () => {
       cancelled = true
+      clearInterval(telemetryInterval)
     }
   }, [fetchLedgerSignals, fetchRejections, fetchTelemetry])
 
-  // Merge notifications + storeSignals + liveRemote + historicalRemote cleanly
+  // Build ledgerSignals directly from storeSignals and annotate with notification read status (no phantom rows)
   const ledgerSignals = useMemo<LedgerSignal[]>(() => {
+    const notifByKey = new Map<string, { id: string; read: boolean }>()
+    for (const n of notifications) {
+      const info = { id: n.id, read: n.read }
+      notifByKey.set(n.id, info)
+      const cKey = canonicalSignalKey({
+        id: n.id,
+        strategyId: n.strategyId,
+        symbol: n.symbol,
+        timeframe: n.timeframe,
+        direction: n.direction,
+        time: n.time,
+        createdAt: n.createdAt,
+      })
+      if (cKey) notifByKey.set(cKey, info)
+    }
+
     const map = new Map<string, LedgerSignal>()
 
-    const upsert = (incoming: LedgerSignal) => {
-      const existing = map.get(incoming.key)
-      if (!existing) {
-        map.set(incoming.key, incoming)
-        return
-      }
-      const statusRank = { WIN: 4, LOSS: 4, EXPIRED: 3, LIVE: 1 }
-      const chosenStatus =
-        statusRank[incoming.status] >= statusRank[existing.status] ? incoming.status : existing.status
-      map.set(incoming.key, {
-        ...existing,
-        ...incoming,
-        status: chosenStatus,
-        read: existing.hasNotification ? existing.read : incoming.read,
-        hasNotification: existing.hasNotification || incoming.hasNotification,
-        reason: incoming.reason.length > existing.reason.length ? incoming.reason : existing.reason,
-        timestampMs: Math.max(existing.timestampMs, incoming.timestampMs),
-      })
-    }
-
-    for (const s of historicalRemote) {
-      const id = String(s.id || `${s.symbol}-${s.timeframe}-${s.strategyId}-${s.time}`)
-      const symbol = compactSymbol(String(s.symbol || 'UNKNOWN'))
-      const tf = String(s.timeframe || '1H')
-      const entry = Number(s.entry ?? 0)
-      const sl = Number(s.sl ?? 0)
-      const tp = Number(s.tp ?? 0)
-      const risk = Math.abs(entry - sl)
-      const reward = Math.abs(tp - entry)
-      const rr = Number(s.rr ?? (risk > 0 ? Number((reward / risk).toFixed(2)) : 0))
-      const strategyId = String(s.strategyId || s.strategy || 'scanner')
-      const rawStatus = String(s.status || 'expired')
-      upsert({
-        key: id,
-        id,
-        symbol,
-        timeframe: tf,
-        strategyId,
-        strategyLabel: strategyDisplayName(
-          strategyId,
-          typeof s.strategyLabel === 'string' ? s.strategyLabel : undefined
-        ),
-        direction: String(s.direction || s.action || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
-        entry,
-        sl,
-        tp,
-        rr,
-        confidence: Number(s.confidence ?? 0),
-        status: normalizeSignalStatus(rawStatus),
-        rawStatus,
-        reason: Array.isArray(s.reason) ? s.reason.map(String) : [],
-        timestampMs: normalizeTimestampMs(s.time ?? s.createdAt),
-        read: true,
-        hasNotification: false,
-        source: 'historical',
-      })
-    }
-
-    for (const s of liveRemote) {
-      const id = String(s.id || `${s.symbol}-${s.timeframe}-${s.strategyId}-${s.time}`)
-      const symbol = compactSymbol(String(s.symbol || 'UNKNOWN'))
-      const tf = String(s.timeframe || '1H')
-      const entry = Number(s.entry ?? 0)
-      const sl = Number(s.sl ?? 0)
-      const tp = Number(s.tp ?? 0)
-      const risk = Math.abs(entry - sl)
-      const reward = Math.abs(tp - entry)
-      const rr = Number(s.rr ?? (risk > 0 ? Number((reward / risk).toFixed(2)) : 0))
-      const strategyId = String(s.strategyId || s.strategy || 'scanner')
-      const rawStatus = String(s.status || 'live')
-      upsert({
-        key: id,
-        id,
-        symbol,
-        timeframe: tf,
-        strategyId,
-        strategyLabel: strategyDisplayName(
-          strategyId,
-          typeof s.strategyLabel === 'string' ? s.strategyLabel : undefined
-        ),
-        direction: String(s.direction || s.action || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
-        entry,
-        sl,
-        tp,
-        rr,
-        confidence: Number(s.confidence ?? 0),
-        status: normalizeSignalStatus(rawStatus),
-        rawStatus,
-        reason: Array.isArray(s.reason) ? s.reason.map(String) : [],
-        timestampMs: normalizeTimestampMs(s.time ?? s.createdAt),
-        read: true,
-        hasNotification: false,
-        source: 'live',
-      })
-    }
-
     for (const s of storeSignals) {
-      const id = s.id
-      upsert({
-        key: id,
-        id,
+      const cKey =
+        canonicalSignalKey({
+          id: s.id,
+          strategyId: s.strategyId,
+          symbol: s.symbol,
+          timeframe: s.timeframe,
+          direction: s.direction,
+          time: s.time,
+        }) || s.id
+
+      const matchedNotif = notifByKey.get(s.id) || notifByKey.get(cKey)
+      const status = normalizeSignalStatus(s.status || 'live')
+      const risk = Math.abs(s.entry - s.sl)
+      const reward = Math.abs(s.tp - s.entry)
+      const rr =
+        typeof s.rr === 'number' && Number.isFinite(s.rr) && s.rr > 0
+          ? s.rr
+          : risk > 0
+            ? Number((reward / risk).toFixed(2))
+            : 0
+
+      const incoming: LedgerSignal = {
+        key: cKey,
+        id: s.id,
+        notificationId: matchedNotif?.id,
         symbol: compactSymbol(s.symbol),
         timeframe: s.timeframe,
         strategyId: s.strategyId,
         strategyLabel: strategyDisplayName(s.strategyId, s.strategyLabel),
-        direction: s.direction,
+        direction: s.direction === 'SELL' ? 'SELL' : 'BUY',
         entry: s.entry,
         sl: s.sl,
         tp: s.tp,
-        rr: s.rr,
+        rr,
         confidence: s.confidence,
-        status: normalizeSignalStatus(s.status || 'live'),
+        status,
         rawStatus: String(s.status || 'live'),
         reason: s.reason || [],
         timestampMs: normalizeTimestampMs(s.time),
-        read: true,
-        hasNotification: false,
-        source: 'live',
-      })
-    }
+        read: matchedNotif ? matchedNotif.read : true,
+        hasNotification: Boolean(matchedNotif),
+        source: status === 'LIVE' ? 'live' : 'historical',
+      }
 
-    for (const n of notifications) {
-      const id = n.id
-      const risk = Math.abs(n.entry - n.sl)
-      const reward = Math.abs(n.tp - n.entry)
-      const rr = n.rr ?? (risk > 0 ? Number((reward / risk).toFixed(2)) : 0)
-      upsert({
-        key: id,
-        id,
-        symbol: compactSymbol(n.symbol),
-        timeframe: n.timeframe,
-        strategyId: n.strategyId,
-        strategyLabel: strategyDisplayName(n.strategyId, n.strategyLabel),
-        direction: n.direction,
-        entry: n.entry,
-        sl: n.sl,
-        tp: n.tp,
-        rr,
-        confidence: n.confidence,
-        status: 'LIVE',
-        rawStatus: 'live',
-        reason: n.reason || [],
-        timestampMs: normalizeTimestampMs(n.createdAt ?? n.time),
-        read: n.read,
-        hasNotification: true,
-        source: 'alert',
-      })
+      const existing = map.get(cKey)
+      if (!existing) {
+        map.set(cKey, incoming)
+      } else {
+        const statusRank: Record<CanonicalSignalStatus, number> = {
+          WIN: 4,
+          LOSS: 4,
+          EXPIRED: 3,
+          LIVE: 1,
+        }
+        const chosenStatus =
+          statusRank[incoming.status] >= statusRank[existing.status]
+            ? incoming.status
+            : existing.status
+        map.set(cKey, {
+          ...existing,
+          ...incoming,
+          status: chosenStatus,
+          read: existing.hasNotification ? existing.read : incoming.read,
+          hasNotification: existing.hasNotification || incoming.hasNotification,
+          notificationId: existing.notificationId || incoming.notificationId,
+          reason:
+            incoming.reason.length > existing.reason.length ? incoming.reason : existing.reason,
+          timestampMs: Math.max(existing.timestampMs, incoming.timestampMs),
+        })
+      }
     }
 
     return Array.from(map.values()).sort((a, b) => b.timestampMs - a.timestampMs)
-  }, [historicalRemote, liveRemote, storeSignals, notifications])
+  }, [storeSignals, notifications])
 
   // Summary metrics
   const ledgerSummary = useMemo(() => {
@@ -904,7 +928,7 @@ export default function Notifications() {
 
   const handleOpenInTerminal = (signal: LedgerSignal) => {
     if (signal.hasNotification && !signal.read) {
-      markRead(signal.id)
+      markRead(signal.notificationId ?? signal.id)
     }
     if (VALID_CHART_SYMBOLS.has(signal.symbol)) {
       setChartSymbol(signal.symbol as ChartSymbol)
@@ -1041,6 +1065,9 @@ export default function Notifications() {
   const isHealthOk = healthData?.status === 'ok'
   const tdKeys = healthData?.twelvedata?.keys ?? []
   const tdAvailable = healthData?.twelvedata?.availableKeys ?? 0
+  const pendingOrdersCount =
+    paperSummary?.pendingCount ?? paperTrades.filter((t) => t.status === 'PENDING').length
+  const liveBrokerBalance = mt5Account?.balance ?? paperSummary?.account.balance ?? 10000
 
   return (
     <div className="min-h-full bg-[#09090B] text-[#FAFAFA] font-sans overflow-x-hidden">
@@ -1053,16 +1080,19 @@ export default function Notifications() {
               <h1 className="text-[24px] sm:text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
                 Signal Ledger &amp; Engine Ops
               </h1>
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#161619] text-[12px] text-[#A1A1AA]">
-                <span
-                  className={`h-2 w-2 rounded-full shrink-0 ${
-                    effectiveRunning ? 'bg-[#34D399]' : isRedisOk ? 'bg-[#FAFAFA]' : 'bg-[#71717A]'
-                  }`}
-                />
+              <span
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#161619] text-[12px] text-[#A1A1AA]"
+                title={
+                  effectiveLastAt
+                    ? `Last scan: ${formatDateTime(normalizeTimestampMs(effectiveLastAt))}`
+                    : 'Auto-scanner runs every 1 minute'
+                }
+              >
+                <span className="h-2 w-2 rounded-full shrink-0 bg-[#34D399]" />
                 <span>
                   {effectiveRunning
                     ? `Scanning ${effectiveCurrent || '...'}`
-                    : 'Scanner Standby'}
+                    : 'Scanner Active · 1m Auto'}
                 </span>
               </span>
               {unreadCount > 0 && (
@@ -1076,12 +1106,59 @@ export default function Notifications() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:flex items-center gap-2.5 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:justify-end">
+            <button
+              type="button"
+              onClick={() => void toggleAutoTrade(!autoTradeEnabled)}
+              disabled={mt5Loading}
+              className={`min-h-[40px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[12.5px] font-medium transition-colors disabled:opacity-50 ${
+                autoTradeEnabled
+                  ? 'bg-[#34D399]/15 text-[#34D399] hover:bg-[#34D399]/20'
+                  : 'bg-[#F87171]/15 text-[#F87171] hover:bg-[#F87171]/20'
+              }`}
+            >
+              <PiPower className="h-4 w-4 shrink-0" />
+              <span>Auto-Trade: {autoTradeEnabled ? 'ON' : 'OFF'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const next = !autoTradeGuardrailsEnabled
+                setAutoTradeGuardrailsEnabled(next)
+                showToast(
+                  next ? 'Execution Guardrails ON' : 'Raw Signal Mode ON',
+                  next
+                    ? 'All 9 execution guardrails re-enabled.'
+                    : 'All 9 guardrails disabled — trading every incoming signal.',
+                  next ? 'info' : 'success'
+                )
+              }}
+              className={`min-h-[40px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[12.5px] font-medium transition-colors ${
+                !autoTradeGuardrailsEnabled
+                  ? 'bg-[#FBBF24]/15 text-[#FBBF24] hover:bg-[#FBBF24]/25'
+                  : 'bg-[#18181B] border border-white/[0.07] text-[#A1A1AA] hover:text-[#FAFAFA]'
+              }`}
+            >
+              <PiShieldCheck className="h-4 w-4 shrink-0" />
+              <span>
+                {!autoTradeGuardrailsEnabled ? 'Raw Mode: ON (All Signals)' : 'Guardrails: ON'}
+              </span>
+            </button>
+
+            <Link
+              to="/settings"
+              className="min-h-[40px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[12.5px] font-mono font-medium text-[#FAFAFA] transition-colors"
+            >
+              <PiSlidersHorizontal className="h-4 w-4 text-[#A1A1AA] shrink-0" />
+              <span>Risk ${fixedRiskAmount || 50}</span>
+            </Link>
+
             <button
               type="button"
               onClick={handleTriggerManualScan}
               disabled={manualScanBusy}
-              className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 sm:py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
+              className="min-h-[40px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7] disabled:opacity-50 text-[13px] font-medium transition-colors"
             >
               <PiPlay className="h-4 w-4 shrink-0" />
               <span className="truncate">{manualScanBusy ? 'Triggering...' : 'Run Manual Scan'}</span>
@@ -1090,7 +1167,7 @@ export default function Notifications() {
               type="button"
               onClick={handleRefreshAll}
               disabled={ledgerLoading || rejectionsLoading || telemetryLoading}
-              className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] disabled:opacity-50 transition-colors"
+              className="min-h-[40px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] disabled:opacity-50 transition-colors"
             >
               <PiArrowsClockwise
                 className={`h-4 w-4 text-[#A1A1AA] shrink-0 ${
@@ -1200,11 +1277,12 @@ export default function Notifications() {
                   : 'Standby'}
               </span>
               <span className="text-[12px] font-mono tabular-nums text-[#71717A]">
-                {mt5Positions.length} open
+                {mt5Positions.length} open · {pendingOrdersCount} pending
               </span>
             </div>
             <div className="text-[11.5px] sm:text-[12px] font-mono tabular-nums text-[#71717A] truncate">
-              Opt: {optimizerStatus?.isFeedbackEngineEnabled ? 'Active' : 'Paused'} · TD:{' '}
+              ${liveBrokerBalance.toFixed(2)} · Opt:{' '}
+              {optimizerStatus?.isFeedbackEngineEnabled ? 'Active' : 'Paused'} · TD:{' '}
               {healthData ? tdAvailable : '—'}
             </div>
           </div>
@@ -1562,7 +1640,7 @@ export default function Notifications() {
                             {isUnread && (
                               <button
                                 type="button"
-                                onClick={() => markRead(sig.id)}
+                                onClick={() => markRead(sig.notificationId ?? sig.id)}
                                 title="Mark as read"
                                 className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#A1A1AA] hover:text-[#34D399] transition-colors"
                               >
@@ -1718,7 +1796,7 @@ export default function Notifications() {
                                     {isUnread && (
                                       <button
                                         type="button"
-                                        onClick={() => markRead(sig.id)}
+                                        onClick={() => markRead(sig.notificationId ?? sig.id)}
                                         title="Mark as read"
                                         className="p-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#A1A1AA] hover:text-[#34D399] transition-colors"
                                       >

@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { PiBell, PiList } from 'react-icons/pi'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
-import { useNotificationStore } from '@/stores/useNotificationStore'
+import { selectLiveSignalCount, useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
 import { apiFetch } from '@/lib/api'
 import webSocketService from '@/lib/websocket'
 import { cn } from '@/lib/utils'
@@ -12,6 +12,20 @@ interface TopbarProps {
   title: string
   subtitle?: string
   onMenuClick?: () => void
+}
+
+interface TopbarPaperBalance {
+  balance: number
+  equity: number
+  startingBalance: number
+}
+
+interface TopbarAccountPayload {
+  connected?: boolean
+  mode?: 'paper' | 'metaapi'
+  balance?: number
+  equity?: number
+  startingBalance?: number
 }
 
 function subscribeWs(callback: () => void) {
@@ -32,18 +46,18 @@ function getWsSnapshot(): boolean {
 }
 
 export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
+  const activeUid = useAuthStore((s) => s.user?.id ?? null)
   const displayName = useAuthStore(
     (s) => s.user?.displayName || s.user?.fullName || s.user?.email || 'Operator',
   )
   const chartSymbol = useTradingContextStore((s) => s.chartSymbol)
   const chartTimeframe = useTradingContextStore((s) => s.chartTimeframe)
-  const unreadCount = useNotificationStore(
-    (s) => s.notifications.filter((n) => !n.read).length,
-  )
+  const liveSignalCount = useAnalysisSignalStore(selectLiveSignalCount)
 
   const wsConnected = useSyncExternalStore(subscribeWs, getWsSnapshot, () => false)
   const [mt5Connected, setMt5Connected] = useState<boolean>(false)
   const [executionMode, setExecutionMode] = useState<'paper' | 'metaapi'>('paper')
+  const [paperBalance, setPaperBalance] = useState<TopbarPaperBalance | null>(null)
 
   useEffect(() => {
     let active = true
@@ -53,9 +67,25 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
         const res = await apiFetch('/api/metaapi/account')
         if (!active) return
         if (res.ok) {
-          const data = (await res.json()) as { connected?: boolean; mode?: 'paper' | 'metaapi' }
+          const data = (await res.json()) as TopbarAccountPayload
           setMt5Connected(Boolean(data?.connected))
           setExecutionMode(data?.mode === 'metaapi' ? 'metaapi' : 'paper')
+          if (typeof data?.balance === 'number' && Number.isFinite(data.balance)) {
+            const nextBalance = data.balance
+            const nextEquity =
+              typeof data.equity === 'number' && Number.isFinite(data.equity)
+                ? data.equity
+                : nextBalance
+            const nextStarting =
+              typeof data.startingBalance === 'number' && Number.isFinite(data.startingBalance)
+                ? data.startingBalance
+                : nextBalance
+            setPaperBalance({
+              balance: nextBalance,
+              equity: nextEquity,
+              startingBalance: nextStarting,
+            })
+          }
         } else {
           setMt5Connected(false)
         }
@@ -69,11 +99,47 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
       void checkMt5Status()
     }, 15_000)
 
+    const unsubAccount = webSocketService.subscribe(
+      'paper-account-updated',
+      (payload?: TopbarAccountPayload) => {
+        if (!active || !payload || typeof payload !== 'object') return
+        if (typeof payload.connected === 'boolean') {
+          setMt5Connected(payload.connected)
+        } else {
+          setMt5Connected(true)
+        }
+        if (payload.mode === 'metaapi' || payload.mode === 'paper') {
+          setExecutionMode(payload.mode)
+        }
+        setPaperBalance((prev) => {
+          const nextBalance =
+            typeof payload.balance === 'number' && Number.isFinite(payload.balance)
+              ? payload.balance
+              : prev?.balance
+          if (typeof nextBalance !== 'number') return prev
+          const nextEquity =
+            typeof payload.equity === 'number' && Number.isFinite(payload.equity)
+              ? payload.equity
+              : prev?.equity ?? nextBalance
+          const nextStarting =
+            typeof payload.startingBalance === 'number' && Number.isFinite(payload.startingBalance)
+              ? payload.startingBalance
+              : prev?.startingBalance ?? nextBalance
+          return {
+            balance: nextBalance,
+            equity: nextEquity,
+            startingBalance: nextStarting,
+          }
+        })
+      },
+    )
+
     return () => {
       active = false
       clearInterval(timer)
+      unsubAccount()
     }
-  }, [])
+  }, [activeUid])
 
   return (
     <header
@@ -86,11 +152,15 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
           <button
             type="button"
             onClick={onMenuClick}
-            aria-label={unreadCount > 0 ? `Open navigation menu (${unreadCount} unread alerts)` : 'Open navigation menu'}
+            aria-label={
+              liveSignalCount > 0
+                ? `Open navigation menu (${liveSignalCount} live signals)`
+                : 'Open navigation menu'
+            }
             className="md:hidden relative w-11 h-11 -ml-1.5 rounded-xl hover:bg-white/[0.06] flex items-center justify-center text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors shrink-0"
           >
             <PiList size={20} />
-            {unreadCount > 0 && (
+            {liveSignalCount > 0 && (
               <span
                 className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-[#34D399]"
                 aria-hidden="true"
@@ -153,6 +223,33 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
             </span>
           </span>
 
+          {paperBalance && (
+            <Link
+              to="/journal"
+              className={cn(
+                'hidden sm:inline-flex items-center px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] text-[11.5px] font-mono font-medium tabular-nums transition-colors',
+                paperBalance.balance > paperBalance.startingBalance
+                  ? 'text-[#34D399]'
+                  : paperBalance.balance < paperBalance.startingBalance
+                  ? 'text-[#F87171]'
+                  : 'text-[#E4E4E7]',
+              )}
+              title={`Balance: $${paperBalance.balance.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })} · Equity: $${paperBalance.equity.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}`}
+            >
+              $
+              {paperBalance.balance.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </Link>
+          )}
+
           <span
             className="flex items-center gap-1.5"
             title={wsConnected ? 'WebSocket Stream Live' : 'WebSocket Disconnected'}
@@ -175,13 +272,13 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
         <Link
           to="/notifications"
           className="hidden md:flex relative h-8 px-2 rounded-lg hover:bg-white/[0.05] items-center gap-1.5 text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
-          title="Signals & Ops Alerts"
-          aria-label={unreadCount > 0 ? `${unreadCount} unread alerts` : 'Signals & Ops Alerts'}
+          title={liveSignalCount > 0 ? `${liveSignalCount} live signals` : 'Signals & Ops Alerts'}
+          aria-label={liveSignalCount > 0 ? `${liveSignalCount} live signals` : 'Signals & Ops Alerts'}
         >
           <PiBell size={16} />
-          {unreadCount > 0 && (
+          {liveSignalCount > 0 && (
             <span className="text-[11px] font-mono font-medium tabular-nums text-[#FAFAFA] bg-white/[0.08] rounded-full px-1.5 py-0.5 leading-none">
-              {unreadCount > 99 ? '99+' : unreadCount}
+              {liveSignalCount > 99 ? '99+' : liveSignalCount}
             </span>
           )}
         </Link>

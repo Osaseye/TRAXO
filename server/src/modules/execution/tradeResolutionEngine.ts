@@ -237,11 +237,15 @@ function computeBreakevenSl(trade: PaperTradeRecord, spread: number, digits: num
 export function evaluateTradeOnBar(
   trade: PaperTradeRecord,
   candle: MarketCandle,
-  subCandles1m?: MarketCandle[]
+  subCandles1m?: MarketCandle[],
+  options?: { isIntrabarSubCandle?: boolean }
 ): { tp1Scaled: boolean; closed: boolean; realizedDeltaUsd: number } {
   const canonicalTf = normalizeCanonicalTimeframe(trade.timeframe);
   const spec = getInstrumentSpec(trade.symbol);
   const spread = getTypicalSpreadPriceUnits(trade.symbol);
+  const isIntrabar = Boolean(options?.isIntrabarSubCandle);
+  const tfSec = timeframeToSeconds(canonicalTf);
+  const elapsedBars = tfSec > 0 ? Math.max(0, Math.floor((candle.time - trade.createdAt) / tfSec)) : 0;
 
   if (trade.lastEvaluatedTime !== null && candle.time <= trade.lastEvaluatedTime) {
     return { tp1Scaled: false, closed: false, realizedDeltaUsd: 0 };
@@ -255,7 +259,7 @@ export function evaluateTradeOnBar(
 
   // 1. Handle PENDING Limit/Stop Fill Verification
   if (trade.status === 'PENDING') {
-    trade.barsHeld += 1;
+    trade.barsHeld = isIntrabar ? Math.max(trade.barsHeld, elapsedBars) : trade.barsHeld + 1;
     trade.lastEvaluatedTime = candle.time;
 
     if (didPendingOrderFillOnCandle(trade, candle, spread)) {
@@ -295,7 +299,7 @@ export function evaluateTradeOnBar(
     return { tp1Scaled: false, closed: false, realizedDeltaUsd: 0 };
   }
 
-  trade.barsHeld += 1;
+  trade.barsHeld = isIntrabar ? Math.max(trade.barsHeld, elapsedBars) : trade.barsHeld + 1;
   trade.lastEvaluatedTime = candle.time;
   updateExcursionMetrics(trade, candle, spec.digits);
 
@@ -396,11 +400,10 @@ export function evaluateTradeOnBar(
   };
 
   // Helper to resolve intrabar using 1m sub-candles when both SL & TP are touched on one candle
-  const tfSec = timeframeToSeconds(canonicalTf);
   const subBars =
     subCandles1m !== undefined
       ? subCandles1m
-      : canonicalTf !== '1m'
+      : !isIntrabar && canonicalTf !== '1m'
       ? queryCandles({
           symbol: trade.symbol,
           timeframe: '1m',

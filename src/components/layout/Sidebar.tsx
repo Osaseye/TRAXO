@@ -21,7 +21,7 @@ import {
   PiX,
 } from 'react-icons/pi'
 import { cn } from '@/lib/utils'
-import { useNotificationStore } from '@/stores/useNotificationStore'
+import { selectLiveSignalCount, useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
 
 interface SidebarProps {
   collapsed: boolean
@@ -49,9 +49,7 @@ export function Sidebar({
   mobileOpen = false,
   onMobileClose,
 }: SidebarProps) {
-  const unreadCount = useNotificationStore(
-    (s) => s.notifications.filter((n) => !n.read).length,
-  )
+  const liveSignalCount = useAnalysisSignalStore(selectLiveSignalCount)
 
   useEffect(() => {
     if (!mobileOpen || !onMobileClose) return
@@ -114,7 +112,13 @@ export function Sidebar({
           <NavLink
             key={to}
             to={to}
-            title={collapsed ? label : undefined}
+            title={
+              label === 'Signals & Ops'
+                ? `${liveSignalCount} live signals`
+                : collapsed
+                  ? label
+                  : undefined
+            }
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors relative group',
@@ -137,8 +141,9 @@ export function Sidebar({
                     )}
                   />
                   {!collapsed && <span className="truncate">{label}</span>}
-                  {label === 'Signals & Ops' && unreadCount > 0 && (
+                  {label === 'Signals & Ops' && liveSignalCount > 0 && (
                     <span
+                      title={`${liveSignalCount} live signals`}
                       className={cn(
                         'flex items-center justify-center rounded-full bg-[#34D399] text-[#09090B] font-mono font-bold',
                         collapsed
@@ -146,7 +151,7 @@ export function Sidebar({
                           : 'ml-auto text-[10px] px-1.5 py-0.2 min-w-4 h-4',
                       )}
                     >
-                      {!collapsed && unreadCount}
+                      {!collapsed && (liveSignalCount > 99 ? '99+' : liveSignalCount)}
                     </span>
                   )}
                 </>
@@ -290,9 +295,12 @@ export function Sidebar({
                             )}
                           />
                           <span className="truncate">{label}</span>
-                          {label === 'Signals & Ops' && unreadCount > 0 && (
-                            <span className="ml-auto flex items-center justify-center rounded-full bg-[#34D399] text-[#09090B] font-mono font-bold text-[11px] px-2 min-w-5 h-5">
-                              {unreadCount > 99 ? '99+' : unreadCount}
+                          {label === 'Signals & Ops' && liveSignalCount > 0 && (
+                            <span
+                              title={`${liveSignalCount} live signals`}
+                              className="ml-auto flex items-center justify-center rounded-full bg-[#34D399] text-[#09090B] font-mono font-bold text-[11px] px-2 min-w-5 h-5"
+                            >
+                              {liveSignalCount > 99 ? '99+' : liveSignalCount}
                             </span>
                           )}
                         </>

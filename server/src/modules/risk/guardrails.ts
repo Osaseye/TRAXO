@@ -5,6 +5,7 @@ import {
   normalizeSymbol,
 } from '../../config/instruments';
 import { newsServiceClient } from '../../services/news/NewsServiceClient';
+import { firestore } from '../market-data/firebaseAdmin';
 import redis, { backupRedis } from '../market-data/redisClient';
 
 export type GuardrailCode = 'A.1' | 'A.2' | 'B.4' | 'B.7' | 'C.9' | 'C.10' | 'D.1' | 'D.2' | 'D.3';
@@ -112,11 +113,38 @@ export const DEFAULT_GUARDRAIL_CONFIG: GuardrailConfig = {
   newsFilterEnabled: true,
   newsFreezeBeforeMinutes: 30,
   newsFreezeAfterMinutes: 15,
-  riskAmountUsd: 500,
+  riskAmountUsd: 50,
   accountBalance: 10000,
 };
 
 let runtimeGuardrailOverrides: Partial<GuardrailConfig> = {};
+let hydratedContextFromFirestore = false;
+let firestoreHydrationPromise: Promise<Record<string, any> | null> | null = null;
+
+function optNum(val: unknown): number | undefined {
+  if (val === undefined || val === null || val === '') return undefined;
+  const n = Number(val);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function optBool(val: unknown): boolean | undefined {
+  if (typeof val === 'boolean') return val;
+  return undefined;
+}
+
+function resolveContextRiskUsd(ctx: Record<string, any>): number | undefined {
+  if (!ctx || typeof ctx !== 'object') return undefined;
+  const bal = Number(ctx.accountBalance);
+  const pct = Number(ctx.riskPerTradePct);
+  if (ctx.riskMode === 'percentage' && Number.isFinite(bal) && bal > 0 && Number.isFinite(pct) && pct > 0) {
+    return Math.max(1, Number(((bal * pct) / 100).toFixed(2)));
+  }
+  const fixed = Number(ctx.fixedRiskAmount);
+  if (Number.isFinite(fixed) && fixed > 0) {
+    return fixed;
+  }
+  return undefined;
+}
 
 export function updateRuntimeGuardrailConfig(partial: Partial<GuardrailConfig>): void {
   const cleaned: Partial<GuardrailConfig> = {};
@@ -484,6 +512,49 @@ export async function loadGuardrailConfig(): Promise<GuardrailConfig> {
     } catch {}
   }
 
+  if (
+    runtimeGuardrailOverrides.guardrailsEnabled === undefined &&
+    cachedGuardrailsEnabled === null &&
+    !cachedTradingCtx
+  ) {
+    if (!hydratedContextFromFirestore) {
+      hydratedContextFromFirestore = true;
+      firestoreHydrationPromise = firestore
+        .collection('users')
+        .doc('default_trader')
+        .collection('settings')
+        .doc('tradingContext')
+        .get()
+        .then((snap: any) => (snap?.exists ? snap.data() || {} : null))
+        .catch(() => null);
+    }
+
+    const fsData = firestoreHydrationPromise ? await firestoreHydrationPromise : null;
+    if (fsData && typeof fsData === 'object') {
+      ctxObj = fsData;
+      const effectiveRisk = resolveContextRiskUsd(fsData);
+      const fsBalance = optNum(fsData.accountBalance);
+      updateRuntimeGuardrailConfig({
+        guardrailsEnabled: optBool(fsData.autoTradeGuardrailsEnabled),
+        minConfidence: optNum(fsData.autoTradeMinConfidence),
+        minRR: optNum(fsData.autoTradeMinRR),
+        maxPositions: optNum(fsData.autoTradeMaxPositions),
+        correlationEnabled: optBool(fsData.autoTradeCorrelationShield),
+        maxSpreadPips: optNum(fsData.autoTradeSpreadCapPips),
+        sessionFilter:
+          typeof fsData.autoTradeSessionFilter === 'string' && fsData.autoTradeSessionFilter
+            ? (fsData.autoTradeSessionFilter as SessionWindowFilter)
+            : undefined,
+        maxDailyLossPct: optNum(fsData.maxDailyLossPct),
+        cooldownEnabled: optBool(fsData.autoTradeCooldownOnLoss),
+        maxConsecutiveLosses: optNum(fsData.maxConsecutiveLossCap),
+        newsFilterEnabled: optBool(fsData.autoTradeNewsFilter),
+        riskAmountUsd: effectiveRisk,
+        accountBalance: fsBalance && fsBalance > 0 ? fsBalance : undefined,
+      });
+    }
+  }
+
   const numOr = (val: string | null, fallback: number): number =>
     val !== null && !Number.isNaN(Number(val)) ? Number(val) : fallback;
 
@@ -544,7 +615,10 @@ export async function loadGuardrailConfig(): Promise<GuardrailConfig> {
     newsFreezeAfterMinutes: DEFAULT_GUARDRAIL_CONFIG.newsFreezeAfterMinutes,
     riskAmountUsd:
       runtimeGuardrailOverrides.riskAmountUsd ??
-      numOr(cachedRiskAmt, ctxObj.fixedRiskAmount ?? DEFAULT_GUARDRAIL_CONFIG.riskAmountUsd),
+      numOr(
+        cachedRiskAmt,
+        resolveContextRiskUsd(ctxObj) ?? DEFAULT_GUARDRAIL_CONFIG.riskAmountUsd
+      ),
     accountBalance:
       runtimeGuardrailOverrides.accountBalance ??
       (Number(ctxObj.accountBalance) || DEFAULT_GUARDRAIL_CONFIG.accountBalance),

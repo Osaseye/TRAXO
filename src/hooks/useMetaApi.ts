@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { resolveApiBaseUrl } from '@/lib/api';
 import { auth } from '@/lib/firebase';
+import webSocketService from '@/lib/websocket';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useTradingContextStore } from '@/stores/useTradingContextStore';
 
@@ -522,9 +523,52 @@ export function useMetaApi() {
       void fetchReplayStatus();
     }, 8000);
 
+    let tradeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const unsubAccount = webSocketService.subscribe(
+      'paper-account-updated',
+      (payload?: Partial<MetaApiAccountInfo>) => {
+        if (!payload || typeof payload !== 'object') return;
+        setAccount((prev) => ({
+          ...(prev ?? {
+            connected: true,
+            mode: 'paper',
+            state: 'CONNECTED',
+            platform: 'TRAXO PAPER',
+          }),
+          ...payload,
+          connected: payload.connected ?? prev?.connected ?? true,
+        }));
+        if (typeof payload.balance === 'number' && Number.isFinite(payload.balance) && payload.balance > 0) {
+          const { autoSyncBrokerBalance, setAccountBalance, accountBalance } =
+            useTradingContextStore.getState();
+          if (autoSyncBrokerBalance && Math.abs(accountBalance - payload.balance) > 0.01) {
+            setAccountBalance(Number(payload.balance.toFixed(2)));
+          }
+        }
+      }
+    );
+
+    const unsubTrade = webSocketService.subscribe('paper-trade-updated', () => {
+      if (tradeRefreshTimer) {
+        clearTimeout(tradeRefreshTimer);
+      }
+      tradeRefreshTimer = setTimeout(() => {
+        tradeRefreshTimer = null;
+        void fetchAccount();
+        void fetchPositions();
+        void fetchPaperTrades();
+      }, 250);
+    });
+
     return () => {
       clearTimeout(initialTimer);
       clearInterval(interval);
+      if (tradeRefreshTimer) {
+        clearTimeout(tradeRefreshTimer);
+      }
+      unsubAccount();
+      unsubTrade();
     };
   }, [fetchAccount, fetchPositions, fetchAutoTradeStatus, fetchPaperTrades, fetchReplayStatus]);
 

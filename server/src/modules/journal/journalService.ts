@@ -16,6 +16,130 @@ function getMemoryBucket(uid: string): Map<string, Record<string, any>> {
   return bucket;
 }
 
+export function normalizeCreatedAtMs(raw: any, fallbackTimeSec?: any): number {
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+    return raw > 1e12 ? raw : raw * 1000;
+  }
+  if (raw instanceof Date) {
+    const ms = raw.getTime();
+    if (Number.isFinite(ms) && ms > 0) return ms;
+  }
+  if (raw && typeof raw === 'object') {
+    if (typeof raw.toMillis === 'function') {
+      const ms = raw.toMillis();
+      if (Number.isFinite(ms) && ms > 0) return ms;
+    }
+    const sec = raw.seconds ?? raw._seconds;
+    if (typeof sec === 'number' && Number.isFinite(sec) && sec > 0) {
+      return sec * 1000;
+    }
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    const num = Number(raw);
+    if (Number.isFinite(num) && num > 0) {
+      return num > 1e12 ? num : num * 1000;
+    }
+    const parsed = Date.parse(raw);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  if (fallbackTimeSec !== undefined && fallbackTimeSec !== null) {
+    const ft = Number(fallbackTimeSec);
+    if (Number.isFinite(ft) && ft > 0) {
+      return ft > 1e12 ? ft : ft * 1000;
+    }
+    if (typeof fallbackTimeSec === 'string') {
+      const parsed = Date.parse(fallbackTimeSec);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+  }
+  return Date.now();
+}
+
+export function mapSignalToJournalEntry(
+  sig: Record<string, any>,
+  defaultRiskUsd = 50
+): Record<string, any> {
+  const rawStatus = String(sig.status || 'live').trim().toLowerCase();
+  let outcome: 'pending' | 'skipped' | 'win' | 'loss' = 'pending';
+  if (
+    rawStatus === 'win' ||
+    rawStatus === 'won' ||
+    rawStatus === 'tp' ||
+    rawStatus === 'tp_hit' ||
+    rawStatus === 'win_tp1' ||
+    rawStatus === 'win_tp2' ||
+    rawStatus === 'win_tp1_be'
+  ) {
+    outcome = 'win';
+  } else if (
+    rawStatus === 'loss' ||
+    rawStatus === 'lost' ||
+    rawStatus === 'sl' ||
+    rawStatus === 'sl_hit' ||
+    rawStatus === 'loss_sl'
+  ) {
+    outcome = 'loss';
+  } else if (rawStatus === 'expired' || rawStatus === 'stale' || rawStatus === 'cancelled') {
+    outcome = 'skipped';
+  }
+
+  const entryNum = Number(sig.entry || 0);
+  const slNum = Number(sig.sl || 0);
+  const tpNum = Number(sig.tp || 0);
+  const riskDist = Math.abs(entryNum - slNum);
+  const rewardDist = Math.abs(tpNum - entryNum);
+  const rr =
+    Number(sig.rr) > 0
+      ? Number(sig.rr)
+      : riskDist > 0
+        ? Number((rewardDist / riskDist).toFixed(2))
+        : 0;
+
+  const pnlUsd =
+    outcome === 'win'
+      ? Number((defaultRiskUsd * rr).toFixed(2))
+      : outcome === 'loss'
+        ? -Number(defaultRiskUsd.toFixed(2))
+        : 0;
+  const pnlR =
+    outcome === 'win' ? Number(rr.toFixed(2)) : outcome === 'loss' ? -1 : 0;
+
+  return {
+    id: String(sig.id),
+    signalId: String(sig.id),
+    suggestionKey: `signal:${sig.id}`,
+    symbol: String(sig.symbol || ''),
+    timeframe: String(sig.timeframe || ''),
+    strategy: String(sig.strategyLabel || sig.strategyId || 'TRAXO Engine'),
+    action: String(sig.direction).toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
+    entry: entryNum,
+    sl: slNum,
+    tp: tpNum,
+    tp2: sig.tp2 != null ? Number(sig.tp2) : null,
+    rr,
+    confidence: Number(sig.confidence || 50),
+    risk: sig.risk || 'Medium',
+    suggestedPosition: 0,
+    riskAmount: defaultRiskUsd,
+    taken: false,
+    outcome,
+    pnlUsd,
+    pnlR,
+    exitPrice: sig.exitPrice != null ? Number(sig.exitPrice) : null,
+    mode: 'signal',
+    source: 'signal',
+    status: String(sig.status || 'live'),
+    notes: Array.isArray(sig.reason)
+      ? sig.reason.join(' · ')
+      : Array.isArray(sig.reasons)
+        ? sig.reasons.join(' · ')
+        : typeof sig.notes === 'string'
+          ? sig.notes
+          : '',
+    createdAt: normalizeCreatedAtMs(sig.createdAt, sig.time),
+  };
+}
+
 export function mapPaperStatusToJournalOutcome(
   status: PaperTradeStatus,
   realizedPnlUsd: number
@@ -153,12 +277,7 @@ export async function saveJournalEntry(body: Record<string, any>): Promise<Recor
   const resolvedUid = String(uid || 'default_trader').trim() || 'default_trader';
   const entryId = String(id || tradeId || `journal-${Date.now()}`);
 
-  const createdTs =
-    typeof createdAt === 'number' && Number.isFinite(createdAt)
-      ? createdAt > 1e12
-        ? createdAt
-        : createdAt * 1000
-      : Date.now();
+  const createdTs = normalizeCreatedAtMs(createdAt);
 
   const payload: Record<string, any> = {
     id: entryId,
@@ -177,7 +296,7 @@ export async function saveJournalEntry(body: Record<string, any>): Promise<Recor
     risk: risk || 'Low',
     suggestedPosition:
       suggestedPosition != null ? Number(suggestedPosition) : volume != null ? Number(volume) : 0.01,
-    riskAmount: riskAmount != null ? Number(riskAmount) : 25,
+    riskAmount: riskAmount != null ? Number(riskAmount) : 50,
     taken: Boolean(taken),
     outcome,
     notes: notes || '',
@@ -242,10 +361,14 @@ export async function updateJournalEntry(
     // ignore Firestore read error
   }
 
-  const prevData = memPrev || fsPrev;
-  if (!prevData) {
-    return { found: false };
-  }
+  const basePrev = memPrev || fsPrev;
+  const priorOutcome = basePrev?.outcome;
+  const { uid: _ignoredUid, ...bodyFields } = body;
+  const prevData = basePrev || {
+    ...bodyFields,
+    id,
+    createdAt: normalizeCreatedAtMs(body.createdAt, body.time),
+  };
 
   const updates: Record<string, any> = {
     updatedAt: Date.now(),
@@ -263,12 +386,12 @@ export async function updateJournalEntry(
   bucket.set(id, merged);
 
   try {
-    await docRef.set(updates, { merge: true });
+    await docRef.set(fsPrev ? updates : merged, { merge: true });
   } catch {
     // Non-fatal
   }
 
-  if (outcome === 'loss' && prevData.outcome !== 'loss') {
+  if (outcome === 'loss' && priorOutcome !== 'loss') {
     const cfg = await loadGuardrailConfig().catch(() => null);
     processResolvedLoss(prevData).catch(() => {});
     recordTradeResolutionForRisk(
@@ -276,7 +399,7 @@ export async function updateJournalEntry(
       Math.abs(Number(pnlUsd ?? prevData.riskAmount ?? cfg?.riskAmountUsd ?? 0)),
       cfg || undefined
     ).catch(() => {});
-  } else if (outcome === 'win' && prevData.outcome !== 'win') {
+  } else if (outcome === 'win' && priorOutcome !== 'win') {
     const cfg = await loadGuardrailConfig().catch(() => null);
     processResolvedWin(prevData).catch(() => {});
     recordTradeResolutionForRisk('WIN', 0, cfg || undefined).catch(() => {});

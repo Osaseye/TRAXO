@@ -171,7 +171,6 @@ export default function Settings() {
   const setMaxDailyLossPct = useTradingContextStore((s) => s.setMaxDailyLossPct)
 
   const autoTradeGuardrailsEnabled = useTradingContextStore((s) => s.autoTradeGuardrailsEnabled)
-  const setAutoTradeGuardrailsEnabled = useTradingContextStore((s) => s.setAutoTradeGuardrailsEnabled)
   const autoTradeMinConfidence = useTradingContextStore((s) => s.autoTradeMinConfidence)
   const setAutoTradeMinConfidence = useTradingContextStore((s) => s.setAutoTradeMinConfidence)
   const autoTradeMaxPositions = useTradingContextStore((s) => s.autoTradeMaxPositions)
@@ -235,20 +234,63 @@ export default function Settings() {
   }, [])
 
   useEffect(() => {
+    let active = true
     getTradingContext()
-      .then((ctx) => {
-        if (ctx && typeof ctx.maxConsecutiveLossCap === 'number' && ctx.maxConsecutiveLossCap > 0) {
+      .then((ctx: Record<string, unknown> | null) => {
+        if (!active || !ctx || typeof ctx !== 'object') return
+        if (typeof ctx.maxConsecutiveLossCap === 'number' && ctx.maxConsecutiveLossCap > 0) {
           setMaxConsecutiveLossCap(ctx.maxConsecutiveLossCap)
         }
-        if (ctx && typeof ctx.autoTradeGuardrailsEnabled === 'boolean') {
-          useTradingContextStore.setState({
-            autoTradeGuardrailsEnabled: ctx.autoTradeGuardrailsEnabled,
-          })
+
+        const patch: Partial<ReturnType<typeof useTradingContextStore.getState>> = {}
+        if (typeof ctx.fixedRiskAmount === 'number' && Number.isFinite(ctx.fixedRiskAmount) && ctx.fixedRiskAmount > 0) {
+          patch.fixedRiskAmount = ctx.fixedRiskAmount
+        }
+        if (ctx.riskMode === 'fixedAmount' || ctx.riskMode === 'percentage') {
+          patch.riskMode = ctx.riskMode
+        }
+        if (typeof ctx.autoTradeGuardrailsEnabled === 'boolean') {
+          patch.autoTradeGuardrailsEnabled = ctx.autoTradeGuardrailsEnabled
+        }
+        if (typeof ctx.autoTradeMinConfidence === 'number' && Number.isFinite(ctx.autoTradeMinConfidence)) {
+          patch.autoTradeMinConfidence = ctx.autoTradeMinConfidence
+        }
+        if (typeof ctx.autoTradeMinRR === 'number' && Number.isFinite(ctx.autoTradeMinRR)) {
+          patch.autoTradeMinRR = ctx.autoTradeMinRR
+        }
+        if (typeof ctx.autoTradeMaxPositions === 'number' && Number.isFinite(ctx.autoTradeMaxPositions)) {
+          patch.autoTradeMaxPositions = ctx.autoTradeMaxPositions
+        }
+        if (typeof ctx.autoTradeSpreadCapPips === 'number' && Number.isFinite(ctx.autoTradeSpreadCapPips)) {
+          patch.autoTradeSpreadCapPips = ctx.autoTradeSpreadCapPips
+        }
+        if (
+          ctx.autoTradeSessionFilter === 'all' ||
+          ctx.autoTradeSessionFilter === 'london_ny' ||
+          ctx.autoTradeSessionFilter === 'ny_only'
+        ) {
+          patch.autoTradeSessionFilter = ctx.autoTradeSessionFilter
+        }
+        if (typeof ctx.autoTradeCorrelationShield === 'boolean') {
+          patch.autoTradeCorrelationShield = ctx.autoTradeCorrelationShield
+        }
+        if (typeof ctx.autoTradeNewsFilter === 'boolean') {
+          patch.autoTradeNewsFilter = ctx.autoTradeNewsFilter
+        }
+        if (typeof ctx.autoTradeCooldownOnLoss === 'boolean') {
+          patch.autoTradeCooldownOnLoss = ctx.autoTradeCooldownOnLoss
+        }
+
+        if (Object.keys(patch).length > 0) {
+          useTradingContextStore.setState(patch)
         }
       })
       .catch(() => {
         // non-fatal when backend offline
       })
+    return () => {
+      active = false
+    }
   }, [])
 
   function updateBrokerField<K extends keyof BrokerDeskConfig>(key: K, value: BrokerDeskConfig[K]) {
@@ -325,6 +367,31 @@ export default function Settings() {
 
   const showSection = (section: Exclude<SettingsSectionTab, 'all'>) =>
     mobileTab === 'all' || mobileTab === section
+  const showQuickControl = mobileTab === 'all' || mobileTab === 'broker' || mobileTab === 'risk'
+
+  function handleGuardrailsToggle(nextGuardrailsEnabled: boolean) {
+    useTradingContextStore.setState({ autoTradeGuardrailsEnabled: nextGuardrailsEnabled })
+    void postTradingContext({
+      autoTradeGuardrailsEnabled: nextGuardrailsEnabled,
+      fixedRiskAmount,
+      riskMode,
+    }).catch(() => {
+      // non-fatal when backend offline
+    })
+    if (!nextGuardrailsEnabled) {
+      showToast(
+        'Raw Signal Mode ON',
+        'All 9 guardrails disabled; trading every incoming signal',
+        'success',
+      )
+    } else {
+      showToast(
+        'Execution Guardrails ON',
+        'All 9 risk and execution filters enforced.',
+        'info',
+      )
+    }
+  }
 
   return (
     <div className="min-h-full bg-[#09090B] text-[#FAFAFA] font-sans overflow-x-hidden">
@@ -412,6 +479,130 @@ export default function Settings() {
             })}
           </div>
         </div>
+
+        {/* 0. Auto-Trader & Raw Signal Execution */}
+        <section className={cn('space-y-3', !showQuickControl && 'hidden md:block')}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
+                Auto-Trader &amp; Raw Signal Execution
+              </h2>
+              <p className="text-[13px] text-[#71717A]">
+                Instant execution controls for autonomous signal routing and per-trade dollar sizing.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span
+                className={cn(
+                  'px-2.5 py-0.5 rounded-full text-[11.5px] font-medium',
+                  autoTradeEnabled
+                    ? 'bg-[#34D399]/10 text-[#34D399]'
+                    : 'bg-[#18181B] text-[#71717A]',
+                )}
+              >
+                {autoTradeEnabled ? 'Auto-Trade ON' : 'Auto-Trade OFF'}
+              </span>
+              {!autoTradeGuardrailsEnabled && (
+                <span className="px-2.5 py-0.5 rounded-full text-[11.5px] font-mono font-medium bg-[#FBBF24]/15 text-[#FBBF24]">
+                  RAW SIGNAL MODE
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
+            {/* Autonomous Auto-Trader */}
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-row items-center justify-between gap-4">
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">
+                  Autonomous Auto-Trader
+                </div>
+                <div className="text-[13px] text-[#71717A]">
+                  {autoTradeEnabled ? 'Active — executing signals' : 'Paused'}
+                </div>
+              </div>
+              <TogglePill
+                enabled={autoTradeEnabled}
+                disabled={metaLoading}
+                onToggle={() => void toggleAutoTrade(!autoTradeEnabled)}
+                label="Toggle Autonomous Auto-Trader"
+              />
+            </div>
+
+            {/* Bypass All Guardrails (Trade Every Signal) */}
+            <div className="p-4 sm:p-5 sm:px-6 space-y-3">
+              <div className="flex flex-row items-center justify-between gap-4">
+                <div className="space-y-0.5 min-w-0 flex-1">
+                  <div className="text-[14px] font-medium text-[#FAFAFA]">
+                    Bypass All Guardrails (Trade Every Signal)
+                  </div>
+                  <div className="text-[13px] text-[#71717A]">
+                    Disable all 9 execution filters and route every live strategy signal immediately.
+                  </div>
+                </div>
+                <TogglePill
+                  enabled={!autoTradeGuardrailsEnabled}
+                  onToggle={() => handleGuardrailsToggle(!autoTradeGuardrailsEnabled)}
+                  label="Bypass All Guardrails (Trade Every Signal)"
+                />
+              </div>
+
+              {!autoTradeGuardrailsEnabled && (
+                <div className="rounded-xl bg-[#0D0D10] border border-[#FBBF24]/30 px-3.5 py-2.5 text-[12.5px] text-[#FBBF24]">
+                  RAW SIGNAL MODE ACTIVE — Trading every incoming signal with ${fixedRiskAmount || 50} risk
+                </div>
+              )}
+            </div>
+
+            {/* Default Risk Per Trade ($) */}
+            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-medium text-[#FAFAFA]">
+                  Default Risk Per Trade ($)
+                </div>
+                <div className="text-[13px] text-[#71717A]">
+                  Fixed USD stop-loss risk applied per executed trade and un-executed signal benchmark.
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+                <div className="grid grid-cols-4 sm:flex items-center gap-1.5">
+                  {[10, 25, 50, 100].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => {
+                        if (riskMode !== 'fixedAmount') setRiskMode('fixedAmount')
+                        setFixedRiskAmount(amt)
+                      }}
+                      className={cn(
+                        'min-h-[38px] sm:min-h-0 px-2.5 py-1.5 sm:py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
+                        fixedRiskAmount === amt
+                          ? 'bg-[#FAFAFA] text-[#09090B] font-semibold'
+                          : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
+                      )}
+                    >
+                      ${amt}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, accountBalance)}
+                  step={5}
+                  value={fixedRiskAmount || ''}
+                  onChange={(e) => {
+                    if (riskMode !== 'fixedAmount') setRiskMode('fixedAmount')
+                    const val = e.target.value === '' ? 0 : parseFloat(e.target.value)
+                    setFixedRiskAmount(Number.isNaN(val) ? 0 : val)
+                  }}
+                  aria-label="Default Risk Per Trade USD"
+                  className="w-full sm:w-28 min-h-[40px] sm:min-h-0 px-3 py-1.5 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* 1. Exness MT5 Connection */}
         <section className={cn('space-y-3', !showSection('broker') && 'hidden md:block')}>
@@ -650,7 +841,7 @@ export default function Settings() {
                 </div>
                 <TogglePill
                   enabled={autoTradeGuardrailsEnabled}
-                  onToggle={() => setAutoTradeGuardrailsEnabled(!autoTradeGuardrailsEnabled)}
+                  onToggle={() => handleGuardrailsToggle(!autoTradeGuardrailsEnabled)}
                   label="Toggle all Auto-Trade guardrails"
                 />
               </div>
@@ -789,6 +980,18 @@ export default function Settings() {
               )}
             </div>
 
+            {!autoTradeGuardrailsEnabled && (
+              <div className="px-4 sm:px-6 py-2.5 flex items-center justify-between gap-2 bg-[#141418]/50">
+                <span className="text-[12px] text-[#71717A]">
+                  Individual rule thresholds &amp; filters below
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-[#FBBF24]/15 text-[#FBBF24] text-[11px] font-mono font-medium">
+                  Bypassed in Raw Signal Mode
+                </span>
+              </div>
+            )}
+
+            <div className={cn('divide-y divide-white/[0.06] transition-opacity', !autoTradeGuardrailsEnabled && 'opacity-45')}>
             {/* Rule D.1 Daily Loss Cap */}
             <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="space-y-0.5">
@@ -1109,6 +1312,7 @@ export default function Settings() {
                   )
                 })}
               </div>
+            </div>
             </div>
           </div>
         </section>

@@ -29,14 +29,14 @@ export function resolveRiskAmountUsd(params: {
   if (params.riskMode === 'percentage' && params.accountBalance && params.riskPerTradePct) {
     return Math.max(1, Number(((params.accountBalance * params.riskPerTradePct) / 100).toFixed(2)));
   }
-  return 500;
+  return 50;
 }
 
 export function calculateLots(
   symbol: string,
   entry: number,
   sl: number,
-  riskAmount = 500
+  riskAmount = 50
 ): number {
   const spec = getInstrumentSpec(symbol);
   if (!Number.isFinite(riskAmount) || riskAmount <= 0) {

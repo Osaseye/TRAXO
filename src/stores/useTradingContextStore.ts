@@ -76,7 +76,7 @@ export interface JournalEntry {
   tp2?: number | null
   tradeId?: string
   signalId?: string | null
-  mode?: 'paper' | 'metaapi' | 'manual'
+  mode?: 'paper' | 'metaapi' | 'manual' | 'signal'
   status?: string
   /** True once the user has moved SL to entry (break-even management). */
   breakEvenTriggered?: boolean
@@ -87,7 +87,7 @@ export interface JournalEntry {
   currentSl?: number
 }
 
-interface TradingContextState {
+export interface TradingContextState {
   accountBalance: number
   riskPerTradePct: number
   maxDailyLossPct: number
@@ -109,7 +109,7 @@ interface TradingContextState {
   setChartTimeframe: (value: ChartTimeframe) => void
   logSuggestionDecision: (entry: Omit<JournalEntry, 'id' | 'createdAt'>) => void
   setJournalOutcome: (suggestionKey: string, outcome: JournalOutcome) => void
-  addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'createdAt'>) => void
+  addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'createdAt'> & { createdAt?: number }) => void
   editJournalEntry: (id: string, updates: Partial<JournalEntry>) => void
   deleteJournalEntry: (id: string) => void
   /** Move SL to entry for a pending trade (break-even management). */
@@ -164,7 +164,7 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
         const newEntry: JournalEntry = {
           ...entry,
           id: `jrnl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          createdAt: Date.now(),
+          createdAt: entry.createdAt ?? Date.now(),
         }
         return { journal: [newEntry, ...state.journal].slice(0, 300) }
       }),
@@ -195,9 +195,9 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
       }),
   accountBalance: 10000,
   riskMode: 'fixedAmount',
-  fixedRiskAmount: 500,
+  fixedRiskAmount: 50,
   autoSyncBrokerBalance: true,
-  riskPerTradePct: 2.5,
+  riskPerTradePct: 0.5,
   maxDailyLossPct: 6,
   chartSymbol: 'EURUSD',
   chartTimeframe: '4H',
@@ -341,19 +341,21 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
       const previous = existingIdx >= 0 ? state.journal[existingIdx] : null
       let nextBalance = state.accountBalance
 
-      // Reserve capital when a suggestion is marked as taken and unresolved.
-      if (!previous && entry.taken) {
-        nextBalance = Math.max(0, nextBalance - entry.suggestedPosition)
-      }
-
-      if (previous && previous.taken !== entry.taken) {
-        // Revert reservation if user switches from taken -> not taken before outcome resolution.
-        if (previous.taken && !entry.taken && previous.outcome === 'pending') {
-          nextBalance = nextBalance + previous.suggestedPosition
-        }
-        // Reserve capital if user switches from not taken -> taken.
-        if (!previous.taken && entry.taken) {
+      // Reserve capital only when not auto-syncing with the broker balance.
+      if (!state.autoSyncBrokerBalance) {
+        if (!previous && entry.taken) {
           nextBalance = Math.max(0, nextBalance - entry.suggestedPosition)
+        }
+
+        if (previous && previous.taken !== entry.taken) {
+          // Revert reservation if user switches from taken -> not taken before outcome resolution.
+          if (previous.taken && !entry.taken && previous.outcome === 'pending') {
+            nextBalance = nextBalance + previous.suggestedPosition
+          }
+          // Reserve capital if user switches from not taken -> taken.
+          if (!previous.taken && entry.taken) {
+            nextBalance = Math.max(0, nextBalance - entry.suggestedPosition)
+          }
         }
       }
 
@@ -365,7 +367,9 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
 
       // Sync to backend asynchronously
       postJournalEntry(next).catch(() => {})
-      postTradingContext({ accountBalance: nextBalance }).catch(() => {})
+      if (!state.autoSyncBrokerBalance) {
+        postTradingContext({ accountBalance: nextBalance }).catch(() => {})
+      }
 
       if (existingIdx >= 0) {
         const updated = [...state.journal]
@@ -384,11 +388,11 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
       const target = state.journal[idx]
       const updatedJournal = [...state.journal]
 
-      // Only settle cashflow once when moving from pending to final outcome.
+      // Only settle cashflow once when moving from pending to final outcome, and only when not auto-syncing broker balance.
       let nextBalance = state.accountBalance
       const settling = target.outcome === 'pending' && (outcome === 'win' || outcome === 'loss' || outcome === 'breakeven')
 
-      if (target.taken && settling) {
+      if (!state.autoSyncBrokerBalance && target.taken && settling) {
         const riskDist = Math.abs(target.entry - target.sl)
         const rewardDist = Math.abs(target.tp - target.entry)
         const rr = riskDist > 0 ? rewardDist / riskDist : 0
@@ -411,7 +415,9 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
 
       // Sync outcome & updated balance to backend asynchronously
       updateJournalEntry(target.id, { outcome }).catch(() => {})
-      postTradingContext({ accountBalance: nextBalance }).catch(() => {})
+      if (!state.autoSyncBrokerBalance) {
+        postTradingContext({ accountBalance: nextBalance }).catch(() => {})
+      }
 
       if (outcome === 'loss') {
         apiFetch('/api/strategy-optimization/analyze-loss', {
@@ -427,16 +433,29 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
     }),
 }), {
   name: 'traxo-trading-context',
-  version: 2,
-  migrate: (persistedState) => {
+  version: 3,
+  migrate: (persistedState, version) => {
     const state = (persistedState ?? {}) as Partial<TradingContextState>
     const nextChartSymbol: ChartSymbol = isValidChartSymbol(state.chartSymbol) ? state.chartSymbol : 'EURUSD'
     const nextNotifSymbols: ChartSymbol[] = Array.isArray(state.notifSymbolFilters)
       ? state.notifSymbolFilters.filter((sym): sym is ChartSymbol => isValidChartSymbol(sym))
       : []
 
+    let fixedRiskAmount = state.fixedRiskAmount
+    let riskPerTradePct = state.riskPerTradePct
+    if (version < 3) {
+      if (fixedRiskAmount === 500 || fixedRiskAmount === undefined) {
+        fixedRiskAmount = 50
+      }
+      if (riskPerTradePct === 2.5 || riskPerTradePct === undefined) {
+        riskPerTradePct = 0.5
+      }
+    }
+
     return {
       ...state,
+      fixedRiskAmount,
+      riskPerTradePct,
       chartSymbol: nextChartSymbol,
       notifSymbolFilters: nextNotifSymbols,
       autoTradeAllowedCategories: sanitizeAllowedCategories(state.autoTradeAllowedCategories),

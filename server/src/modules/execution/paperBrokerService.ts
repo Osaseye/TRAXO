@@ -101,6 +101,42 @@ export class PaperBrokerService implements IExecutionBroker {
     return mapAccountRow(created);
   }
 
+  private broadcastAccountUpdate(acc: PaperAccountRecord): void {
+    broadcast({
+      type: 'PAPER_ACCOUNT_UPDATED',
+      payload: {
+        connected: true,
+        mode: 'paper',
+        state: 'CONNECTED',
+        platform: 'TRAXO PAPER',
+        uid: acc.uid,
+        balance: acc.balance,
+        equity: acc.equity,
+        margin: acc.usedMargin,
+        usedMargin: acc.usedMargin,
+        freeMargin: acc.freeMargin,
+        floatingPnl: acc.floatingPnl,
+        realizedPnl: acc.realizedPnl,
+        startingBalance: acc.startingBalance,
+        peakEquity: acc.peakEquity,
+        maxDrawdownPct: acc.maxDrawdownPct,
+        currency: acc.currency,
+        leverage: acc.leverage,
+      },
+    });
+  }
+
+  hasTradeForSignal(signalId: string, uid = DEFAULT_UID): boolean {
+    const cleanId = String(signalId || '').trim();
+    if (!cleanId) return false;
+    const db = getDb();
+    return Boolean(
+      db
+        .prepare("SELECT 1 FROM paper_trades WHERE uid = ? AND signal_id = ? AND status NOT IN ('CANCELLED') LIMIT 1")
+        .get(uid, cleanId)
+    );
+  }
+
   recalculateAccountMetrics(uid = DEFAULT_UID): PaperAccountRecord {
     const db = getDb();
     const row = db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(uid);
@@ -123,7 +159,17 @@ export class PaperBrokerService implements IExecutionBroker {
     let usedMargin = 0;
     for (const r of openRows) {
       const t = mapTradeRowToRecord(r);
-      floatingPnl += t.floatingPnlUsd;
+      const latest = getLatestArchivedCandle(t.symbol);
+      const liveFloating = latest
+        ? computeDollarPnl({
+            symbol: t.symbol,
+            direction: t.direction,
+            entryPrice: t.fillPrice ?? t.requestedEntry,
+            exitPrice: latest.close,
+            volume: t.openVolume,
+          })
+        : t.floatingPnlUsd;
+      floatingPnl += liveFloating;
       usedMargin += estimateMarginRequired(
         t.symbol,
         t.fillPrice ?? t.requestedEntry,
@@ -136,7 +182,7 @@ export class PaperBrokerService implements IExecutionBroker {
       .prepare(`SELECT COALESCE(SUM(realized_pnl_usd), 0) AS total_realized FROM paper_trades WHERE uid = ?`)
       .get(uid);
     const realizedPnl = Number(Number(realizedRow?.total_realized || 0).toFixed(2));
-    const balance = Number(acc.balance.toFixed(2));
+    const balance = Number((acc.startingBalance + realizedPnl).toFixed(2));
     const equity = Number((balance + floatingPnl).toFixed(2));
     const freeMargin = Number(Math.max(0, equity - usedMargin).toFixed(2));
     const peakEquity = Number(Math.max(acc.peakEquity, equity).toFixed(2));
@@ -146,10 +192,11 @@ export class PaperBrokerService implements IExecutionBroker {
 
     db.prepare(`
       UPDATE paper_accounts
-      SET equity = ?, used_margin = ?, free_margin = ?, floating_pnl = ?,
+      SET balance = ?, equity = ?, used_margin = ?, free_margin = ?, floating_pnl = ?,
           realized_pnl = ?, peak_equity = ?, max_drawdown_pct = ?, updated_at = ?
       WHERE uid = ?
     `).run(
+      balance,
       equity,
       Number(usedMargin.toFixed(2)),
       freeMargin,
@@ -201,6 +248,7 @@ export class PaperBrokerService implements IExecutionBroker {
     } catch {}
 
     const rec = this.recalculateAccountMetrics(uid);
+    this.broadcastAccountUpdate(rec);
     schedulePaperCloudBackup(uid);
     return rec;
   }
@@ -372,20 +420,6 @@ export class PaperBrokerService implements IExecutionBroker {
         };
       }
 
-      const slPrice =
-        roundToDigits(params.sl, spec.digits) ??
-        roundToDigits(
-          actionUpper === 'BUY' ? requestedEntry - spec.pipSize * 20 : requestedEntry + spec.pipSize * 20,
-          spec.digits
-        )!;
-      const tp1Price =
-        roundToDigits(params.tp, spec.digits) ??
-        roundToDigits(
-          actionUpper === 'BUY' ? requestedEntry + spec.pipSize * 40 : requestedEntry - spec.pipSize * 40,
-          spec.digits
-        )!;
-      const tp2Price = params.tp2 !== undefined ? roundToDigits(params.tp2, spec.digits) ?? null : null;
-
       const db = getDb();
       if (signalIdClean) {
         const existingSignalTrade = db
@@ -407,6 +441,63 @@ export class PaperBrokerService implements IExecutionBroker {
       }
 
       const account = await this.ensureAccount(uid);
+      const isImmediateMarket = orderEntryType === 'MARKET';
+      const fillPrice = isImmediateMarket
+        ? actionUpper === 'BUY'
+          ? quote.ask ?? requestedEntry
+          : quote.bid ?? requestedEntry
+        : null;
+      const anchor = fillPrice ?? requestedEntry;
+
+      const rawSl =
+        params.sl !== undefined && params.sl !== null && Number(params.sl) > 0
+          ? Number(params.sl)
+          : undefined;
+      const rawTp =
+        params.tp !== undefined && params.tp !== null && Number(params.tp) > 0
+          ? Number(params.tp)
+          : undefined;
+      const rawTp2 =
+        params.tp2 !== undefined && params.tp2 !== null && Number(params.tp2) > 0
+          ? Number(params.tp2)
+          : undefined;
+
+      let slPrice =
+        roundToDigits(rawSl, spec.digits) ??
+        roundToDigits(
+          actionUpper === 'BUY' ? anchor - spec.pipSize * 20 : anchor + spec.pipSize * 20,
+          spec.digits
+        )!;
+      let tp1Price =
+        roundToDigits(rawTp, spec.digits) ??
+        roundToDigits(
+          actionUpper === 'BUY' ? anchor + spec.pipSize * 40 : anchor - spec.pipSize * 40,
+          spec.digits
+        )!;
+      let tp2Price = rawTp2 !== undefined ? roundToDigits(rawTp2, spec.digits) ?? null : null;
+
+      if (actionUpper === 'BUY') {
+        if (slPrice >= anchor) {
+          slPrice = roundToDigits(anchor - spec.pipSize * 20, spec.digits)!;
+        }
+        if (tp1Price <= anchor) {
+          tp1Price = roundToDigits(anchor + spec.pipSize * 40, spec.digits)!;
+        }
+        if (tp2Price !== null && tp2Price <= tp1Price) {
+          tp2Price = null;
+        }
+      } else {
+        if (slPrice <= anchor) {
+          slPrice = roundToDigits(anchor + spec.pipSize * 20, spec.digits)!;
+        }
+        if (tp1Price >= anchor) {
+          tp1Price = roundToDigits(anchor - spec.pipSize * 40, spec.digits)!;
+        }
+        if (tp2Price !== null && tp2Price >= tp1Price) {
+          tp2Price = null;
+        }
+      }
+
       const exitMode = assignDynamicExitMode({
         strategyId: params.strategyId,
         market: params.market || spec.assetType,
@@ -414,13 +505,6 @@ export class PaperBrokerService implements IExecutionBroker {
         volume,
         tp2: tp2Price,
       });
-
-      const isImmediateMarket = orderEntryType === 'MARKET';
-      const fillPrice = isImmediateMarket
-        ? actionUpper === 'BUY'
-          ? quote.ask ?? requestedEntry
-          : quote.bid ?? requestedEntry
-        : null;
 
       const createdAt =
         params.signalTime && Number.isFinite(params.signalTime)
@@ -530,7 +614,8 @@ export class PaperBrokerService implements IExecutionBroker {
         }
       }
 
-      this.recalculateAccountMetrics(uid);
+      const updatedAcc = this.recalculateAccountMetrics(uid);
+      this.broadcastAccountUpdate(updatedAcc);
       schedulePaperCloudBackup(uid);
       const saved = this.getTradeById(tradeId);
       if (saved) {
@@ -717,7 +802,8 @@ export class PaperBrokerService implements IExecutionBroker {
       existing.id
     );
 
-    this.recalculateAccountMetrics(existing.uid);
+    const updatedAcc = this.recalculateAccountMetrics(existing.uid);
+    this.broadcastAccountUpdate(updatedAcc);
     schedulePaperCloudBackup(existing.uid);
     const updated = this.getTradeById(existing.id);
     if (updated) {
@@ -754,7 +840,8 @@ export class PaperBrokerService implements IExecutionBroker {
       WHERE id = ?
     `).run(nowSec, JSON.stringify(events), existing.id);
 
-    this.recalculateAccountMetrics(existing.uid);
+    const updatedAcc = this.recalculateAccountMetrics(existing.uid);
+    this.broadcastAccountUpdate(updatedAcc);
     schedulePaperCloudBackup(existing.uid);
     const updated = this.getTradeById(existing.id);
     if (updated) {
@@ -847,13 +934,22 @@ export class PaperBrokerService implements IExecutionBroker {
     const canonicalSym = normalizeSymbol(symbol);
     const canonicalTf = normalizeCanonicalTimeframe(timeframe);
 
-    const activeRows = db
-      .prepare(
-        `SELECT * FROM paper_trades
-         WHERE symbol = ? AND timeframe = ? AND status IN ('PENDING', 'OPEN', 'PARTIAL_TP1')
-         ORDER BY created_at ASC`
-      )
-      .all(canonicalSym, canonicalTf);
+    const isSubTfTick = canonicalTf === '1m' || canonicalTf === '5m';
+    const activeRows = isSubTfTick
+      ? db
+          .prepare(
+            `SELECT * FROM paper_trades
+             WHERE symbol = ? AND status IN ('PENDING', 'OPEN', 'PARTIAL_TP1')
+             ORDER BY created_at ASC`
+          )
+          .all(canonicalSym)
+      : db
+          .prepare(
+            `SELECT * FROM paper_trades
+             WHERE symbol = ? AND timeframe = ? AND status IN ('PENDING', 'OPEN', 'PARTIAL_TP1')
+             ORDER BY created_at ASC`
+          )
+          .all(canonicalSym, canonicalTf);
 
     if (!activeRows.length) {
       return { updatedTrades: [], newlyClosedTrades: [], tp1ScaledTrades: [] };
@@ -866,12 +962,15 @@ export class PaperBrokerService implements IExecutionBroker {
 
     for (const row of activeRows) {
       const trade = mapTradeRowToRecord(row);
+      const tradeTf = normalizeCanonicalTimeframe(trade.timeframe);
+      const isIntrabar = tradeTf !== canonicalTf;
+      const evalTf = isIntrabar ? canonicalTf : tradeTf;
       const fromTime = (trade.lastEvaluatedTime ?? trade.createdAt) + 1;
       const toTime = latestCandle?.time;
 
       let bars = queryCandles({
         symbol: trade.symbol,
-        timeframe: trade.timeframe,
+        timeframe: evalTf,
         fromTime,
         toTime,
       });
@@ -889,7 +988,12 @@ export class PaperBrokerService implements IExecutionBroker {
       let closedOnRun = false;
 
       for (const bar of bars) {
-        const res = evaluateTradeOnBar(trade, bar, subCandles1m);
+        const res = evaluateTradeOnBar(
+          trade,
+          bar,
+          isIntrabar ? undefined : subCandles1m,
+          { isIntrabarSubCandle: isIntrabar }
+        );
         tradeChanged = true;
 
         if (res.realizedDeltaUsd !== 0) {
@@ -912,7 +1016,10 @@ export class PaperBrokerService implements IExecutionBroker {
 
       if (!tradeChanged) continue;
 
-      if (!closedOnRun && (trade.status === 'OPEN' || trade.status === 'PARTIAL_TP1')) {
+      if (
+        (closedOnRun && trade.balanceAfter === null) ||
+        (!closedOnRun && (trade.status === 'OPEN' || trade.status === 'PARTIAL_TP1'))
+      ) {
         const currentAcc = await this.ensureAccount(trade.uid);
         trade.balanceAfter = Number(currentAcc.balance.toFixed(2));
       }
@@ -965,7 +1072,8 @@ export class PaperBrokerService implements IExecutionBroker {
     }
 
     for (const uid of touchedUids) {
-      this.recalculateAccountMetrics(uid);
+      const updatedAcc = this.recalculateAccountMetrics(uid);
+      this.broadcastAccountUpdate(updatedAcc);
       schedulePaperCloudBackup(uid);
     }
 

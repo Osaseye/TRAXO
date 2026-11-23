@@ -47,7 +47,7 @@ export function calculateLots(symbol: string, entry: number, sl: number, riskAmo
   }
 
   const cleanSymbol = (symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
-  let lotSize = 0.01
+  let lotSize: number
 
   if (cleanSymbol.includes('JPY')) {
     lotSize = riskAmount / (riskDist * 650)
@@ -80,7 +80,7 @@ export function formatMT4OrderClipboardPayload(signal: {
   const entryFmt = formatPrice(signal.entry, undefined, symbol)
   const slFmt = formatPrice(signal.sl, undefined, symbol)
   const tpFmt = formatPrice(signal.tp, undefined, symbol)
-  const riskAmt = signal.riskAmount ?? 25
+  const riskAmt = signal.riskAmount ?? 50
   const lots = calculateLots(symbol, signal.entry, signal.sl, riskAmt)
 
   return `${signal.direction} ${symbol} @ ${entryFmt} | SL: ${slFmt} | TP: ${tpFmt} | Risk: $${riskAmt.toFixed(2)} (${lots} Lots)`

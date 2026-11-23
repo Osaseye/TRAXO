@@ -63,6 +63,13 @@ export async function resolveRequestUid(req: any): Promise<string> {
   return 'default_trader';
 }
 
+async function resolvePaperOrRequestUid(req: any): Promise<string> {
+  if (metaApiService.getExecutionMode() === 'paper') {
+    return 'default_trader';
+  }
+  return resolveRequestUid(req);
+}
+
 router.get('/mode', (_req: any, res: any) => {
   res.json({ mode: metaApiService.getExecutionMode() });
 });
@@ -75,7 +82,7 @@ router.post('/mode', (req: any, res: any) => {
 
 router.post('/paper/reset-account', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const balance = Number(req.body?.balance ?? req.body?.startingBalance ?? 10000);
     const clearTrades = Boolean(req.body?.clearTrades);
     const updated = await paperBrokerService.resetOrSetPaperBalance(uid, balance, clearTrades);
@@ -87,7 +94,7 @@ router.post('/paper/reset-account', async (req: any, res: any) => {
 
 router.post('/account/reset', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const balance = Number(req.body?.balance ?? req.body?.startingBalance ?? 10000);
     const clearTrades = Boolean(req.body?.clearTrades);
     const updated = await paperBrokerService.resetOrSetPaperBalance(uid, balance, clearTrades);
@@ -99,7 +106,7 @@ router.post('/account/reset', async (req: any, res: any) => {
 
 router.get('/trades', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const status = req.query?.status ? String(req.query.status) : undefined;
     const limit = req.query?.limit ? Number(req.query.limit) : 200;
     const trades = paperBrokerService.getAllTrades(uid, status, limit);
@@ -112,7 +119,7 @@ router.get('/trades', async (req: any, res: any) => {
 
 router.get('/trades/:tradeId/replay', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const tradeId = String(req.params?.tradeId || '').trim();
     if (!tradeId) {
       res.status(400).json({ ok: false, error: 'Missing tradeId' });
@@ -131,7 +138,7 @@ router.get('/trades/:tradeId/replay', async (req: any, res: any) => {
 
 router.get('/backup/status', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const status = await getPaperBackupStatus(uid);
     res.json({ ok: true, ...status });
   } catch (error: any) {
@@ -141,7 +148,7 @@ router.get('/backup/status', async (req: any, res: any) => {
 
 router.post('/backup/sync', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const result = await syncPaperStateToCloudBackup(uid);
     res.json(result);
   } catch (error: any) {
@@ -151,7 +158,7 @@ router.post('/backup/sync', async (req: any, res: any) => {
 
 router.get('/account', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const info = await metaApiService.getAccountInfo(uid);
     res.json(info);
   } catch (error: any) {
@@ -161,7 +168,7 @@ router.get('/account', async (req: any, res: any) => {
 
 router.get('/positions', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const positions = await metaApiService.getOpenPositions(uid);
     res.json({ positions });
   } catch (error: any) {
@@ -186,7 +193,7 @@ router.get('/quote', async (req: any, res: any) => {
 
 router.get('/orders', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const orders = await metaApiService.getOpenOrders(uid);
     res.json({ ok: true, orders });
   } catch (error: any) {
@@ -196,7 +203,7 @@ router.get('/orders', async (req: any, res: any) => {
 
 router.post('/orders/cancel', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const { orderId } = req.body || {};
     if (!orderId) {
       res.status(400).json({ ok: false, error: 'Missing orderId' });
@@ -211,7 +218,7 @@ router.post('/orders/cancel', async (req: any, res: any) => {
 
 router.delete('/orders/:orderId', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const { orderId } = req.params;
     if (!orderId) {
       res.status(400).json({ ok: false, error: 'Missing orderId' });
@@ -226,7 +233,7 @@ router.delete('/orders/:orderId', async (req: any, res: any) => {
 
 router.post('/execute', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const {
       symbol,
       action,
@@ -295,7 +302,7 @@ router.post('/execute', async (req: any, res: any) => {
 
 router.post('/close', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await resolvePaperOrRequestUid(req);
     const { positionId } = req.body || {};
     if (!positionId) {
       res.status(400).json({ error: 'Missing positionId' });

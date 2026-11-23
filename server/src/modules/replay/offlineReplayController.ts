@@ -358,16 +358,17 @@ export class OfflineReplayController {
           }
 
           // 2. Run all TRAXO + core strategies on the historical slice
+          const rawSignalMode = cfg?.guardrailsEnabled === false;
           const rollingDrawdownPct =
-            cfg && cfg.accountBalance > 0
+            !rawSignalMode && cfg && cfg.accountBalance > 0
               ? Number(((riskState.dailyLossUsd / cfg.accountBalance) * 100).toFixed(2))
               : 0;
 
           const { signals: found } = runAllStrategies(windowSlice, sym, this.timeframe, null, {
             rollingDrawdownPct,
-            consecutiveLosses: riskState.consecutiveLosses,
+            consecutiveLosses: rawSignalMode ? 0 : riskState.consecutiveLosses,
             accountBalance: cfg?.accountBalance,
-            bypassMinConfidence: cfg?.guardrailsEnabled === false,
+            bypassMinConfidence: rawSignalMode,
           });
 
           for (const signal of found) {
@@ -379,7 +380,7 @@ export class OfflineReplayController {
 
             if (cfg) {
               const [openPositions, quote] = await Promise.all([
-                paperBrokerService.getOpenPositions(),
+                paperBrokerService.getOpenPositions('default_trader'),
                 paperBrokerService.getSymbolQuote(signal.symbol, currentBar.close),
               ]);
               const evaluation = await evaluatePreTradeGuardrailsAsync({
@@ -397,8 +398,10 @@ export class OfflineReplayController {
 
               if (!evaluation.allowed) continue;
 
-              const dynamicLots = calculateLots(signal.symbol, signal.entry, signal.sl, cfg.riskAmountUsd);
+              const riskUsd = cfg.riskAmountUsd || 50;
+              const dynamicLots = calculateLots(signal.symbol, signal.entry, signal.sl, riskUsd);
               const execRes = await paperBrokerService.executeTrade({
+                uid: 'default_trader',
                 signalId: signal.id,
                 symbol: signal.symbol,
                 timeframe: signal.timeframe,
@@ -411,7 +414,7 @@ export class OfflineReplayController {
                 sl: signal.sl,
                 tp: signal.tp,
                 tp2: signal.tp2,
-                riskAmountUsd: cfg.riskAmountUsd,
+                riskAmountUsd: riskUsd,
                 rr: signal.rr,
                 confidence: signal.confidence,
                 entryType: signal.entryType,

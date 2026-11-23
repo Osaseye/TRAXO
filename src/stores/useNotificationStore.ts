@@ -47,7 +47,7 @@ function dedupeNotifications(next: StoredNotification[]) {
     bySetup.set(key, {
       ...notification,
       id: existing.id,
-      read: existing.read && notification.read,
+      read: existing.read || notification.read,
       createdAt: Math.min(existing.createdAt, notification.createdAt),
     })
   }
@@ -119,9 +119,9 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
       const snap = await getDocs(q)
       if (!snap.empty) {
         const notifications = snap.docs.map((doc) => doc.data() as StoredNotification)
-        set({ notifications: dedupeNotifications(notifications) })
-      } else {
-        set({ notifications: [] })
+        set((state) => ({
+          notifications: dedupeNotifications([...notifications, ...state.notifications]),
+        }))
       }
     } catch {
       // silently ignore

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   PiArrowUpRight,
@@ -19,18 +19,70 @@ import {
 } from 'react-icons/pi'
 import { useMetaApi, type PaperTradeRecord } from '@/hooks/useMetaApi'
 import { getJournalEntries, updateJournalEntry } from '@/lib/api'
+import webSocketService from '@/lib/websocket'
+import { useAuthStore } from '@/stores/useAuthStore'
+import {
+  canonicalSignalKey,
+  normalizeSignalStatus,
+  useAnalysisSignalStore,
+  type StoredSignal,
+} from '@/stores/useAnalysisSignalStore'
+import { showToast } from '@/stores/useToastStore'
 import {
   useTradingContextStore,
   type JournalEntry,
   type JournalOutcome,
 } from '@/stores/useTradingContextStore'
 
-type JournalScope = 'taken' | 'all'
+type JournalScope = 'all' | 'taken' | 'signals'
 
 interface TradeMetrics {
   rr: number
   pnlUsd: number
   pnlR: number
+}
+
+function normalizeTimestampMs(raw: unknown): number {
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+    return raw > 1e12 ? raw : raw * 1000
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (trimmed) {
+      const asNum = Number(trimmed)
+      if (Number.isFinite(asNum) && asNum > 0) {
+        return asNum > 1e12 ? asNum : asNum * 1000
+      }
+      const parsed = Date.parse(trimmed)
+      if (!Number.isNaN(parsed)) return parsed
+    }
+  }
+  if (raw && typeof raw === 'object') {
+    const obj = raw as { seconds?: unknown; _seconds?: unknown }
+    const secs =
+      typeof obj.seconds === 'number'
+        ? obj.seconds
+        : typeof obj._seconds === 'number'
+          ? obj._seconds
+          : null
+    if (secs !== null && Number.isFinite(secs) && secs > 0) {
+      return secs > 1e12 ? secs : secs * 1000
+    }
+  }
+  return Date.now()
+}
+
+function getEntryOriginBadge(entry: JournalEntry): { label: string; className: string } {
+  if (entry.mode === 'paper') {
+    return { label: 'Auto / Paper', className: 'bg-[#38BDF8]/10 text-[#38BDF8]' }
+  }
+  if (entry.mode === 'metaapi') {
+    return { label: 'MT5', className: 'bg-[#34D399]/10 text-[#34D399]' }
+  }
+  if (entry.mode === 'signal' || !entry.taken) {
+    return { label: 'Signal', className: 'bg-[#FBBF24]/10 text-[#FBBF24]' }
+  }
+  return { label: 'Manual', className: 'bg-white/[0.08] text-[#FAFAFA]' }
 }
 
 function toDateKey(ts: number): string {
@@ -65,17 +117,51 @@ function formatCompactUsd(val: number): string {
   return `${sign}$${Math.round(abs)}`
 }
 
-function computeEntryMetrics(entry: JournalEntry): TradeMetrics {
+function computeEntryMetrics(entry: JournalEntry, defaultRiskUsd: number): TradeMetrics {
+  const effectiveRisk = entry.riskAmount > 0 ? entry.riskAmount : defaultRiskUsd
   const riskDist = Math.abs(entry.entry - entry.sl)
   const rewardDist = Math.abs(entry.tp - entry.entry)
-  const rr = riskDist > 0 ? rewardDist / riskDist : 0
+  const explicitRr = (entry as JournalEntry & { rr?: number }).rr
+  const rr =
+    typeof explicitRr === 'number' && Number.isFinite(explicitRr) && explicitRr > 0
+      ? explicitRr
+      : riskDist > 0
+        ? rewardDist / riskDist
+        : 0
 
   if (
+    entry.status === 'PARTIAL_TP1' &&
     typeof entry.pnlUsd === 'number' &&
-    Number.isFinite(entry.pnlUsd) &&
-    entry.outcome !== 'pending' &&
-    entry.outcome !== 'skipped'
+    Number.isFinite(entry.pnlUsd)
   ) {
+    const pnlR =
+      typeof entry.pnlR === 'number' && Number.isFinite(entry.pnlR)
+        ? entry.pnlR
+        : effectiveRisk > 0
+          ? entry.pnlUsd / effectiveRisk
+          : 0
+    return { rr, pnlUsd: entry.pnlUsd, pnlR }
+  }
+
+  if (entry.outcome === 'pending' || entry.outcome === 'skipped') {
+    return { rr, pnlUsd: 0, pnlR: 0 }
+  }
+
+  if (
+    entry.mode === 'signal' &&
+    (entry.pnlUsd === undefined || !Number.isFinite(entry.pnlUsd) || entry.pnlUsd === 0)
+  ) {
+    if (entry.outcome === 'win') {
+      const pnlUsd = effectiveRisk * rr
+      return { rr, pnlUsd, pnlR: rr }
+    }
+    if (entry.outcome === 'loss') {
+      return { rr, pnlUsd: -effectiveRisk, pnlR: -1 }
+    }
+    return { rr, pnlUsd: 0, pnlR: 0 }
+  }
+
+  if (typeof entry.pnlUsd === 'number' && Number.isFinite(entry.pnlUsd)) {
     const pnlR =
       typeof entry.pnlR === 'number' && Number.isFinite(entry.pnlR)
         ? entry.pnlR
@@ -88,14 +174,63 @@ function computeEntryMetrics(entry: JournalEntry): TradeMetrics {
   }
 
   if (entry.outcome === 'win') {
-    const pnlUsd = entry.riskAmount > 0 ? entry.riskAmount * rr : 0
+    const pnlUsd = effectiveRisk * rr
     return { rr, pnlUsd, pnlR: rr }
   }
   if (entry.outcome === 'loss') {
-    const pnlUsd = entry.riskAmount > 0 ? -entry.riskAmount : 0
+    const pnlUsd = -effectiveRisk
     return { rr, pnlUsd, pnlR: -1 }
   }
   return { rr, pnlUsd: 0, pnlR: 0 }
+}
+
+function signalToJournalEntry(s: StoredSignal, defaultRiskUsd: number): JournalEntry {
+  const canonical = normalizeSignalStatus(s.status)
+  let outcome: JournalOutcome = 'pending'
+  if (canonical === 'WIN') outcome = 'win'
+  else if (canonical === 'LOSS') outcome = 'loss'
+  else if (canonical === 'EXPIRED') outcome = 'skipped'
+
+  const riskDist = Math.abs(s.entry - s.sl)
+  const rewardDist = Math.abs(s.tp - s.entry)
+  const rr =
+    typeof s.rr === 'number' && Number.isFinite(s.rr) && s.rr > 0
+      ? s.rr
+      : riskDist > 0
+        ? rewardDist / riskDist
+        : 0
+
+  return {
+    id: s.id,
+    suggestionKey: canonicalSignalKey({
+      id: s.id,
+      strategyId: s.strategyId,
+      symbol: s.symbol,
+      timeframe: s.timeframe,
+      direction: s.direction,
+      time: s.time,
+    }),
+    symbol: s.symbol,
+    timeframe: s.timeframe,
+    strategy: s.strategyLabel || s.strategyId || 'TRAXO Engine',
+    action: s.direction === 'SELL' ? 'SELL' : 'BUY',
+    entry: s.entry,
+    sl: s.sl,
+    tp: s.tp,
+    tp2: s.tp2 ?? null,
+    confidence: s.confidence ?? 0,
+    risk: s.risk || 'Medium',
+    suggestedPosition: 0,
+    riskAmount: defaultRiskUsd,
+    taken: false,
+    outcome,
+    pnlR: outcome === 'win' ? rr : outcome === 'loss' ? -1 : 0,
+    signalId: s.id,
+    mode: 'signal',
+    status: canonical,
+    createdAt: normalizeTimestampMs(s.time),
+    notes: Array.isArray(s.reason) && s.reason.length > 0 ? s.reason.join(' · ') : undefined,
+  }
 }
 
 function paperTradeToJournalEntry(t: PaperTradeRecord): JournalEntry {
@@ -135,7 +270,7 @@ function paperTradeToJournalEntry(t: PaperTradeRecord): JournalEntry {
     signalId: t.signalId,
     mode: 'paper',
     status: t.status,
-    createdAt: t.createdAt > 1e12 ? t.createdAt : t.createdAt * 1000,
+    createdAt: normalizeTimestampMs(t.createdAt),
     notes: Array.isArray(t.reasons) ? t.reasons.join(' · ') : undefined,
     breakEvenTriggered: t.status === 'WIN_TP1_BE' || (t.tp1HitAt != null && t.currentSl !== t.slPrice),
   }
@@ -143,7 +278,6 @@ function paperTradeToJournalEntry(t: PaperTradeRecord): JournalEntry {
 
 function normalizeRemoteJournalEntry(raw: Record<string, unknown>): JournalEntry | null {
   if (!raw || !raw.id || !raw.symbol) return null
-  const rawTs = Number(raw.createdAt) || Date.now()
   return {
     id: String(raw.id),
     suggestionKey: String(raw.suggestionKey || `remote:${raw.id}`),
@@ -167,9 +301,12 @@ function normalizeRemoteJournalEntry(raw: Record<string, unknown>): JournalEntry
     exitPrice: raw.exitPrice != null ? Number(raw.exitPrice) : null,
     tradeId: raw.tradeId ? String(raw.tradeId) : undefined,
     signalId: raw.signalId ? String(raw.signalId) : null,
-    mode: raw.mode === 'paper' || raw.mode === 'metaapi' || raw.mode === 'manual' ? raw.mode : undefined,
+    mode:
+      raw.mode === 'paper' || raw.mode === 'metaapi' || raw.mode === 'manual' || raw.mode === 'signal'
+        ? raw.mode
+        : undefined,
     status: raw.status ? String(raw.status) : undefined,
-    createdAt: rawTs > 1e12 ? rawTs : rawTs * 1000,
+    createdAt: normalizeTimestampMs(raw.createdAt),
     notes: typeof raw.notes === 'string' ? raw.notes : undefined,
     breakEvenTriggered: Boolean(raw.breakEvenTriggered),
   }
@@ -183,12 +320,19 @@ function extractTagsFromNotes(notes?: string): string[] {
 
 export default function TradingJournal() {
   const navigate = useNavigate()
+  const activeUid = useAuthStore((s) => s.user?.id ?? null)
+  const storeSignals = useAnalysisSignalStore((s) => s.signals)
   const journal = useTradingContextStore((s) => s.journal)
+  const fixedRiskAmount = useTradingContextStore((s) => s.fixedRiskAmount)
+  const autoTradeGuardrailsEnabled = useTradingContextStore((s) => s.autoTradeGuardrailsEnabled)
+  const logSuggestionDecision = useTradingContextStore((s) => s.logSuggestionDecision)
   const editJournalEntry = useTradingContextStore((s) => s.editJournalEntry)
   const deleteJournalEntry = useTradingContextStore((s) => s.deleteJournalEntry)
   const triggerBreakEven = useTradingContextStore((s) => s.triggerBreakEven)
 
-  const [activeTab, setActiveTab] = useState<'paper' | 'manual'>('paper')
+  const defaultRiskUsd = fixedRiskAmount > 0 ? fixedRiskAmount : 50
+
+  const [activeTab, setActiveTab] = useState<'paper' | 'manual'>('manual')
   const [paperStatusFilter, setPaperStatusFilter] = useState<'ALL' | 'ACTIVE' | 'WINS' | 'LOSSES' | 'EXPIRED'>('ALL')
   const [paperSearch, setPaperSearch] = useState('')
   const [showBalanceModal, setShowBalanceModal] = useState(false)
@@ -220,7 +364,7 @@ export default function TradingJournal() {
     })
   }, [paperTrades, paperStatusFilter, paperSearch])
 
-  const [scope, setScope] = useState<JournalScope>('taken')
+  const [scope, setScope] = useState<JournalScope>('all')
   const [search, setSearch] = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState<'ALL' | JournalOutcome>('ALL')
   const [directionFilter, setDirectionFilter] = useState<'ALL' | 'BUY' | 'SELL'>('ALL')
@@ -230,7 +374,7 @@ export default function TradingJournal() {
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear())
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth())
 
-  useEffect(() => {
+  const refreshRemoteJournal = useCallback(() => {
     let active = true
     getJournalEntries()
       .then((rows) => {
@@ -246,7 +390,23 @@ export default function TradingJournal() {
     return () => {
       active = false
     }
-  }, [paperTrades.length])
+  }, [])
+
+  useEffect(() => {
+    return refreshRemoteJournal()
+  }, [refreshRemoteJournal, activeUid, paperTrades.length])
+
+  useEffect(() => {
+    const onUpdate = () => {
+      refreshRemoteJournal()
+    }
+    const unsub1 = webSocketService.subscribe('paper-trade-updated', onUpdate)
+    const unsub2 = webSocketService.subscribe('signal-updated', onUpdate)
+    return () => {
+      unsub1()
+      unsub2()
+    }
+  }, [refreshRemoteJournal])
 
   const paperTradesById = useMemo(() => {
     const map = new Map<string, PaperTradeRecord>()
@@ -258,30 +418,107 @@ export default function TradingJournal() {
   }, [paperTrades])
 
   const allJournalEntries = useMemo(() => {
-    const byKey = new Map<string, JournalEntry>()
-    const scoreEntry = (e: JournalEntry) => {
-      const resolvedBoost = e.outcome !== 'pending' && e.outcome !== 'skipped' ? 10 : 0
-      const pnlBoost = typeof e.pnlUsd === 'number' ? 5 : 0
-      const paperBoost = e.mode === 'paper' ? 3 : 0
-      return resolvedBoost + pnlBoost + paperBoost
+    const records = new Map<string, JournalEntry>()
+    const aliasToPrimary = new Map<string, string>()
+
+    const scoreEntry = (e: JournalEntry): number => {
+      let score = 0
+      if (e.taken) score += 100
+      if (e.tradeId) score += 40
+      if (e.mode === 'paper' || e.mode === 'metaapi') score += 30
+      else if (e.mode === 'manual') score += 20
+      else if (e.mode === 'signal') score += 0
+      else score += 10
+      if (e.outcome !== 'pending' && e.outcome !== 'skipped') score += 10
+      if (typeof e.pnlUsd === 'number' && e.pnlUsd !== 0) score += 5
+      return score
     }
-    const upsert = (entry: JournalEntry) => {
-      const dedupKey = entry.tradeId || entry.signalId || entry.id
-      const existing = byKey.get(dedupKey) || byKey.get(entry.id)
-      if (!existing || scoreEntry(entry) >= scoreEntry(existing)) {
-        byKey.set(dedupKey, entry)
+
+    const collectAliases = (e: JournalEntry): string[] => {
+      const aliases: string[] = []
+      if (e.id) aliases.push(`id:${e.id}`)
+      if (e.tradeId) aliases.push(`trade:${e.tradeId}`)
+      if (e.signalId) aliases.push(`sig:${e.signalId}`)
+      if (e.suggestionKey) {
+        if (e.suggestionKey.startsWith('signal:')) {
+          aliases.push(`sig:${e.suggestionKey.slice(7)}`)
+        } else if (
+          !e.suggestionKey.startsWith('remote:') &&
+          !e.suggestionKey.startsWith('trade:')
+        ) {
+          aliases.push(`sugg:${e.suggestionKey}`)
+          if (!e.suggestionKey.startsWith('auto:')) {
+            aliases.push(`sig:${e.suggestionKey}`)
+          }
+        }
+      }
+      const canon = canonicalSignalKey({
+        id: e.signalId || e.id,
+        strategy: e.strategy,
+        symbol: e.symbol,
+        timeframe: e.timeframe,
+        action: e.action,
+        createdAt: e.createdAt,
+      })
+      if (canon) aliases.push(`canon:${canon}`)
+      return aliases
+    }
+
+    const upsert = (incoming: JournalEntry) => {
+      const aliases = collectAliases(incoming)
+      let primaryKey: string | undefined
+      for (const alias of aliases) {
+        const hit = aliasToPrimary.get(alias)
+        if (hit && records.has(hit)) {
+          primaryKey = hit
+          break
+        }
+      }
+
+      if (!primaryKey) {
+        primaryKey = aliases[0] || `id:${incoming.id}`
+        records.set(primaryKey, incoming)
+        for (const alias of aliases) {
+          aliasToPrimary.set(alias, primaryKey)
+        }
+        return
+      }
+
+      const existing = records.get(primaryKey)!
+      const incomingWins = scoreEntry(incoming) >= scoreEntry(existing)
+      const winner = incomingWins ? incoming : existing
+      const loser = incomingWins ? existing : incoming
+
+      const existingHasUserNotes = Boolean(
+        existing.notes && existing.notes.trim() && existing.mode !== 'signal'
+      )
+      const mergedNotes =
+        incomingWins && incoming.mode === 'paper' && existingHasUserNotes
+          ? existing.notes
+          : winner.notes || loser.notes
+
+      records.set(primaryKey, {
+        ...winner,
+        notes: mergedNotes,
+      })
+
+      for (const alias of aliases) {
+        aliasToPrimary.set(alias, primaryKey)
       }
     }
 
+    for (const s of storeSignals) upsert(signalToJournalEntry(s, defaultRiskUsd))
     for (const e of journal) upsert(e)
     for (const e of remoteJournal) upsert(e)
     for (const t of paperTrades) upsert(paperTradeToJournalEntry(t))
 
-    return Array.from(byKey.values()).sort((a, b) => b.createdAt - a.createdAt)
-  }, [journal, remoteJournal, paperTrades])
+    return Array.from(records.values()).sort((a, b) => b.createdAt - a.createdAt)
+  }, [storeSignals, defaultRiskUsd, journal, remoteJournal, paperTrades])
 
   const scopedEntries = useMemo(() => {
-    return scope === 'taken' ? allJournalEntries.filter((j) => j.taken) : allJournalEntries
+    if (scope === 'taken') return allJournalEntries.filter((j) => j.taken)
+    if (scope === 'signals') return allJournalEntries.filter((j) => !j.taken)
+    return allJournalEntries
   }, [allJournalEntries, scope])
 
   // Global KPI metrics across scoped entries
@@ -300,26 +537,30 @@ export default function TradingJournal() {
     for (const entry of scopedEntries) {
       if (entry.outcome === 'pending') {
         pending += 1
+        if (entry.status === 'PARTIAL_TP1' && typeof entry.pnlUsd === 'number' && entry.pnlUsd !== 0) {
+          const m = computeEntryMetrics(entry, defaultRiskUsd)
+          netUsd += m.pnlUsd
+          netR += m.pnlR
+          if (m.pnlUsd > 0) grossWinUsd += m.pnlUsd
+          else if (m.pnlUsd < 0) grossLossUsd += Math.abs(m.pnlUsd)
+          if (m.pnlR > 0) grossWinR += m.pnlR
+          else if (m.pnlR < 0) grossLossR += Math.abs(m.pnlR)
+        }
         continue
       }
       if (entry.outcome === 'skipped') continue
 
-      const m = computeEntryMetrics(entry)
-      if (entry.outcome === 'win') {
-        wins += 1
-        grossWinUsd += m.pnlUsd
-        netUsd += m.pnlUsd
-        grossWinR += m.pnlR
-        netR += m.pnlR
-      } else if (entry.outcome === 'loss') {
-        losses += 1
-        grossLossUsd += Math.abs(m.pnlUsd)
-        netUsd += m.pnlUsd
-        grossLossR += Math.abs(m.pnlR)
-        netR += m.pnlR
-      } else if (entry.outcome === 'breakeven') {
-        breakeven += 1
-      }
+      const m = computeEntryMetrics(entry, defaultRiskUsd)
+      if (entry.outcome === 'win') wins += 1
+      else if (entry.outcome === 'loss') losses += 1
+      else if (entry.outcome === 'breakeven') breakeven += 1
+
+      netUsd += m.pnlUsd
+      netR += m.pnlR
+      if (m.pnlUsd > 0) grossWinUsd += m.pnlUsd
+      else if (m.pnlUsd < 0) grossLossUsd += Math.abs(m.pnlUsd)
+      if (m.pnlR > 0) grossWinR += m.pnlR
+      else if (m.pnlR < 0) grossLossR += Math.abs(m.pnlR)
     }
 
     const decided = wins + losses
@@ -355,7 +596,7 @@ export default function TradingJournal() {
       expectancyUsd,
       expectancyR,
     }
-  }, [scopedEntries])
+  }, [scopedEntries, defaultRiskUsd])
 
   // Calendar aggregation keyed by YYYY-MM-DD
   const dayBuckets = useMemo(() => {
@@ -375,7 +616,7 @@ export default function TradingJournal() {
       }
       bucket.count += 1
       bucket.entries.push(entry)
-      const m = computeEntryMetrics(entry)
+      const m = computeEntryMetrics(entry, defaultRiskUsd)
       bucket.netUsd += m.pnlUsd
       bucket.netR += m.pnlR
       if (entry.outcome === 'win') bucket.wins += 1
@@ -383,7 +624,7 @@ export default function TradingJournal() {
       map.set(key, bucket)
     }
     return map
-  }, [scopedEntries])
+  }, [scopedEntries, defaultRiskUsd])
 
   // Build calendar cells for current month (Sun-Sat grid matching journal-empty benchmark)
   const calendarCells = useMemo(() => {
@@ -454,7 +695,7 @@ export default function TradingJournal() {
     let lossDays = 0
 
     for (const entry of monthEntries) {
-      const m = computeEntryMetrics(entry)
+      const m = computeEntryMetrics(entry, defaultRiskUsd)
       netUsd += m.pnlUsd
       netR += m.pnlR
       if (entry.outcome === 'win') wins += 1
@@ -480,7 +721,7 @@ export default function TradingJournal() {
       winDays,
       lossDays,
     }
-  }, [monthEntries, calendarCells])
+  }, [monthEntries, calendarCells, defaultRiskUsd])
 
   const recentEntries = useMemo(() => {
     return monthEntries.slice(0, 4)
@@ -521,13 +762,46 @@ export default function TradingJournal() {
 
   const handleOutcomeChange = (entry: JournalEntry, outcome: JournalOutcome) => {
     const updated: JournalEntry = { ...entry, outcome }
-    const m = computeEntryMetrics(updated)
-    editJournalEntry(entry.id, { outcome })
-    updateJournalEntry(entry.id, { outcome, pnlUsd: m.pnlUsd }).catch(() => {})
+    const m = computeEntryMetrics(updated, defaultRiskUsd)
+    if (journal.some((j) => j.id === entry.id)) {
+      editJournalEntry(entry.id, { outcome, pnlUsd: m.pnlUsd, pnlR: m.pnlR })
+      updateJournalEntry(entry.id, { outcome, pnlUsd: m.pnlUsd }).catch(() => {})
+    } else {
+      logSuggestionDecision({
+        ...updated,
+        pnlUsd: m.pnlUsd,
+        pnlR: m.pnlR,
+      })
+    }
   }
 
   const handleToggleTaken = (entry: JournalEntry) => {
-    editJournalEntry(entry.id, { taken: !entry.taken })
+    if (journal.some((j) => j.id === entry.id)) {
+      editJournalEntry(entry.id, { taken: !entry.taken })
+    } else {
+      logSuggestionDecision({
+        ...entry,
+        taken: !entry.taken,
+        mode: entry.mode === 'signal' ? 'manual' : entry.mode,
+      })
+    }
+  }
+
+  const handleBreakEven = (entry: JournalEntry) => {
+    if (journal.some((j) => j.id === entry.id)) {
+      triggerBreakEven(entry.id)
+    } else {
+      logSuggestionDecision({
+        ...entry,
+        breakEvenTriggered: true,
+        currentSl: entry.entry,
+      })
+    }
+    showToast(
+      'Break-Even Locked',
+      `${entry.symbol} stop loss moved to entry ${formatPrice(entry.entry)}.`,
+      'success'
+    )
   }
 
   const handleExportCsv = () => {
@@ -548,7 +822,7 @@ export default function TradingJournal() {
       'Notes',
     ]
     const rows = filteredTableEntries.map((e) => {
-      const m = computeEntryMetrics(e)
+      const m = computeEntryMetrics(e, defaultRiskUsd)
       return [
         new Date(e.createdAt).toISOString(),
         e.symbol,
@@ -558,7 +832,7 @@ export default function TradingJournal() {
         formatPrice(e.entry),
         formatPrice(e.currentSl ?? e.sl),
         formatPrice(e.tp),
-        e.riskAmount.toFixed(2),
+        (e.riskAmount > 0 ? e.riskAmount : defaultRiskUsd).toFixed(2),
         e.outcome,
         m.pnlUsd.toFixed(2),
         m.pnlR.toFixed(2),
@@ -592,24 +866,24 @@ export default function TradingJournal() {
         {/* Page Header */}
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div className="space-y-2 min-w-0">
-            <p className="text-[12px] font-medium text-[#71717A]">Execution &amp; Paper Ledger</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-[12px] font-medium text-[#71717A]">Execution &amp; Paper Ledger</p>
+              <Link
+                to="/settings"
+                className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-medium transition-colors ${
+                  autoTradeGuardrailsEnabled
+                    ? 'bg-[#161619] text-[#A1A1AA] hover:text-[#FAFAFA]'
+                    : 'bg-[#FBBF24]/15 text-[#FBBF24]'
+                }`}
+              >
+                {autoTradeGuardrailsEnabled ? 'Guarded' : 'Raw Signal Mode'} · ${defaultRiskUsd}/trade
+              </Link>
+            </div>
             <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
               <h1 className="text-[24px] sm:text-[28px] font-semibold tracking-[-0.03em] text-[#FAFAFA] leading-tight">
                 Trading Journal
               </h1>
               <div className="inline-flex items-center rounded-full bg-[#111113] border border-white/[0.08] p-1">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('paper')}
-                  className={`px-3 py-1 rounded-full text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors ${
-                    activeTab === 'paper'
-                      ? 'bg-[#FAFAFA] text-[#09090B]'
-                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
-                  }`}
-                >
-                  <span>Paper Ledger (Auto-Trader)</span>
-                  <span className="font-mono text-[11px] opacity-75">{paperTrades.length}</span>
-                </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('manual')}
@@ -619,42 +893,65 @@ export default function TradingJournal() {
                       : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
                   }`}
                 >
-                  <span>Calendar &amp; All Trades</span>
+                  <span>Calendar &amp; All Activity</span>
                   <span className="font-mono text-[11px] opacity-75">{scopedEntries.length}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('paper')}
+                  className={`px-3 py-1 rounded-full text-[12px] font-medium inline-flex items-center gap-1.5 transition-colors ${
+                    activeTab === 'paper'
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  <span>Paper Execution Ledger</span>
+                  <span className="font-mono text-[11px] opacity-75">{paperTrades.length}</span>
                 </button>
               </div>
             </div>
             <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA]">
               {activeTab === 'paper'
                 ? 'Deterministic internal paper execution, dynamic TP1/BE/TP2 management, and bar-by-bar candle replay proof.'
-                : 'Monthly performance matrix, trade execution history, and outcome attribution.'}
+                : 'Monthly performance matrix, unified executed trades & live signals, and outcome attribution.'}
             </p>
           </div>
 
           {activeTab === 'manual' ? (
-            <div className="flex items-center justify-between sm:justify-end gap-2.5 sm:gap-3 w-full sm:w-auto shrink-0">
+            <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5 sm:gap-3 w-full sm:w-auto shrink-0">
               <div className="inline-flex items-center rounded-full bg-[#111113] border border-white/[0.07] p-1">
                 <button
                   type="button"
-                  onClick={() => setScope('taken')}
-                  className={`px-3.5 py-1.5 rounded-full text-[12.5px] sm:text-[13px] font-medium transition-colors ${
-                    scope === 'taken'
-                      ? 'bg-[#FAFAFA] text-[#09090B]'
-                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
-                  }`}
-                >
-                  Taken
-                </button>
-                <button
-                  type="button"
                   onClick={() => setScope('all')}
-                  className={`px-3.5 py-1.5 rounded-full text-[12.5px] sm:text-[13px] font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-full text-[12px] sm:text-[12.5px] font-medium transition-colors ${
                     scope === 'all'
                       ? 'bg-[#FAFAFA] text-[#09090B]'
                       : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
                   }`}
                 >
                   All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScope('taken')}
+                  className={`px-3 py-1.5 rounded-full text-[12px] sm:text-[12.5px] font-medium transition-colors ${
+                    scope === 'taken'
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  Executed
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScope('signals')}
+                  className={`px-3 py-1.5 rounded-full text-[12px] sm:text-[12.5px] font-medium transition-colors whitespace-nowrap ${
+                    scope === 'signals'
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  Signals Only
                 </button>
               </div>
 
@@ -915,7 +1212,10 @@ export default function TradingJournal() {
                                 <span className="text-[11.5px] font-normal text-[#71717A]">{t.timeframe}</span>
                               </div>
                               <div className="text-[11px] font-mono text-[#71717A]">
-                                {new Date(t.createdAt * 1000).toISOString().replace('T', ' ').slice(5, 16)}
+                                {new Date(t.createdAt > 1e12 ? t.createdAt : t.createdAt * 1000)
+                                  .toISOString()
+                                  .replace('T', ' ')
+                                  .slice(5, 16)}
                               </div>
                             </td>
                             <td className="py-3.5 px-4">
@@ -1142,31 +1442,40 @@ export default function TradingJournal() {
                     </div>
 
                     {cell.count > 0 ? (
-                      <div className="space-y-0.5 min-w-0 w-full">
-                        <div
-                          className={`text-[9.5px] sm:text-[13px] font-mono font-semibold tabular-nums leading-tight truncate ${
-                            isWin
-                              ? 'text-[#34D399]'
-                              : isLoss
-                                ? 'text-[#F87171]'
-                                : 'text-[#A1A1AA]'
-                          }`}
-                        >
-                          <span className="sm:hidden">
-                            {cell.netUsd !== 0
-                              ? formatCompactUsd(cell.netUsd)
-                              : `${cell.netR >= 0 ? '+' : ''}${cell.netR.toFixed(1)}R`}
-                          </span>
-                          <span className="hidden sm:inline">
-                            {cell.netUsd !== 0
-                              ? formatSignedUsd(cell.netUsd)
-                              : `${cell.netR >= 0 ? '+' : ''}${cell.netR.toFixed(1)}R`}
-                          </span>
+                      cell.wins === 0 && cell.losses === 0 && cell.netUsd === 0 ? (
+                        <div className="space-y-0.5 min-w-0 w-full">
+                          <div className="text-[9.5px] sm:text-[12px] font-mono font-medium tabular-nums leading-tight truncate text-[#A1A1AA]">
+                            <span className="sm:hidden">{cell.count}p</span>
+                            <span className="hidden sm:inline">{cell.count} pending</span>
+                          </div>
                         </div>
-                        <div className="text-[11px] font-mono tabular-nums text-[#71717A] hidden sm:block">
-                          {cell.wins}W/{cell.losses}L
+                      ) : (
+                        <div className="space-y-0.5 min-w-0 w-full">
+                          <div
+                            className={`text-[9.5px] sm:text-[13px] font-mono font-semibold tabular-nums leading-tight truncate ${
+                              isWin
+                                ? 'text-[#34D399]'
+                                : isLoss
+                                  ? 'text-[#F87171]'
+                                  : 'text-[#A1A1AA]'
+                            }`}
+                          >
+                            <span className="sm:hidden">
+                              {cell.netUsd !== 0
+                                ? formatCompactUsd(cell.netUsd)
+                                : `${cell.netR >= 0 ? '+' : ''}${cell.netR.toFixed(1)}R`}
+                            </span>
+                            <span className="hidden sm:inline">
+                              {cell.netUsd !== 0
+                                ? formatSignedUsd(cell.netUsd)
+                                : `${cell.netR >= 0 ? '+' : ''}${cell.netR.toFixed(1)}R`}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-mono tabular-nums text-[#71717A] hidden sm:block">
+                            {cell.wins}W/{cell.losses}L
+                          </div>
                         </div>
-                      </div>
+                      )
                     ) : cell.isToday ? (
                       <>
                         <span className="sm:hidden w-1.5 h-1.5 rounded-full bg-[#FAFAFA]/70" />
@@ -1287,7 +1596,8 @@ export default function TradingJournal() {
                 <div className="space-y-2.5">
                   {recentEntries.map((entry) => {
                     const dateKey = toDateKey(entry.createdAt)
-                    const m = computeEntryMetrics(entry)
+                    const m = computeEntryMetrics(entry, defaultRiskUsd)
+                    const origin = getEntryOriginBadge(entry)
                     const prettyDate = new Date(entry.createdAt).toLocaleDateString('en-US', {
                       weekday: 'short',
                       month: 'short',
@@ -1300,9 +1610,16 @@ export default function TradingJournal() {
                         className="block rounded-xl bg-[#161619] hover:bg-[#1D1D22] p-3.5 transition-colors"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[14px] font-medium text-[#FAFAFA] truncate">
-                            {entry.symbol}
-                          </span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[14px] font-medium text-[#FAFAFA] truncate">
+                              {entry.symbol}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded-md text-[10.5px] font-medium shrink-0 ${origin.className}`}
+                            >
+                              {origin.label}
+                            </span>
+                          </div>
                           <span className="text-[12px] text-[#71717A] shrink-0">{prettyDate}</span>
                         </div>
                         <div className="flex items-center justify-between gap-2 mt-1">
@@ -1318,18 +1635,20 @@ export default function TradingJournal() {
                           </span>
                           <span
                             className={`text-[12px] font-mono tabular-nums font-medium shrink-0 ${
-                              entry.outcome === 'win'
+                              entry.outcome === 'win' || m.pnlUsd > 0
                                 ? 'text-[#34D399]'
-                                : entry.outcome === 'loss'
+                                : entry.outcome === 'loss' || m.pnlUsd < 0
                                   ? 'text-[#F87171]'
                                   : 'text-[#71717A]'
                             }`}
                           >
-                            {entry.outcome === 'pending' || entry.outcome === 'skipped'
-                              ? entry.outcome
-                              : entry.riskAmount > 0
-                                ? formatSignedUsd(m.pnlUsd)
-                                : `${m.pnlR >= 0 ? '+' : ''}${m.pnlR.toFixed(1)}R`}
+                            {entry.status === 'PARTIAL_TP1' && m.pnlUsd !== 0
+                              ? `${formatSignedUsd(m.pnlUsd)} (open)`
+                              : entry.outcome === 'pending' || entry.outcome === 'skipped'
+                                ? entry.outcome
+                                : m.pnlUsd !== 0 || entry.riskAmount > 0
+                                  ? formatSignedUsd(m.pnlUsd)
+                                  : `${m.pnlR >= 0 ? '+' : ''}${m.pnlR.toFixed(1)}R`}
                           </span>
                         </div>
                       </Link>
@@ -1436,7 +1755,8 @@ export default function TradingJournal() {
               <div className="md:hidden divide-y divide-white/[0.06]">
                 {filteredTableEntries.map((entry) => {
                   const dateKey = toDateKey(entry.createdAt)
-                  const m = computeEntryMetrics(entry)
+                  const m = computeEntryMetrics(entry, defaultRiskUsd)
+                  const origin = getEntryOriginBadge(entry)
                   const tags = extractTagsFromNotes(entry.notes)
                   const effectiveSl = entry.currentSl ?? entry.sl
                   const timeStr = new Date(entry.createdAt).toLocaleTimeString('en-US', {
@@ -1463,6 +1783,11 @@ export default function TradingJournal() {
                               {entry.symbol}
                             </span>
                             <span className="text-[12px] text-[#71717A]">{entry.timeframe}</span>
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-medium ${origin.className}`}
+                            >
+                              {origin.label}
+                            </span>
                           </div>
                           <div className="flex items-center gap-2 text-[12px] text-[#A1A1AA] flex-wrap">
                             <span className="truncate max-w-[160px]">{entry.strategy}</span>
@@ -1479,18 +1804,20 @@ export default function TradingJournal() {
 
                         <div
                           className={`text-[14px] font-mono font-semibold tabular-nums shrink-0 ${
-                            entry.outcome === 'win'
+                            entry.outcome === 'win' || m.pnlUsd > 0
                               ? 'text-[#34D399]'
-                              : entry.outcome === 'loss'
+                              : entry.outcome === 'loss' || m.pnlUsd < 0
                                 ? 'text-[#F87171]'
                                 : 'text-[#71717A]'
                           }`}
                         >
-                          {entry.outcome === 'pending' || entry.outcome === 'skipped'
-                            ? '—'
-                            : entry.riskAmount > 0
-                              ? formatSignedUsd(m.pnlUsd)
-                              : `${m.pnlR >= 0 ? '+' : ''}${m.pnlR.toFixed(2)}R`}
+                          {entry.status === 'PARTIAL_TP1' && m.pnlUsd !== 0
+                            ? formatSignedUsd(m.pnlUsd)
+                            : entry.outcome === 'pending' || entry.outcome === 'skipped'
+                              ? '—'
+                              : m.pnlUsd !== 0 || entry.riskAmount > 0
+                                ? formatSignedUsd(m.pnlUsd)
+                                : `${m.pnlR >= 0 ? '+' : ''}${m.pnlR.toFixed(2)}R`}
                         </div>
                       </div>
 
@@ -1515,7 +1842,7 @@ export default function TradingJournal() {
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[#71717A] font-sans">Risk</span>
                           <span className="text-[#A1A1AA]">
-                            {entry.riskAmount > 0 ? `$${entry.riskAmount.toFixed(0)}` : '—'}
+                            ${(entry.riskAmount > 0 ? entry.riskAmount : defaultRiskUsd).toFixed(0)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between gap-2">
@@ -1553,7 +1880,7 @@ export default function TradingJournal() {
                               : 'bg-[#18181B] text-[#71717A] hover:text-[#FAFAFA]'
                           }`}
                         >
-                          {entry.taken ? 'Taken' : 'System'}
+                          {entry.taken ? 'Executed' : 'Signal'}
                         </button>
 
                         {(entry.outcome === 'win' ||
@@ -1583,7 +1910,7 @@ export default function TradingJournal() {
                         {entry.outcome === 'pending' && !entry.breakEvenTriggered && (
                           <button
                             type="button"
-                            onClick={() => triggerBreakEven(entry.id)}
+                            onClick={() => handleBreakEven(entry)}
                             title="Move SL to Break-Even"
                             className="h-9 w-9 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#A1A1AA] hover:text-[#34D399] inline-flex items-center justify-center transition-colors shrink-0"
                           >
@@ -1625,7 +1952,8 @@ export default function TradingJournal() {
                   <tbody className="divide-y divide-white/[0.05] text-[13.5px]">
                     {filteredTableEntries.map((entry) => {
                       const dateKey = toDateKey(entry.createdAt)
-                      const m = computeEntryMetrics(entry)
+                      const m = computeEntryMetrics(entry, defaultRiskUsd)
+                      const origin = getEntryOriginBadge(entry)
                       const tags = extractTagsFromNotes(entry.notes)
                       const effectiveSl = entry.currentSl ?? entry.sl
 
@@ -1649,8 +1977,15 @@ export default function TradingJournal() {
                           </td>
 
                           <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className="font-medium text-[#FAFAFA]">{entry.symbol}</span>{' '}
-                            <span className="text-[12px] text-[#71717A]">{entry.timeframe}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-[#FAFAFA]">{entry.symbol}</span>
+                              <span className="text-[12px] text-[#71717A]">{entry.timeframe}</span>
+                            </div>
+                            <span
+                              className={`mt-1 inline-flex px-2 py-0.5 rounded-md text-[10.5px] font-medium ${origin.className}`}
+                            >
+                              {origin.label}
+                            </span>
                           </td>
 
                           <td className="py-3.5 px-4 text-[#A1A1AA]">
@@ -1690,23 +2025,25 @@ export default function TradingJournal() {
                           </td>
 
                           <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#A1A1AA] whitespace-nowrap">
-                            {entry.riskAmount > 0 ? `$${entry.riskAmount.toFixed(0)}` : '—'}
+                            ${(entry.riskAmount > 0 ? entry.riskAmount : defaultRiskUsd).toFixed(0)}
                           </td>
 
                           <td
                             className={`py-3.5 px-4 text-right font-mono font-semibold tabular-nums whitespace-nowrap ${
-                              entry.outcome === 'win'
+                              entry.outcome === 'win' || m.pnlUsd > 0
                                 ? 'text-[#34D399]'
-                                : entry.outcome === 'loss'
+                                : entry.outcome === 'loss' || m.pnlUsd < 0
                                   ? 'text-[#F87171]'
                                   : 'text-[#71717A]'
                             }`}
                           >
-                            {entry.outcome === 'pending' || entry.outcome === 'skipped'
-                              ? '—'
-                              : entry.riskAmount > 0
-                                ? formatSignedUsd(m.pnlUsd)
-                                : `${m.pnlR >= 0 ? '+' : ''}${m.pnlR.toFixed(2)}R`}
+                            {entry.status === 'PARTIAL_TP1' && m.pnlUsd !== 0
+                              ? formatSignedUsd(m.pnlUsd)
+                              : entry.outcome === 'pending' || entry.outcome === 'skipped'
+                                ? '—'
+                                : m.pnlUsd !== 0 || entry.riskAmount > 0
+                                  ? formatSignedUsd(m.pnlUsd)
+                                  : `${m.pnlR >= 0 ? '+' : ''}${m.pnlR.toFixed(2)}R`}
                           </td>
 
                           <td className="py-3.5 px-4">
@@ -1736,7 +2073,7 @@ export default function TradingJournal() {
                                   : 'bg-[#18181B] text-[#71717A] hover:text-[#FAFAFA]'
                               }`}
                             >
-                              {entry.taken ? 'Taken' : 'System'}
+                              {entry.taken ? 'Executed' : 'Signal'}
                             </button>
                           </td>
 
@@ -1768,7 +2105,7 @@ export default function TradingJournal() {
                               {entry.outcome === 'pending' && !entry.breakEvenTriggered && (
                                 <button
                                   type="button"
-                                  onClick={() => triggerBreakEven(entry.id)}
+                                  onClick={() => handleBreakEven(entry)}
                                   title="Move SL to Break-Even"
                                   className="p-1.5 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[#A1A1AA] hover:text-[#34D399] transition-colors"
                                 >

@@ -318,7 +318,7 @@ function synthesizeDeterministicSignalReplay(
   const realizedR = resolvedWin
     ? Number((exitMode === 'SCALE_50_TP1_BE_TP2' ? (rr + rr * 1.6) / 2 : rr).toFixed(2))
     : -1.0;
-  const riskAmountUsd = 100;
+  const riskAmountUsd = useTradingContextStore.getState().fixedRiskAmount || 50;
   const realizedPnlUsd =
     typeof input.pnl === 'number'
       ? Number(input.pnl.toFixed(2))
@@ -510,6 +510,7 @@ export default function TradeReplayPage() {
   const { paperTrades, fetchTradeReplay } = useMetaApi();
   const storedSignals = useAnalysisSignalStore((s) => s.signals);
   const journalEntries = useTradingContextStore((s) => s.journal);
+  const fixedRiskAmount = useTradingContextStore((s) => s.fixedRiskAmount);
   const setChartSymbol = useTradingContextStore((s) => s.setChartSymbol);
   const setChartTimeframe = useTradingContextStore((s) => s.setChartTimeframe);
 
@@ -572,15 +573,12 @@ export default function TradeReplayPage() {
       const riskDist = Math.abs(j.entry - j.sl);
       const rewardDist = Math.abs(j.tp - j.entry);
       const rr = riskDist > 0 ? rewardDist / riskDist : 2;
+      const effectiveRisk = j.riskAmount > 0 ? j.riskAmount : fixedRiskAmount || 50;
       const pnlUsd =
         j.outcome === 'win'
-          ? j.riskAmount > 0
-            ? j.riskAmount * rr
-            : rr * 100
+          ? effectiveRisk * rr
           : j.outcome === 'loss'
-            ? j.riskAmount > 0
-              ? -j.riskAmount
-              : -100
+            ? -effectiveRisk
             : 0;
       return {
         id: j.id,
@@ -639,15 +637,12 @@ export default function TradeReplayPage() {
       const riskDist = Math.abs(foundJournal.entry - foundJournal.sl);
       const rewardDist = Math.abs(foundJournal.tp - foundJournal.entry);
       const rr = riskDist > 0 ? rewardDist / riskDist : 2;
+      const effectiveRisk = foundJournal.riskAmount > 0 ? foundJournal.riskAmount : fixedRiskAmount || 50;
       const pnlUsd =
         foundJournal.outcome === 'win'
-          ? foundJournal.riskAmount > 0
-            ? foundJournal.riskAmount * rr
-            : rr * 100
+          ? effectiveRisk * rr
           : foundJournal.outcome === 'loss'
-            ? foundJournal.riskAmount > 0
-              ? -foundJournal.riskAmount
-              : -100
+            ? -effectiveRisk
             : 0;
       return {
         id: foundJournal.id,
@@ -674,7 +669,7 @@ export default function TradeReplayPage() {
     }
 
     return null;
-  }, [routeState.signal, routeState.journalEntry, decodedId, storedSignals, journalEntries]);
+  }, [routeState.signal, routeState.journalEntry, decodedId, storedSignals, journalEntries, fixedRiskAmount]);
 
   const loadReplay = useCallback(async () => {
     setLoading(true);

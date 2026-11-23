@@ -143,7 +143,49 @@ function initSchema(db: any, dbPath: string): void {
       price_lines_json TEXT NOT NULL,
       created_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS signals (
+      id TEXT PRIMARY KEY,
+      canonical_key TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      timeframe TEXT NOT NULL,
+      strategy_id TEXT NOT NULL,
+      strategy_label TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      entry_type TEXT NOT NULL DEFAULT 'market',
+      entry REAL NOT NULL,
+      sl REAL NOT NULL,
+      tp REAL NOT NULL,
+      tp2 REAL,
+      rr REAL NOT NULL DEFAULT 0,
+      confidence REAL NOT NULL DEFAULT 0,
+      risk TEXT NOT NULL DEFAULT 'Medium',
+      status TEXT NOT NULL DEFAULT 'live',
+      reason_json TEXT,
+      time INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      resolved_at INTEGER,
+      exit_price REAL
+    );
+    CREATE INDEX IF NOT EXISTS idx_signals_status_sym_tf ON signals(status, symbol, timeframe);
+    CREATE INDEX IF NOT EXISTS idx_signals_created ON signals(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_signals_canonical ON signals(canonical_key);
   `);
+
+  try {
+    db.exec(`
+      UPDATE paper_trades
+      SET uid = 'default_trader'
+      WHERE uid != 'default_trader'
+        AND (
+          signal_id IS NULL
+          OR NOT EXISTS (
+            SELECT 1 FROM paper_trades AS d
+            WHERE d.uid = 'default_trader' AND d.signal_id = paper_trades.signal_id
+          )
+        );
+    `);
+  } catch {}
 }
 
 export function getDb(): any {
@@ -422,4 +464,437 @@ export function getCandlesAroundWindow(
     tradeCount: tradeRows.length,
     postCount: postRows.length,
   };
+}
+
+export interface ArchivedSignalRecord {
+  id: string;
+  canonicalKey: string;
+  symbol: string;
+  timeframe: string;
+  strategyId: string;
+  strategyLabel: string;
+  direction: 'BUY' | 'SELL';
+  entryType: string;
+  entry: number;
+  sl: number;
+  tp: number;
+  tp2: number | null;
+  rr: number;
+  confidence: number;
+  risk: string;
+  status: string;
+  reason: string[];
+  time: number;
+  createdAt: number;
+  resolvedAt: number | null;
+  exitPrice: number | null;
+}
+
+function normalizeSignalStatus(status: unknown): 'WIN' | 'LOSS' | 'EXPIRED' | 'live' {
+  const upper = String(status || 'live').trim().toUpperCase();
+  if (upper === 'WIN' || upper === 'WIN_TP1' || upper === 'WIN_TP2' || upper === 'WIN_TP1_BE') {
+    return 'WIN';
+  }
+  if (upper === 'LOSS' || upper === 'LOSS_SL') {
+    return 'LOSS';
+  }
+  if (upper === 'EXPIRED' || upper === 'CANCELLED') {
+    return 'EXPIRED';
+  }
+  return 'live';
+}
+
+function signalStatusRank(status: string): number {
+  const norm = normalizeSignalStatus(status);
+  if (norm === 'WIN' || norm === 'LOSS') return 4;
+  if (norm === 'EXPIRED') return 3;
+  return 1;
+}
+
+function normalizeEpochSeconds(val: unknown, fallbackSec: number): number {
+  if (val instanceof Date) {
+    const ms = val.getTime();
+    return Number.isFinite(ms) ? Math.floor(ms / 1000) : fallbackSec;
+  }
+  if (val && typeof val === 'object') {
+    const anyVal = val as Record<string, unknown>;
+    if (typeof anyVal.toMillis === 'function') {
+      const ms = Number(anyVal.toMillis());
+      if (Number.isFinite(ms) && ms > 0) return Math.floor(ms / 1000);
+    }
+    const sec = anyVal._seconds ?? anyVal.seconds;
+    if (typeof sec === 'number' && Number.isFinite(sec) && sec > 0) {
+      return Math.floor(sec);
+    }
+  }
+  if (typeof val === 'number' && Number.isFinite(val) && val > 0) {
+    return val > 1e12 ? Math.floor(val / 1000) : Math.floor(val);
+  }
+  if (typeof val === 'string' && val.trim()) {
+    const num = Number(val.trim());
+    if (Number.isFinite(num) && num > 0) {
+      return num > 1e12 ? Math.floor(num / 1000) : Math.floor(num);
+    }
+    const parsed = Date.parse(val.trim());
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.floor(parsed / 1000);
+    }
+  }
+  return fallbackSec;
+}
+
+function normalizeEpochMs(val: unknown, fallbackMs: number): number {
+  if (val instanceof Date) {
+    const ms = val.getTime();
+    return Number.isFinite(ms) ? Math.floor(ms) : fallbackMs;
+  }
+  if (val && typeof val === 'object') {
+    const anyVal = val as Record<string, unknown>;
+    if (typeof anyVal.toMillis === 'function') {
+      const ms = Number(anyVal.toMillis());
+      if (Number.isFinite(ms) && ms > 0) return Math.floor(ms);
+    }
+    const sec = anyVal._seconds ?? anyVal.seconds;
+    const ns = Number(anyVal._nanoseconds ?? anyVal.nanoseconds ?? 0);
+    if (typeof sec === 'number' && Number.isFinite(sec) && sec > 0) {
+      return Math.floor(sec * 1000 + (Number.isFinite(ns) ? ns / 1e6 : 0));
+    }
+  }
+  if (typeof val === 'number' && Number.isFinite(val) && val > 0) {
+    return val <= 1e12 ? Math.floor(val * 1000) : Math.floor(val);
+  }
+  if (typeof val === 'string' && val.trim()) {
+    const num = Number(val.trim());
+    if (Number.isFinite(num) && num > 0) {
+      return num <= 1e12 ? Math.floor(num * 1000) : Math.floor(num);
+    }
+    const parsed = Date.parse(val.trim());
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.floor(parsed);
+    }
+  }
+  return fallbackMs;
+}
+
+function parseReasonArray(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((item) => item != null).map((item) => String(item));
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item) => item != null).map((item) => String(item));
+      }
+    } catch {}
+    return [raw.trim()];
+  }
+  return [];
+}
+
+function mapSignalRowToRecord(row: any): ArchivedSignalRecord {
+  return {
+    id: String(row.id),
+    canonicalKey: String(row.canonical_key),
+    symbol: String(row.symbol),
+    timeframe: String(row.timeframe),
+    strategyId: String(row.strategy_id),
+    strategyLabel: String(row.strategy_label),
+    direction: row.direction === 'SELL' ? 'SELL' : 'BUY',
+    entryType: String(row.entry_type || 'market'),
+    entry: Number(row.entry),
+    sl: Number(row.sl),
+    tp: Number(row.tp),
+    tp2: row.tp2 !== null && row.tp2 !== undefined ? Number(row.tp2) : null,
+    rr: Number(row.rr ?? 0),
+    confidence: Number(row.confidence ?? 0),
+    risk: String(row.risk || 'Medium'),
+    status: String(row.status || 'live'),
+    reason: parseReasonArray(row.reason_json),
+    time: Number(row.time),
+    createdAt: Number(row.created_at),
+    resolvedAt: row.resolved_at !== null && row.resolved_at !== undefined ? Number(row.resolved_at) : null,
+    exitPrice: row.exit_price !== null && row.exit_price !== undefined ? Number(row.exit_price) : null,
+  };
+}
+
+export function buildCanonicalSignalKey(input: {
+  id?: string;
+  strategyId?: string;
+  symbol?: string;
+  timeframe?: string;
+  direction?: string;
+  time?: number;
+}): string {
+  const rawId = typeof input.id === 'string' ? input.id.trim() : '';
+  const parts = rawId.startsWith('sig:') ? rawId.split(':') : [];
+  const rawStrategy = input.strategyId || parts[1] || '';
+  const rawSymbol = input.symbol || parts[2] || '';
+  const rawTimeframe = input.timeframe || parts[3] || '';
+  const rawDirection = input.direction || parts[4] || '';
+  const rawTime =
+    input.time !== undefined && input.time !== null && Number.isFinite(Number(input.time)) && Number(input.time) > 0
+      ? Number(input.time)
+      : parts[5] !== undefined
+      ? Number(parts[5])
+      : 0;
+
+  const strategyId =
+    String(rawStrategy || 'unknown')
+      .trim()
+      .toLowerCase()
+      .replace(/-/g, '_') || 'unknown';
+  const symbol = rawSymbol ? normalizeSymbol(String(rawSymbol)) : 'UNKNOWN';
+  const timeframe = normalizeCanonicalTimeframe(String(rawTimeframe || '15m'));
+  const direction = String(rawDirection || '').trim().toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
+  const timeSec =
+    Number.isFinite(rawTime) && rawTime > 0
+      ? rawTime > 1e12
+        ? Math.floor(rawTime / 1000)
+        : Math.floor(rawTime)
+      : 0;
+
+  return `sig:${strategyId}:${symbol}:${timeframe}:${direction}:${timeSec}`;
+}
+
+export function upsertSignal(signal: Record<string, any>): void {
+  if (!signal || typeof signal !== 'object') return;
+  const db = getDb();
+
+  const rawId = typeof signal.id === 'string' ? signal.id.trim() : '';
+  const idParts = rawId.startsWith('sig:') ? rawId.split(':') : [];
+  const fallbackNowSec = Math.floor(Date.now() / 1000);
+  const timeSec = normalizeEpochSeconds(
+    signal.time ?? (idParts[5] !== undefined ? Number(idParts[5]) : undefined),
+    fallbackNowSec
+  );
+  const createdAtMs = normalizeEpochMs(signal.createdAt, timeSec * 1000 || Date.now());
+
+  const canonicalKey = buildCanonicalSignalKey({
+    id: rawId || undefined,
+    strategyId: signal.strategyId ?? signal.strategy_id,
+    symbol: signal.symbol,
+    timeframe: signal.timeframe ?? signal.interval,
+    direction: signal.direction,
+    time: timeSec,
+  });
+
+  const id = rawId || canonicalKey;
+  const keyParts = canonicalKey.split(':');
+  const symbol = signal.symbol ? normalizeSymbol(String(signal.symbol)) : keyParts[2] || 'UNKNOWN';
+  const timeframe = normalizeCanonicalTimeframe(
+    String(signal.timeframe || signal.interval || keyParts[3] || '15m')
+  );
+  const strategyId =
+    String(signal.strategyId || signal.strategy_id || keyParts[1] || 'unknown')
+      .trim()
+      .toLowerCase()
+      .replace(/-/g, '_') || 'unknown';
+  const strategyLabel = String(signal.strategyLabel || signal.strategyName || strategyId);
+  const direction: 'BUY' | 'SELL' =
+    String(signal.direction || keyParts[4] || 'BUY').trim().toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
+  const entryType = String(signal.entryType || signal.rawEntryType || 'market').trim().toLowerCase();
+  const entry = Number(signal.entry ?? signal.entryPrice ?? signal.limitPrice ?? 0) || 0;
+  const sl = Number(signal.sl ?? signal.slPrice ?? 0) || 0;
+  const tp = Number(signal.tp ?? signal.tp1Price ?? 0) || 0;
+  const tp2 = signal.tp2 != null && Number.isFinite(Number(signal.tp2)) ? Number(signal.tp2) : null;
+  const rr = Number(signal.rr ?? signal.riskRewardRatio ?? 0) || 0;
+  const confidence = Number(signal.confidence ?? signal.confidencePct ?? 0) || 0;
+  const risk = String(signal.risk || 'Medium');
+  const reasonArr = parseReasonArray(signal.reason ?? signal.reasons ?? signal.reason_json);
+
+  const incomingStatus = normalizeSignalStatus(signal.status);
+  let finalStatus = incomingStatus;
+  let finalResolvedAt =
+    signal.resolvedAt != null
+      ? normalizeEpochMs(signal.resolvedAt, Date.now())
+      : incomingStatus === 'live'
+      ? null
+      : Date.now();
+  let finalExitPrice =
+    signal.exitPrice != null && Number.isFinite(Number(signal.exitPrice))
+      ? Number(signal.exitPrice)
+      : null;
+  let finalCreatedAt = createdAtMs;
+
+  const existingById = db
+    .prepare('SELECT id, status, resolved_at, exit_price, created_at FROM signals WHERE id = ?')
+    .get(id);
+  const existingByCanonical = !existingById
+    ? db
+        .prepare(
+          'SELECT id, status, resolved_at, exit_price, created_at FROM signals WHERE canonical_key = ? ORDER BY created_at DESC LIMIT 1'
+        )
+        .get(canonicalKey)
+    : null;
+  const existing = existingById || existingByCanonical;
+
+  if (existing) {
+    const existingStatus = normalizeSignalStatus(existing.status);
+    if (signalStatusRank(existingStatus) > signalStatusRank(incomingStatus)) {
+      finalStatus = existingStatus;
+      finalResolvedAt =
+        existing.resolved_at != null ? Number(existing.resolved_at) : finalResolvedAt;
+      finalExitPrice =
+        existing.exit_price != null ? Number(existing.exit_price) : finalExitPrice;
+    } else {
+      if (finalResolvedAt === null && existing.resolved_at != null && finalStatus !== 'live') {
+        finalResolvedAt = Number(existing.resolved_at);
+      }
+      if (finalExitPrice === null && existing.exit_price != null) {
+        finalExitPrice = Number(existing.exit_price);
+      }
+    }
+    if (existing.created_at != null && Number(existing.created_at) > 0) {
+      finalCreatedAt = Math.min(createdAtMs, Number(existing.created_at));
+    }
+  }
+
+  db.prepare(`
+    INSERT INTO signals (
+      id, canonical_key, symbol, timeframe, strategy_id, strategy_label,
+      direction, entry_type, entry, sl, tp, tp2, rr, confidence, risk,
+      status, reason_json, time, created_at, resolved_at, exit_price
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      canonical_key = excluded.canonical_key,
+      symbol = excluded.symbol,
+      timeframe = excluded.timeframe,
+      strategy_id = excluded.strategy_id,
+      strategy_label = excluded.strategy_label,
+      direction = excluded.direction,
+      entry_type = excluded.entry_type,
+      entry = excluded.entry,
+      sl = excluded.sl,
+      tp = excluded.tp,
+      tp2 = excluded.tp2,
+      rr = excluded.rr,
+      confidence = excluded.confidence,
+      risk = excluded.risk,
+      status = excluded.status,
+      reason_json = excluded.reason_json,
+      time = excluded.time,
+      created_at = excluded.created_at,
+      resolved_at = excluded.resolved_at,
+      exit_price = excluded.exit_price
+  `).run(
+    id,
+    canonicalKey,
+    symbol,
+    timeframe,
+    strategyId,
+    strategyLabel,
+    direction,
+    entryType,
+    entry,
+    sl,
+    tp,
+    tp2,
+    rr,
+    confidence,
+    risk,
+    finalStatus,
+    JSON.stringify(reasonArr),
+    timeSec,
+    finalCreatedAt,
+    finalResolvedAt,
+    finalExitPrice
+  );
+}
+
+export function updateSignalStatusSqlite(
+  signalId: string,
+  status: string,
+  exitPrice?: number | null
+): void {
+  const cleanId = String(signalId || '').trim();
+  if (!cleanId) return;
+
+  const db = getDb();
+  const normStatus = normalizeSignalStatus(status);
+  const nowMs = Date.now();
+  const cleanExit =
+    exitPrice !== undefined && exitPrice !== null && Number.isFinite(Number(exitPrice))
+      ? Number(exitPrice)
+      : null;
+  const canonicalKey = cleanId.startsWith('sig:') ? buildCanonicalSignalKey({ id: cleanId }) : null;
+
+  const rows = canonicalKey
+    ? db
+        .prepare('SELECT id, status FROM signals WHERE id = ? OR canonical_key = ?')
+        .all(cleanId, canonicalKey)
+    : db.prepare('SELECT id, status FROM signals WHERE id = ?').all(cleanId);
+
+  for (const row of rows) {
+    const currentStatus = normalizeSignalStatus(row.status);
+    if (signalStatusRank(normStatus) < signalStatusRank(currentStatus)) {
+      continue;
+    }
+    db.prepare(
+      `UPDATE signals
+       SET status = ?,
+           resolved_at = CASE WHEN ? = 'live' THEN NULL ELSE ? END,
+           exit_price = COALESCE(?, exit_price)
+       WHERE id = ?`
+    ).run(normStatus, normStatus, nowMs, cleanExit, String(row.id));
+  }
+}
+
+export function querySignals(options?: {
+  limit?: number;
+  status?: string;
+  symbol?: string;
+  timeframe?: string;
+}): ArchivedSignalRecord[] {
+  const db = getDb();
+  const conditions: string[] = [];
+  const args: Array<string | number> = [];
+
+  if (options?.symbol && String(options.symbol).trim()) {
+    conditions.push('symbol = ?');
+    args.push(normalizeSymbol(String(options.symbol)));
+  }
+
+  if (options?.timeframe && String(options.timeframe).trim()) {
+    conditions.push('timeframe = ?');
+    args.push(normalizeCanonicalTimeframe(String(options.timeframe)));
+  }
+
+  if (options?.status && String(options.status).trim()) {
+    const upper = String(options.status).trim().toUpperCase();
+    if (upper !== 'ALL') {
+      if (upper === 'RESOLVED') {
+        conditions.push("status IN ('WIN', 'LOSS', 'EXPIRED')");
+      } else {
+        conditions.push('status = ?');
+        args.push(normalizeSignalStatus(options.status));
+      }
+    }
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const limit =
+    options?.limit && Number(options.limit) > 0
+      ? Math.min(5000, Math.floor(Number(options.limit)))
+      : 200;
+
+  const rows = db
+    .prepare(
+      `SELECT * FROM signals
+       ${whereClause}
+       ORDER BY created_at DESC, time DESC
+       LIMIT ?`
+    )
+    .all(...args, limit);
+
+  return rows.map(mapSignalRowToRecord);
+}
+
+export function queryActiveLiveSignals(symbol?: string, timeframe?: string): ArchivedSignalRecord[] {
+  return querySignals({
+    status: 'live',
+    symbol,
+    timeframe,
+    limit: 1000,
+  });
 }

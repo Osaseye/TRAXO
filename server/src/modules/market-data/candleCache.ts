@@ -53,12 +53,19 @@ export async function cacheCandles(
 
   const key = getCandleKey(symbol, interval, outputsize);
   const intervalMinutes = intervalToMinutes(interval);
-  const ttlSeconds = intervalMinutes * 60 * 2;
 
-  if (isNaN(ttlSeconds) || ttlSeconds <= 0) {
+  if (isNaN(intervalMinutes) || intervalMinutes <= 0) {
     console.warn(`Could not determine a valid TTL for interval: "${interval}". Cache will not be set.`);
     return;
   }
+
+  let ttlSeconds = 7200;
+  if (intervalMinutes <= 1) ttlSeconds = 120;
+  else if (intervalMinutes <= 5) ttlSeconds = 300;
+  else if (intervalMinutes <= 15) ttlSeconds = 900;
+  else if (intervalMinutes <= 30) ttlSeconds = 1200;
+  else if (intervalMinutes <= 60) ttlSeconds = 1800;
+  else if (intervalMinutes <= 240) ttlSeconds = 3600;
 
   try {
     await redis.set(key, JSON.stringify(candles), 'EX', ttlSeconds);

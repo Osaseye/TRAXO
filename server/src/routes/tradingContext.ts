@@ -175,6 +175,11 @@ router.post('/', async (req: any, res: any) => {
     memoryContextByUid.set(uid, payload);
     memoryContextByUid.set('default_trader', payload);
 
+    const effectiveRiskUsd =
+      payload.riskMode === 'percentage' && payload.accountBalance > 0 && payload.riskPerTradePct > 0
+        ? Math.max(1, Number(((payload.accountBalance * payload.riskPerTradePct) / 100).toFixed(2)))
+        : (payload.fixedRiskAmount > 0 ? payload.fixedRiskAmount : 50);
+
     updateRuntimeGuardrailConfig({
       guardrailsEnabled: payload.autoTradeGuardrailsEnabled,
       minConfidence: payload.autoTradeMinConfidence,
@@ -187,7 +192,7 @@ router.post('/', async (req: any, res: any) => {
       cooldownEnabled: payload.autoTradeCooldownOnLoss,
       maxConsecutiveLosses: payload.maxConsecutiveLossCap,
       newsFilterEnabled: payload.autoTradeNewsFilter,
-      riskAmountUsd: payload.fixedRiskAmount,
+      riskAmountUsd: effectiveRiskUsd,
       accountBalance: payload.accountBalance,
     });
 
@@ -196,7 +201,19 @@ router.post('/', async (req: any, res: any) => {
       .doc(uid)
       .collection('settings')
       .doc('tradingContext');
-    await docRef.set(payload, { merge: true }).catch(() => {});
+    const firestoreWrites: Promise<unknown>[] = [docRef.set(payload, { merge: true }).catch(() => {})];
+    if (uid !== 'default_trader') {
+      firestoreWrites.push(
+        firestore
+          .collection('users')
+          .doc('default_trader')
+          .collection('settings')
+          .doc('tradingContext')
+          .set(payload, { merge: true })
+          .catch(() => {})
+      );
+    }
+    await Promise.all(firestoreWrites);
 
     await Promise.all([
       redis.set(`trading_context:${uid}`, JSON.stringify(payload)),
@@ -208,7 +225,7 @@ router.post('/', async (req: any, res: any) => {
       redis.set('metaapi:auto_trade_min_conf', String(payload.autoTradeMinConfidence)),
       redis.set('metaapi:auto_trade_min_rr', String(payload.autoTradeMinRR)),
       redis.set('metaapi:auto_trade_max_pos', String(payload.autoTradeMaxPositions)),
-      redis.set('metaapi:auto_trade_risk_amt', String(payload.fixedRiskAmount)),
+      redis.set('metaapi:auto_trade_risk_amt', String(effectiveRiskUsd)),
       redis.set('metaapi:auto_trade_session', String(payload.autoTradeSessionFilter)),
       redis.set('metaapi:auto_trade_spread_cap', String(payload.autoTradeSpreadCapPips)),
       redis.set('metaapi:auto_trade_correlation', String(payload.autoTradeCorrelationShield)),

@@ -37,6 +37,7 @@ export interface BroadcastMessage {
     | 'NEWS_RELEASED'
     | 'NEWS_FREEZE_EXIT'
     | 'PAPER_TRADE_UPDATED'
+    | 'PAPER_ACCOUNT_UPDATED'
     | 'REPLAY_TICK'
     | string;
   payload?: any;
@@ -58,6 +59,7 @@ export function broadcast(message: BroadcastMessage): void {
     NEWS_RELEASED: ['news-released'],
     NEWS_FREEZE_EXIT: ['news-freeze-exit'],
     PAPER_TRADE_UPDATED: ['paper-trade-updated'],
+    PAPER_ACCOUNT_UPDATED: ['paper-account-updated'],
     REPLAY_TICK: ['replay-tick'],
   };
 

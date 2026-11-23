@@ -9,7 +9,7 @@ export function PositionSizeCalculator({ defaultBalance = 10000 }: PositionSizeC
   const [balance, setBalance] = useState<number>(defaultBalance);
   const [riskType, setRiskType] = useState<'percent' | 'fixed'>('fixed');
   const [riskPercent, setRiskPercent] = useState<number>(1.0);
-  const [fixedRisk, setFixedRisk] = useState<number>(25);
+  const [fixedRisk, setFixedRisk] = useState<number>(50);
   const [direction, setDirection] = useState<'long' | 'short'>('long');
   const [entryPrice, setEntryPrice] = useState<number>(1.085);
   const [stopLoss, setStopLoss] = useState<number>(1.081);
@@ -159,7 +159,7 @@ export function PositionSizeCalculator({ defaultBalance = 10000 }: PositionSizeC
                   step={5}
                   value={fixedRisk || ''}
                   onChange={(e) => setFixedRisk(parseFloat(e.target.value) || 0)}
-                  placeholder="25"
+                  placeholder="50"
                   className="w-full h-10 px-3.5 rounded-xl bg-[#18181B] border border-white/[0.08] focus:border-white/[0.22] focus:outline-none text-[13.5px] font-mono tabular-nums text-[#FAFAFA] transition-colors"
                 />
                 <div className="flex items-center gap-1.5">

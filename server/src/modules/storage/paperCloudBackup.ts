@@ -1,8 +1,11 @@
+import { firestore } from '../market-data/firebaseAdmin';
 import { backupRedis, getRedisTopologyStatus } from '../market-data/redisClient';
 import { getDb } from './sqliteDb';
 
 const BACKUP_KEY_PREFIX = 'backup:traxo:paper_state:';
 const BACKUP_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
+const FIRESTORE_COLLECTION = 'system';
+const FIRESTORE_DOC_PREFIX = 'paper_state_';
 
 let lastSyncedAt: number | null = null;
 let lastRestoredFromCloud = false;
@@ -49,7 +52,25 @@ export async function syncPaperStateToCloudBackup(uid = 'default_trader'): Promi
     replaySnapshots,
   };
 
-  await backupRedis.set(`${BACKUP_KEY_PREFIX}${uid}`, JSON.stringify(payload), 'EX', BACKUP_TTL_SECONDS);
+  await backupRedis
+    .set(`${BACKUP_KEY_PREFIX}${uid}`, JSON.stringify(payload), 'EX', BACKUP_TTL_SECONDS)
+    .catch(() => {});
+
+  const firestoreMirror = JSON.parse(
+    JSON.stringify({
+      version: 1,
+      syncedAt,
+      uid,
+      account,
+      trades: trades.slice(0, 200),
+    })
+  );
+  await firestore
+    .collection(FIRESTORE_COLLECTION)
+    .doc(`${FIRESTORE_DOC_PREFIX}${uid}`)
+    .set(firestoreMirror, { merge: true })
+    .catch(() => {});
+
   lastSyncedAt = syncedAt;
 
   return {
@@ -78,7 +99,7 @@ export function schedulePaperCloudBackup(uid = 'default_trader', delayMs = 1_500
 /**
  * On startup (especially ephemeral cloud deployments where SQLite disk is wiped),
  * restores paper_accounts, paper_trades, and recent replay snapshots from backupRedis
- * if the local SQLite paper_trades table is empty.
+ * or Firestore fallback if the local SQLite paper_trades table is empty.
  */
 export async function hydratePaperStateFromCloudBackup(uid = 'default_trader'): Promise<{
   restored: boolean;
@@ -93,16 +114,32 @@ export async function hydratePaperStateFromCloudBackup(uid = 'default_trader'): 
     return { restored: false, tradeCount: 0, snapshotCount: 0 };
   }
 
+  let parsed: PaperCloudBackupPayload | null = null;
+  let sourceLabel = 'backup Redis';
+
   const raw = await backupRedis.get(`${BACKUP_KEY_PREFIX}${uid}`).catch(() => null);
-  if (!raw) {
-    return { restored: false, tradeCount: 0, snapshotCount: 0 };
+  if (raw) {
+    try {
+      const candidate = JSON.parse(raw) as PaperCloudBackupPayload;
+      if (candidate && (candidate.account || (Array.isArray(candidate.trades) && candidate.trades.length > 0))) {
+        parsed = candidate;
+      }
+    } catch {
+      parsed = null;
+    }
   }
 
-  let parsed: PaperCloudBackupPayload;
-  try {
-    parsed = JSON.parse(raw) as PaperCloudBackupPayload;
-  } catch {
-    return { restored: false, tradeCount: 0, snapshotCount: 0 };
+  if (!parsed) {
+    const snap = await firestore
+      .collection(FIRESTORE_COLLECTION)
+      .doc(`${FIRESTORE_DOC_PREFIX}${uid}`)
+      .get()
+      .catch(() => null);
+    const fsData = snap?.exists ? (snap.data() as PaperCloudBackupPayload | undefined) : null;
+    if (fsData && (fsData.account || (Array.isArray(fsData.trades) && fsData.trades.length > 0))) {
+      parsed = fsData;
+      sourceLabel = 'Firestore';
+    }
   }
 
   if (!parsed || (!parsed.account && (!Array.isArray(parsed.trades) || parsed.trades.length === 0))) {
@@ -235,7 +272,7 @@ export async function hydratePaperStateFromCloudBackup(uid = 'default_trader'): 
     lastRestoredFromCloud = true;
     lastSyncedAt = parsed.syncedAt || Date.now();
     console.log(
-      `[PaperBackup] Restored ${trades.length} paper trade(s) & ${snaps.length} replay snapshot(s) from backup Redis.`
+      `[PaperBackup] Restored ${trades.length} paper trade(s) & ${snaps.length} replay snapshot(s) from ${sourceLabel}.`
     );
     return { restored: true, tradeCount: trades.length, snapshotCount: snaps.length };
   } catch (err: any) {
@@ -257,12 +294,21 @@ export async function getPaperBackupStatus(uid = 'default_trader'): Promise<{
 }> {
   const topology = getRedisTopologyStatus();
   const raw = await backupRedis.get(`${BACKUP_KEY_PREFIX}${uid}`).catch(() => null);
+  let cloudSnapshotPresent = Boolean(raw);
+  if (!cloudSnapshotPresent) {
+    const snap = await firestore
+      .collection(FIRESTORE_COLLECTION)
+      .doc(`${FIRESTORE_DOC_PREFIX}${uid}`)
+      .get()
+      .catch(() => null);
+    cloudSnapshotPresent = Boolean(snap?.exists);
+  }
   return {
     configured: topology.backupConfigured,
     primaryHealthy: topology.primaryHealthy,
     backupHealthy: topology.backupHealthy,
     lastSyncedAt,
     restoredFromCloud: lastRestoredFromCloud,
-    cloudSnapshotPresent: Boolean(raw),
+    cloudSnapshotPresent,
   };
 }
