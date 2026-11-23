@@ -3,6 +3,10 @@
     "module": "commonjs",
     "target": "es2022",
     "lib": ["es2022"],
+    "rootDir": ".",
+    "outDir": "./dist",
+    "sourceMap": false,
+    "declaration": false,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
@@ -14,9 +18,12 @@
     "strict": false
   },
   "include": [
-    "**/*.ts"
+    "src/**/*.ts",
+    "algorithms/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "dist",
+    "scripts"
   ]
 }

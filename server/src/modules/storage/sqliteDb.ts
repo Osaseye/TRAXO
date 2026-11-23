@@ -3,7 +3,10 @@ import path from 'path';
 import { normalizeSymbol } from '../../config/instruments';
 import type { MarketCandle } from '../market-data/marketDataService';
 
-const DEFAULT_DB_PATH = path.resolve(__dirname, '../../../data/traxo_market.db');
+const SERVER_ROOT = fs.existsSync(path.resolve(__dirname, '../../../package.json'))
+  ? path.resolve(__dirname, '../../..')
+  : path.resolve(__dirname, '../../../..');
+const DEFAULT_DB_PATH = path.resolve(SERVER_ROOT, 'data/traxo_market.db');
 
 let dbInstance: any = null;
 let currentDbPath: string | null = null;

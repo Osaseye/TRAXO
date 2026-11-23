@@ -17,9 +17,13 @@ export function createApp() {
   app.use(express.json());
   registerRoutes(app);
 
-  const distDir = path.resolve(__dirname, '../../dist');
-  const distIndexPath = path.resolve(__dirname, '../../dist/index.html');
-  if (fs.existsSync(distIndexPath)) {
+  const distIndexCandidates = [
+    path.resolve(__dirname, '../../dist/index.html'),
+    path.resolve(__dirname, '../../../dist/index.html'),
+  ];
+  const distIndexPath = distIndexCandidates.find((p) => fs.existsSync(p));
+  if (distIndexPath) {
+    const distDir = path.dirname(distIndexPath);
     app.use(express.static(distDir));
     app.get('*', (req: any, res: any, next: any) => {
       if (
