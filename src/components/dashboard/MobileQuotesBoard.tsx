@@ -257,7 +257,7 @@ export function MobileQuotesBoard({
   const isInitialLoading = loading && quotes.length === 0
 
   return (
-    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] flex flex-col">
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] flex flex-col pb-4">
       {/* Sticky Top Compact Status Header + Filter Chips + Column Strip */}
       <div className="sticky top-0 z-10 bg-[#09090B]/95 backdrop-blur-md border-b border-white/[0.06]">
         <div className="px-3.5 pt-2.5 pb-2 flex items-center justify-between gap-2">

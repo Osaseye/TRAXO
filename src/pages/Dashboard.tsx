@@ -1945,7 +1945,7 @@ export default function Dashboard() {
 
       {/* MOBILE MT5 QUOTES VIEW (< lg) */}
       {mobileView === 'quotes' && (
-        <div className="lg:hidden flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="lg:hidden flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <MobileQuotesBoard
             quotes={liveQuotes}
             loading={liveQuotesLoading}
@@ -1972,7 +1972,7 @@ export default function Dashboard() {
 
       {/* MOBILE MT5 TRADE BOOK VIEW (< lg) */}
       {mobileView === 'trade' && (
-        <div className="lg:hidden flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="lg:hidden flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <MobileTradeBook
             account={account}
             balance={liveBalance}

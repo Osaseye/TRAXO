@@ -116,7 +116,7 @@ export function MobileTradeBook({
     : realizedPnl
 
   return (
-    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] flex flex-col">
+    <div className="min-h-full bg-[#09090B] text-[#FAFAFA] flex flex-col pb-4">
       {/* Top Sticky Floating P&L Summary Banner */}
       <div className="sticky top-0 z-10 bg-[#09090B]/95 backdrop-blur-md border-b border-white/[0.06] px-3.5 py-3 space-y-2.5">
         <div className="flex items-start justify-between gap-2">
