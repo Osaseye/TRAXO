@@ -15,7 +15,7 @@ import {
   PiWifiSlash,
 } from 'react-icons/pi'
 import { apiFetch, getScannerStatus } from '@/lib/api'
-import { useMetaApi } from '@/hooks/useMetaApi'
+import { usePaperBroker } from '@/hooks/usePaperBroker'
 import { useStrategyOptimizer } from '@/hooks/useStrategyOptimizer'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useOnboardingStore } from '@/stores/useOnboardingStore'
@@ -45,7 +45,7 @@ export default function AdminPanel() {
   const journal = useTradingContextStore((s) => s.journal)
   const activeStrategies = useOnboardingStore((s) => s.selectedStrategyIds)
 
-  const { account: mt5Account, positions: mt5Positions, refreshAccount } = useMetaApi()
+  const { account: mt5Account, positions: mt5Positions, refreshAccount } = usePaperBroker()
   const { status: optimizerStatus, refreshStatus: refreshOptimizer } = useStrategyOptimizer()
 
   const [scannerStatus, setScannerStatus] = useState<{
@@ -151,10 +151,10 @@ export default function AdminPanel() {
       { label: 'Express Health Endpoint', ok: health?.status === 'ok', detail: health?.status || 'Offline' },
       { label: 'Redis Signal Cache', ok: scannerStatus?.redis === 'connected' || scannerStatus?.status === 'ok', detail: scannerStatus?.redis || scannerStatus?.status || 'Unknown' },
       {
-        label: mt5Account?.mode !== 'metaapi' ? 'TRAXO Paper Engine' : 'MetaApi Broker Bridge',
+        label: 'TRAXO Paper Engine',
         ok: Boolean(mt5Account?.connected),
         detail: mt5Account?.connected
-          ? `${mt5Account?.mode !== 'metaapi' ? 'Paper Active' : 'Connected'} (${mt5Positions.length} open)`
+          ? `Paper Active (${mt5Positions.length} open)`
           : 'Disconnected',
       },
     ]

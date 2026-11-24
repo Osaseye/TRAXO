@@ -1,6 +1,6 @@
 import type { MarketCandle } from '../market-data/marketDataService';
 
-export type ExecutionMode = 'paper' | 'metaapi';
+export type ExecutionMode = 'paper';
 export type ExitMode = 'FULL_TP1' | 'SCALE_50_TP1_BE_TP2';
 
 export type PaperTradeStatus =
@@ -195,15 +195,40 @@ export interface SymbolQuoteResponse {
   error?: string;
 }
 
+export interface MarketQuoteRow {
+  symbol: string;
+  name: string;
+  assetType: 'FOREX' | 'METAL' | 'FUTURES';
+  digits: number;
+  pipSize: number;
+  bid: number | null;
+  ask: number | null;
+  mid: number | null;
+  spreadPips: number | null;
+  dayOpen: number | null;
+  dayHigh: number | null;
+  dayLow: number | null;
+  changePct: number | null;
+  timestamp: string | null;
+}
+
 export interface IExecutionBroker {
   readonly mode: ExecutionMode;
-  getAccountInfo(uid?: string): Promise<Record<string, any>>;
+  getAccountInfo(uid: string): Promise<Record<string, any>>;
   getSymbolQuote(symbol: string, referencePrice?: number): Promise<SymbolQuoteResponse>;
+  getAllInstrumentQuotes(): Promise<MarketQuoteRow[]>;
   executeTrade(params: ExecuteTradeParams): Promise<ExecuteTradeResult>;
-  getOpenPositions(uid?: string): Promise<any[]>;
-  getOpenOrders(uid?: string): Promise<any[]>;
-  closePosition(positionId: string, exitPriceOverride?: number): Promise<{ success: boolean; result?: any; error?: string }>;
-  cancelOrder(orderId: string): Promise<{ success: boolean; result?: any; error?: string }>;
+  getOpenPositions(uid: string): Promise<any[]>;
+  getOpenOrders(uid: string): Promise<any[]>;
+  closePosition(
+    positionId: string,
+    exitPriceOverride?: number,
+    expectedUid?: string
+  ): Promise<{ success: boolean; result?: any; error?: string }>;
+  cancelOrder(
+    orderId: string,
+    expectedUid?: string
+  ): Promise<{ success: boolean; result?: any; error?: string }>;
 }
 
 const FULL_TP1_STRATEGY_IDS = new Set([

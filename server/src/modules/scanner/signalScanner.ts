@@ -5,7 +5,12 @@ import { analyzeTrendFollowing } from '../../../algorithms/trendFollowingStrateg
 import { analyzeWickRejection } from '../../../algorithms/wickRejection';
 import { getWickRejectionAnchorTimeframe } from '../../../algorithms/wickRejectionContext';
 import type { NewsEvent } from '../../../algorithms/orderBlock/types';
-import { getInstrumentDigits, getScannableInstruments, normalizeSymbol } from '../../config/instruments';
+import {
+  getInstrumentDigits,
+  getInstrumentSpec,
+  getScannableInstruments,
+  normalizeSymbol,
+} from '../../config/instruments';
 import * as marketDataService from '../market-data/marketDataService';
 import * as candleCache from '../market-data/candleCache';
 import { getAvailableCount } from '../market-data/keyRotator';
@@ -21,18 +26,14 @@ import {
 } from '../optimizer/strategyOptimizer';
 import {
   evaluatePreTradeGuardrailsAsync,
-  getRiskRuntimeState,
-  loadGuardrailConfig,
   recordGuardrailRejection,
-  recordTradeResolutionForRisk,
 } from '../risk/guardrails';
 import { calculateLots } from '../risk/positionSizing';
 import {
-  executeTrade,
-  getAutoTradeEnabled,
-  getOpenPositions,
-  getSymbolQuote,
-} from '../execution/metaApiService';
+  getAutoTradeEnabledUsers,
+  recordUserTradeResolutionForRisk,
+  toGuardrailConfig,
+} from '../execution/paperAutoTraderRegistry';
 import { paperBrokerService } from '../execution/paperBrokerService';
 import { isWinningPaperStatus } from '../execution/executionBroker';
 import { evaluateSignalDeterministically } from '../execution/tradeResolutionEngine';
@@ -351,7 +352,6 @@ async function resolveActiveSignalsForCandle(
   frontTimeframe: string,
   latestCandle: marketDataService.MarketCandle
 ): Promise<void> {
-  const cfg = await loadGuardrailConfig().catch(() => null);
   const resolvedSignalIds = new Set<string>();
 
   // 1. Resolve all open/pending Internal Paper Broker trades deterministically across archived bars
@@ -397,15 +397,14 @@ async function resolveActiveSignalsForCandle(
 
       if (isWin) {
         await processResolvedWin(optPayload).catch(() => {});
-        await recordTradeResolutionForRisk('WIN', Math.abs(trade.realizedPnlUsd), cfg || undefined).catch(() => {});
       } else {
         await processResolvedLoss(optPayload).catch(() => {});
-        await recordTradeResolutionForRisk(
-          'LOSS',
-          Math.abs(trade.realizedPnlUsd || cfg?.riskAmountUsd || 50),
-          cfg || undefined
-        ).catch(() => {});
       }
+      await recordUserTradeResolutionForRisk(
+        trade.uid,
+        outcome,
+        Math.abs(trade.realizedPnlUsd)
+      ).catch(() => {});
     }
   } catch (err: any) {
     console.error(`[PaperResolver] Failed resolving ${frontSymbol} ${frontTimeframe}:`, err?.message);
@@ -520,40 +519,29 @@ export async function runScan(): Promise<void> {
         // 1. Resolution Loop (triggers WIN & LOSS optimizer feedback + D.1/D.2 risk updates)
         await resolveActiveSignalsForCandle(frontSymbol, frontTimeframe, latestCandle);
 
-        // 2. Gather cached HTF candles + news + risk state for full live context
+        // 2. Gather cached HTF candles + news + active per-user auto-traders
         const anchorTf = getWickRejectionAnchorTimeframe(frontTimeframe);
         const anchorTdTf = toTwelveDataInterval(anchorTf);
-        const [htfCandles, newsCtx, guardrailCfg, riskState] = await Promise.all([
+        const [htfCandles, newsCtx, activeAutoTraders] = await Promise.all([
           candleCache.getCachedCandles(tdSymbol, anchorTdTf, 200).catch(() => null),
           getUpcomingNewsContext(frontSymbol).catch(() => ({ minutesAway: null, newsEvents: [] })),
-          loadGuardrailConfig().catch(() => null),
-          getRiskRuntimeState().catch(() => ({
-            dailyLossUsd: 0,
-            consecutiveLosses: 0,
-            cooldownUntil: null,
-            dateKey: '',
-          })),
+          getAutoTradeEnabledUsers().catch(() => []),
         ]);
 
-        const rawSignalMode = guardrailCfg?.guardrailsEnabled === false;
-        const rollingDrawdownPct =
-          !rawSignalMode && guardrailCfg && guardrailCfg.accountBalance > 0
-            ? Number(((riskState.dailyLossUsd / guardrailCfg.accountBalance) * 100).toFixed(2))
-            : 0;
+        const anyUserRawMode = activeAutoTraders.some((u) => !u.guardrailsEnabled);
 
-        // 3. Run all 5 strategies with full structural context
+        // 3. Run all strategies globally with neutral risk context (per-user guardrails evaluate below)
         const { signals: found, rejects } = runAllStrategies(
           candles,
           frontSymbol,
           timeframe,
-          rawSignalMode ? null : newsCtx.minutesAway,
+          anyUserRawMode ? null : newsCtx.minutesAway,
           {
             htfCandles: htfCandles || undefined,
-            newsEvents: rawSignalMode ? [] : newsCtx.newsEvents,
-            rollingDrawdownPct,
-            consecutiveLosses: rawSignalMode ? 0 : riskState.consecutiveLosses,
-            accountBalance: guardrailCfg?.accountBalance,
-            bypassMinConfidence: rawSignalMode,
+            newsEvents: anyUserRawMode ? [] : newsCtx.newsEvents,
+            rollingDrawdownPct: 0,
+            consecutiveLosses: 0,
+            bypassMinConfidence: anyUserRawMode,
           }
         );
 
@@ -579,7 +567,8 @@ export async function runScan(): Promise<void> {
           console.error(`Failed to save scan rejects for ${frontSymbol} to backup Redis:`, err);
         }
 
-        // 4. Deduplicate, store, broadcast, and evaluate atomic pre-trade guardrails
+        // 4. Deduplicate, store, broadcast, and evaluate per-user pre-trade guardrails
+        const todayUtc = new Date().toISOString().slice(0, 10);
         for (const signal of found) {
           const existingLive = await signalStore.getLiveSignal(
             signal.symbol,
@@ -597,42 +586,56 @@ export async function runScan(): Promise<void> {
             await signalStore.cacheLiveSignal(signal);
             await signalStore.saveHistoricalSignal(signal);
             broadcast({ type: 'NEW_SIGNAL', payload: signal });
-          } else {
-            if (!existingLive || existingLive.id !== signal.id) {
-              await signalStore.cacheLiveSignal(signal);
-            }
-            if (!rawSignalMode) {
-              continue;
-            }
+          } else if (!existingLive || existingLive.id !== signal.id) {
+            await signalStore.cacheLiveSignal(signal);
           }
 
-          if (getAutoTradeEnabled() && (isNewSignal || rawSignalMode)) {
-            if (paperBrokerService.hasTradeForSignal(signal.id, 'default_trader')) {
+          const symCategory = getInstrumentSpec(signal.symbol).category.toLowerCase();
+
+          for (const userCfg of activeAutoTraders) {
+            const userRawMode = !userCfg.guardrailsEnabled;
+            if (!isNewSignal && !userRawMode) {
               continue;
             }
+            if (paperBrokerService.hasTradeForSignal(signal.id, userCfg.uid)) {
+              continue;
+            }
+            if (
+              !userRawMode &&
+              Array.isArray(userCfg.allowedCategories) &&
+              userCfg.allowedCategories.length > 0
+            ) {
+              const allowedLower = userCfg.allowedCategories.map((c) => String(c).toLowerCase());
+              if (!allowedLower.includes(symCategory)) {
+                continue;
+              }
+            }
+
             try {
-              const cfg = guardrailCfg || (await loadGuardrailConfig());
-              const currentRisk = await getRiskRuntimeState();
+              const cfg = toGuardrailConfig(userCfg);
               const [openPositions, quote] = await Promise.all([
-                getOpenPositions('default_trader'),
-                getSymbolQuote(signal.symbol),
+                paperBrokerService.getOpenPositions(userCfg.uid),
+                paperBrokerService.getSymbolQuote(signal.symbol, latestCandle.close),
               ]);
+
+              const userDailyLoss =
+                userCfg.dailyLossDate === todayUtc ? Number(userCfg.dailyLossUsd) || 0 : 0;
 
               const evaluation = await evaluatePreTradeGuardrailsAsync({
                 signal,
                 config: cfg,
                 openPositions,
                 quote: quote.ok ? { bid: quote.bid, ask: quote.ask } : null,
-                dailyLossUsd: currentRisk.dailyLossUsd,
+                dailyLossUsd: userDailyLoss,
                 accountBalance: cfg.accountBalance,
-                consecutiveLosses: currentRisk.consecutiveLosses,
-                cooldownActiveUntil: currentRisk.cooldownUntil,
+                consecutiveLosses: Number(userCfg.consecutiveLosses) || 0,
+                cooldownActiveUntil: userCfg.cooldownUntil ?? null,
                 newsMinutesAway: newsCtx.minutesAway,
               });
 
               if (!evaluation.allowed) {
                 console.log(
-                  `[AutoTrader] Guardrails blocked ${signal.symbol} ${signal.direction} (${signal.strategyId}): ${evaluation.reasons.join(' | ')}`
+                  `[AutoTrader:${userCfg.uid}] Guardrails blocked ${signal.symbol} ${signal.direction} (${signal.strategyId}): ${evaluation.reasons.join(' | ')}`
                 );
                 await recordGuardrailRejection(signal, evaluation);
                 continue;
@@ -654,11 +657,11 @@ export async function runScan(): Promise<void> {
               }
 
               console.log(
-                `[AutoTrader] Executing ${signal.direction} (${entryType.toUpperCase()}) on ${signal.symbol} (${dynamicLots} Lots, $${riskUsd} Risk, ${signal.confidence}% Conf)...`
+                `[AutoTrader:${userCfg.uid}] Executing ${signal.direction} (${entryType.toUpperCase()}) on ${signal.symbol} (${dynamicLots} Lots, $${riskUsd} Risk, ${signal.confidence}% Conf)...`
               );
 
-              const execRes = await executeTrade({
-                uid: 'default_trader',
+              const execRes = await paperBrokerService.executeTrade({
+                uid: userCfg.uid,
                 signalId: signal.id,
                 symbol: signal.symbol,
                 timeframe: signal.timeframe,
@@ -686,13 +689,13 @@ export async function runScan(): Promise<void> {
 
               if (execRes.success) {
                 console.log(
-                  `[AutoTrader] Trade executed on Exness MT5: ${signal.symbol} ${signal.direction} ${dynamicLots}L (${entryType})`
+                  `[AutoTrader:${userCfg.uid}] Paper trade executed: ${signal.symbol} ${signal.direction} ${dynamicLots}L (${entryType})`
                 );
-              } else {
-                console.error(`[AutoTrader] Trade execution failed: ${execRes.error}`);
+              } else if (!execRes.duplicate) {
+                console.error(`[AutoTrader:${userCfg.uid}] Trade execution failed: ${execRes.error}`);
               }
             } catch (execErr: any) {
-              console.error(`[AutoTrader] Execution exception: ${execErr.message}`);
+              console.error(`[AutoTrader:${userCfg.uid}] Execution exception: ${execErr.message}`);
             }
           }
         }

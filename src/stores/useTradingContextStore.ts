@@ -88,6 +88,7 @@ export interface JournalEntry {
 }
 
 export interface TradingContextState {
+  ownerUid: string | null
   accountBalance: number
   riskPerTradePct: number
   maxDailyLossPct: number
@@ -99,6 +100,7 @@ export interface TradingContextState {
   fixedRiskAmount: number
   autoSyncBrokerBalance: boolean
 
+  bindOwnerUid: (uid: string | null) => void
   setAccountBalance: (value: number) => void
   setRiskPerTradePct: (value: number) => void
   setFixedRiskAmount: (value: number) => void
@@ -193,6 +195,20 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
         updated[idx] = { ...entry, breakEvenTriggered: true, currentSl: entry.entry }
         return { journal: updated }
       }),
+  ownerUid: null,
+  bindOwnerUid: (uid) =>
+    set((state) => {
+      if (uid === state.ownerUid) return state
+      return {
+        ownerUid: uid,
+        accountBalance: 10000,
+        journal: [],
+        fixedRiskAmount: 50,
+        riskPerTradePct: 0.5,
+        riskMode: 'fixedAmount',
+        autoTradeGuardrailsEnabled: true,
+      }
+    }),
   accountBalance: 10000,
   riskMode: 'fixedAmount',
   fixedRiskAmount: 50,
@@ -433,7 +449,7 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
     }),
 }), {
   name: 'traxo-trading-context',
-  version: 3,
+  version: 4,
   migrate: (persistedState, version) => {
     const state = (persistedState ?? {}) as Partial<TradingContextState>
     const nextChartSymbol: ChartSymbol = isValidChartSymbol(state.chartSymbol) ? state.chartSymbol : 'EURUSD'
@@ -441,27 +457,31 @@ export const useTradingContextStore = create<TradingContextState>()(persist((set
       ? state.notifSymbolFilters.filter((sym): sym is ChartSymbol => isValidChartSymbol(sym))
       : []
 
-    let fixedRiskAmount = state.fixedRiskAmount
-    let riskPerTradePct = state.riskPerTradePct
-    if (version < 3) {
-      if (fixedRiskAmount === 500 || fixedRiskAmount === undefined) {
-        fixedRiskAmount = 50
-      }
-      if (riskPerTradePct === 2.5 || riskPerTradePct === undefined) {
-        riskPerTradePct = 0.5
-      }
+    if (version < 4) {
+      return {
+        ...state,
+        ownerUid: null,
+        journal: [],
+        accountBalance: 10000,
+        fixedRiskAmount: 50,
+        riskPerTradePct: 0.5,
+        riskMode: 'fixedAmount',
+        chartSymbol: nextChartSymbol,
+        notifSymbolFilters: nextNotifSymbols,
+        autoTradeAllowedCategories: sanitizeAllowedCategories(state.autoTradeAllowedCategories),
+      } as TradingContextState
     }
 
     return {
       ...state,
-      fixedRiskAmount,
-      riskPerTradePct,
+      ownerUid: typeof state.ownerUid === 'string' ? state.ownerUid : null,
       chartSymbol: nextChartSymbol,
       notifSymbolFilters: nextNotifSymbols,
       autoTradeAllowedCategories: sanitizeAllowedCategories(state.autoTradeAllowedCategories),
     } as TradingContextState
   },
   partialize: (state) => ({
+    ownerUid: state.ownerUid,
     accountBalance: state.accountBalance,
     riskPerTradePct: state.riskPerTradePct,
     riskMode: state.riskMode,

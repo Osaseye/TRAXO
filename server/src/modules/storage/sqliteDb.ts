@@ -63,6 +63,39 @@ function initSchema(db: any, dbPath: string): void {
     );
     CREATE INDEX IF NOT EXISTS idx_candles_lookup ON candles(symbol, timeframe, time DESC);
 
+    CREATE TABLE IF NOT EXISTS schema_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS user_paper_settings (
+      uid TEXT PRIMARY KEY,
+      auto_trade_enabled INTEGER NOT NULL DEFAULT 0,
+      guardrails_enabled INTEGER NOT NULL DEFAULT 1,
+      risk_mode TEXT NOT NULL DEFAULT 'fixedAmount',
+      fixed_risk_amount REAL NOT NULL DEFAULT 50,
+      risk_per_trade_pct REAL NOT NULL DEFAULT 0.5,
+      max_daily_loss_pct REAL NOT NULL DEFAULT 4.0,
+      max_consecutive_loss_cap INTEGER NOT NULL DEFAULT 3,
+      min_confidence REAL NOT NULL DEFAULT 60,
+      min_rr REAL NOT NULL DEFAULT 1.8,
+      max_positions INTEGER NOT NULL DEFAULT 5,
+      spread_cap_pips REAL NOT NULL DEFAULT 3.5,
+      session_filter TEXT NOT NULL DEFAULT 'all',
+      correlation_shield INTEGER NOT NULL DEFAULT 1,
+      news_filter INTEGER NOT NULL DEFAULT 1,
+      cooldown_on_loss INTEGER NOT NULL DEFAULT 1,
+      allowed_categories_json TEXT NOT NULL DEFAULT '["forex","metals","indices"]',
+      account_balance REAL NOT NULL DEFAULT 10000,
+      auto_sync_broker_balance INTEGER NOT NULL DEFAULT 1,
+      daily_loss_usd REAL NOT NULL DEFAULT 0,
+      daily_loss_date TEXT NOT NULL DEFAULT '',
+      consecutive_losses INTEGER NOT NULL DEFAULT 0,
+      cooldown_until INTEGER,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_paper_settings_autotrade ON user_paper_settings(auto_trade_enabled);
+
     CREATE TABLE IF NOT EXISTS paper_accounts (
       uid TEXT PRIMARY KEY,
       starting_balance REAL NOT NULL DEFAULT 10000,
@@ -81,7 +114,7 @@ function initSchema(db: any, dbPath: string): void {
 
     CREATE TABLE IF NOT EXISTS paper_trades (
       id TEXT PRIMARY KEY,
-      uid TEXT NOT NULL DEFAULT 'default_trader',
+      uid TEXT NOT NULL,
       signal_id TEXT,
       symbol TEXT NOT NULL,
       timeframe TEXT NOT NULL,
@@ -172,20 +205,17 @@ function initSchema(db: any, dbPath: string): void {
     CREATE INDEX IF NOT EXISTS idx_signals_canonical ON signals(canonical_key);
   `);
 
-  try {
+  const migrationRow = db
+    .prepare("SELECT value FROM schema_meta WHERE key = 'paper_v2_migrated'")
+    .get();
+  if (migrationRow?.value !== '1') {
     db.exec(`
-      UPDATE paper_trades
-      SET uid = 'default_trader'
-      WHERE uid != 'default_trader'
-        AND (
-          signal_id IS NULL
-          OR NOT EXISTS (
-            SELECT 1 FROM paper_trades AS d
-            WHERE d.uid = 'default_trader' AND d.signal_id = paper_trades.signal_id
-          )
-        );
+      DELETE FROM trade_replay_snapshots;
+      DELETE FROM paper_trades;
+      DELETE FROM paper_accounts;
+      INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('paper_v2_migrated', '1');
     `);
-  } catch {}
+  }
 }
 
 export function getDb(): any {
@@ -897,4 +927,255 @@ export function queryActiveLiveSignals(symbol?: string, timeframe?: string): Arc
     timeframe,
     limit: 1000,
   });
+}
+
+export interface UserPaperSettingsRow {
+  uid: string;
+  autoTradeEnabled: boolean;
+  guardrailsEnabled: boolean;
+  riskMode: 'fixedAmount' | 'percentage';
+  fixedRiskAmount: number;
+  riskPerTradePct: number;
+  maxDailyLossPct: number;
+  maxConsecutiveLossCap: number;
+  minConfidence: number;
+  minRR: number;
+  maxPositions: number;
+  spreadCapPips: number;
+  sessionFilter: 'all' | 'london_ny' | 'ny_only' | 'london_only';
+  correlationShield: boolean;
+  newsFilter: boolean;
+  cooldownOnLoss: boolean;
+  allowedCategories: string[];
+  accountBalance: number;
+  autoSyncBrokerBalance: boolean;
+  dailyLossUsd: number;
+  dailyLossDate: string;
+  consecutiveLosses: number;
+  cooldownUntil: number | null;
+  updatedAt: number;
+}
+
+const VALID_SESSION_FILTERS = new Set(['all', 'london_ny', 'ny_only', 'london_only']);
+
+function normalizeSessionFilter(
+  raw: unknown
+): 'all' | 'london_ny' | 'ny_only' | 'london_only' {
+  const s = String(raw || 'all').trim().toLowerCase();
+  if (VALID_SESSION_FILTERS.has(s)) {
+    return s as 'all' | 'london_ny' | 'ny_only' | 'london_only';
+  }
+  return 'all';
+}
+
+function parseAllowedCategories(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    const cleaned = raw.map((c) => String(c || '').trim().toLowerCase()).filter(Boolean);
+    return cleaned.length > 0 ? cleaned : ['forex', 'metals', 'indices'];
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed.map((c) => String(c || '').trim().toLowerCase()).filter(Boolean);
+        return cleaned.length > 0 ? cleaned : ['forex', 'metals', 'indices'];
+      }
+    } catch {}
+  }
+  return ['forex', 'metals', 'indices'];
+}
+
+function mapUserPaperSettingsRow(row: any): UserPaperSettingsRow {
+  return {
+    uid: String(row.uid),
+    autoTradeEnabled: Boolean(Number(row.auto_trade_enabled)),
+    guardrailsEnabled: Boolean(Number(row.guardrails_enabled)),
+    riskMode: row.risk_mode === 'percentage' ? 'percentage' : 'fixedAmount',
+    fixedRiskAmount: Number(row.fixed_risk_amount ?? 50),
+    riskPerTradePct: Number(row.risk_per_trade_pct ?? 0.5),
+    maxDailyLossPct: Number(row.max_daily_loss_pct ?? 4.0),
+    maxConsecutiveLossCap: Number(row.max_consecutive_loss_cap ?? 3),
+    minConfidence: Number(row.min_confidence ?? 60),
+    minRR: Number(row.min_rr ?? 1.8),
+    maxPositions: Number(row.max_positions ?? 5),
+    spreadCapPips: Number(row.spread_cap_pips ?? 3.5),
+    sessionFilter: normalizeSessionFilter(row.session_filter),
+    correlationShield: Boolean(Number(row.correlation_shield)),
+    newsFilter: Boolean(Number(row.news_filter)),
+    cooldownOnLoss: Boolean(Number(row.cooldown_on_loss)),
+    allowedCategories: parseAllowedCategories(row.allowed_categories_json),
+    accountBalance: Number(row.account_balance ?? 10000),
+    autoSyncBrokerBalance: Boolean(Number(row.auto_sync_broker_balance)),
+    dailyLossUsd: Number(row.daily_loss_usd ?? 0),
+    dailyLossDate: String(row.daily_loss_date || ''),
+    consecutiveLosses: Number(row.consecutive_losses ?? 0),
+    cooldownUntil:
+      row.cooldown_until !== null && row.cooldown_until !== undefined
+        ? Number(row.cooldown_until)
+        : null,
+    updatedAt: Number(row.updated_at || Date.now()),
+  };
+}
+
+export function getUserPaperSettings(uid: string): UserPaperSettingsRow | null {
+  const cleanUid = String(uid || '').trim();
+  if (!cleanUid) return null;
+  const db = getDb();
+  const row = db
+    .prepare('SELECT * FROM user_paper_settings WHERE uid = ?')
+    .get(cleanUid);
+  return row ? mapUserPaperSettingsRow(row) : null;
+}
+
+export function upsertUserPaperSettings(settings: UserPaperSettingsRow): void {
+  const cleanUid = String(settings?.uid || '').trim();
+  if (!cleanUid) return;
+  const db = getDb();
+
+  const riskMode: 'fixedAmount' | 'percentage' =
+    settings.riskMode === 'percentage' ? 'percentage' : 'fixedAmount';
+  const sessionFilter = normalizeSessionFilter(settings.sessionFilter);
+  const allowedCategories = parseAllowedCategories(settings.allowedCategories);
+  const cooldownUntil =
+    settings.cooldownUntil !== null &&
+    settings.cooldownUntil !== undefined &&
+    Number.isFinite(Number(settings.cooldownUntil))
+      ? Math.floor(Number(settings.cooldownUntil))
+      : null;
+  const updatedAt =
+    Number.isFinite(Number(settings.updatedAt)) && Number(settings.updatedAt) > 0
+      ? Math.floor(Number(settings.updatedAt))
+      : Date.now();
+
+  db.prepare(`
+    INSERT INTO user_paper_settings (
+      uid,
+      auto_trade_enabled,
+      guardrails_enabled,
+      risk_mode,
+      fixed_risk_amount,
+      risk_per_trade_pct,
+      max_daily_loss_pct,
+      max_consecutive_loss_cap,
+      min_confidence,
+      min_rr,
+      max_positions,
+      spread_cap_pips,
+      session_filter,
+      correlation_shield,
+      news_filter,
+      cooldown_on_loss,
+      allowed_categories_json,
+      account_balance,
+      auto_sync_broker_balance,
+      daily_loss_usd,
+      daily_loss_date,
+      consecutive_losses,
+      cooldown_until,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(uid) DO UPDATE SET
+      auto_trade_enabled = excluded.auto_trade_enabled,
+      guardrails_enabled = excluded.guardrails_enabled,
+      risk_mode = excluded.risk_mode,
+      fixed_risk_amount = excluded.fixed_risk_amount,
+      risk_per_trade_pct = excluded.risk_per_trade_pct,
+      max_daily_loss_pct = excluded.max_daily_loss_pct,
+      max_consecutive_loss_cap = excluded.max_consecutive_loss_cap,
+      min_confidence = excluded.min_confidence,
+      min_rr = excluded.min_rr,
+      max_positions = excluded.max_positions,
+      spread_cap_pips = excluded.spread_cap_pips,
+      session_filter = excluded.session_filter,
+      correlation_shield = excluded.correlation_shield,
+      news_filter = excluded.news_filter,
+      cooldown_on_loss = excluded.cooldown_on_loss,
+      allowed_categories_json = excluded.allowed_categories_json,
+      account_balance = excluded.account_balance,
+      auto_sync_broker_balance = excluded.auto_sync_broker_balance,
+      daily_loss_usd = excluded.daily_loss_usd,
+      daily_loss_date = excluded.daily_loss_date,
+      consecutive_losses = excluded.consecutive_losses,
+      cooldown_until = excluded.cooldown_until,
+      updated_at = excluded.updated_at
+  `).run(
+    cleanUid,
+    settings.autoTradeEnabled ? 1 : 0,
+    settings.guardrailsEnabled ? 1 : 0,
+    riskMode,
+    Number.isFinite(Number(settings.fixedRiskAmount)) ? Number(settings.fixedRiskAmount) : 50,
+    Number.isFinite(Number(settings.riskPerTradePct)) ? Number(settings.riskPerTradePct) : 0.5,
+    Number.isFinite(Number(settings.maxDailyLossPct)) ? Number(settings.maxDailyLossPct) : 4.0,
+    Math.max(1, Math.floor(Number(settings.maxConsecutiveLossCap) || 3)),
+    Number.isFinite(Number(settings.minConfidence)) ? Number(settings.minConfidence) : 60,
+    Number.isFinite(Number(settings.minRR)) ? Number(settings.minRR) : 1.8,
+    Math.max(1, Math.floor(Number(settings.maxPositions) || 5)),
+    Number.isFinite(Number(settings.spreadCapPips)) ? Number(settings.spreadCapPips) : 3.5,
+    sessionFilter,
+    settings.correlationShield ? 1 : 0,
+    settings.newsFilter ? 1 : 0,
+    settings.cooldownOnLoss ? 1 : 0,
+    JSON.stringify(allowedCategories),
+    Number.isFinite(Number(settings.accountBalance)) && Number(settings.accountBalance) > 0
+      ? Number(settings.accountBalance)
+      : 10000,
+    settings.autoSyncBrokerBalance ? 1 : 0,
+    Number.isFinite(Number(settings.dailyLossUsd)) ? Number(settings.dailyLossUsd) : 0,
+    String(settings.dailyLossDate || ''),
+    Math.max(0, Math.floor(Number(settings.consecutiveLosses) || 0)),
+    cooldownUntil,
+    updatedAt
+  );
+}
+
+export function listAutoTradeEnabledSettings(): UserPaperSettingsRow[] {
+  const db = getDb();
+  const rows = db
+    .prepare('SELECT * FROM user_paper_settings WHERE auto_trade_enabled = 1 ORDER BY updated_at DESC')
+    .all();
+  return rows.map(mapUserPaperSettingsRow);
+}
+
+export function updateUserRiskRuntime(
+  uid: string,
+  risk: {
+    dailyLossUsd: number;
+    dailyLossDate: string;
+    consecutiveLosses: number;
+    cooldownUntil: number | null;
+  }
+): void {
+  const cleanUid = String(uid || '').trim();
+  if (!cleanUid) return;
+  const db = getDb();
+  const now = Date.now();
+  const dailyLossUsd = Number.isFinite(Number(risk.dailyLossUsd)) ? Number(risk.dailyLossUsd) : 0;
+  const dailyLossDate = String(risk.dailyLossDate || '');
+  const consecutiveLosses = Math.max(0, Math.floor(Number(risk.consecutiveLosses) || 0));
+  const cooldownUntil =
+    risk.cooldownUntil !== null &&
+    risk.cooldownUntil !== undefined &&
+    Number.isFinite(Number(risk.cooldownUntil))
+      ? Math.floor(Number(risk.cooldownUntil))
+      : null;
+
+  const result = db
+    .prepare(`
+      UPDATE user_paper_settings
+      SET daily_loss_usd = ?,
+          daily_loss_date = ?,
+          consecutive_losses = ?,
+          cooldown_until = ?,
+          updated_at = ?
+      WHERE uid = ?
+    `)
+    .run(dailyLossUsd, dailyLossDate, consecutiveLosses, cooldownUntil, now, cleanUid);
+
+  if (!result?.changes) {
+    db.prepare(`
+      INSERT OR IGNORE INTO user_paper_settings (
+        uid, daily_loss_usd, daily_loss_date, consecutive_losses, cooldown_until, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).run(cleanUid, dailyLossUsd, dailyLossDate, consecutiveLosses, cooldownUntil, now);
+  }
 }

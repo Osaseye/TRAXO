@@ -1,4 +1,10 @@
 import express from 'express';
+import { requireAuthenticatedUid } from '../modules/auth/requestAuth';
+import {
+  getUserTradingConfig,
+  resolveEffectiveRiskUsd,
+} from '../modules/execution/paperAutoTraderRegistry';
+import { paperBrokerService } from '../modules/execution/paperBrokerService';
 import {
   getJournalEntries,
   mapPaperTradeToJournalEntry,
@@ -6,11 +12,9 @@ import {
   saveJournalEntry,
   updateJournalEntry,
 } from '../modules/journal/journalService';
-import { paperBrokerService } from '../modules/execution/paperBrokerService';
 import { firestore } from '../modules/market-data/firebaseAdmin';
-import { loadGuardrailConfig } from '../modules/risk/guardrails';
+import { ensureUserPaperHydrated } from '../modules/storage/paperCloudBackup';
 import { buildCanonicalSignalKey, querySignals } from '../modules/storage/sqliteDb';
-import { resolveRequestUid } from './metaApi';
 
 const router = express.Router();
 
@@ -65,25 +69,24 @@ function getItemCanonicalKey(item: Record<string, any>): string {
   });
 }
 
-// GET /api/journal?uid=...
+// GET /api/journal
 router.get('/', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await requireAuthenticatedUid(req, res);
+    if (!uid) return;
+
+    await ensureUserPaperHydrated(uid);
+
     const [
       uidEntries,
-      defaultEntries,
-      defaultPaperTrades,
       uidPaperTrades,
+      userCfg,
       sqliteSignals,
       fsSignalSnap,
-      guardrailCfg,
     ] = await Promise.all([
       getJournalEntries(uid).catch(() => []),
-      uid !== 'default_trader' ? getJournalEntries('default_trader').catch(() => []) : Promise.resolve([]),
-      Promise.resolve(paperBrokerService.getAllTrades('default_trader', undefined, 500)),
-      uid !== 'default_trader'
-        ? Promise.resolve(paperBrokerService.getAllTrades(uid, undefined, 500))
-        : Promise.resolve([]),
+      Promise.resolve(paperBrokerService.getAllTrades(uid, undefined, 500)),
+      getUserTradingConfig(uid).catch(() => null),
       Promise.resolve()
         .then(() => querySignals({ limit: 400 }))
         .catch(() => []),
@@ -93,22 +96,18 @@ router.get('/', async (req: any, res: any) => {
         .limit(200)
         .get()
         .catch(() => null),
-      loadGuardrailConfig().catch(() => null),
     ]);
 
-    const defaultRiskUsd =
-      guardrailCfg?.riskAmountUsd && guardrailCfg.riskAmountUsd > 0
-        ? guardrailCfg.riskAmountUsd
-        : 50;
+    const defaultRiskUsd = userCfg ? resolveEffectiveRiskUsd(userCfg) : 50;
 
-    // Step A: Index user notes/overrides from stored journal entries (default_trader first, then uid overrides)
+    // Step A: Index user notes/overrides from stored journal entries strictly for this UID
     const storedById = new Map<string, Record<string, any>>();
     const storedByTradeId = new Map<string, Record<string, any>>();
     const storedBySignalId = new Map<string, Record<string, any>>();
     const storedByCanonicalKey = new Map<string, Record<string, any>>();
     const dedupedStored = new Map<string, Record<string, any>>();
 
-    for (const entry of [...defaultEntries, ...uidEntries]) {
+    for (const entry of uidEntries) {
       if (!entry || !entry.id) continue;
       const id = String(entry.id);
       const prev = dedupedStored.get(id);
@@ -133,9 +132,9 @@ router.get('/', async (req: any, res: any) => {
     const executedSignalIds = new Set<string>();
     const executedCanonicalKeys = new Set<string>();
 
-    // Step B (Priority 1): Map every Paper Broker trade
+    // Step B (Priority 1): Map every Paper Broker trade belonging strictly to this UID
     const paperById = new Map<string, any>();
-    for (const trade of [...defaultPaperTrades, ...uidPaperTrades]) {
+    for (const trade of uidPaperTrades) {
       if (trade && trade.id) paperById.set(String(trade.id), trade);
     }
 
@@ -166,7 +165,7 @@ router.get('/', async (req: any, res: any) => {
       if (tradeCanonKey) executedCanonicalKeys.add(tradeCanonKey);
     }
 
-    // Step C (Priority 2): Add remaining stored manual/MT5 journal entries (taken: true)
+    // Step C (Priority 2): Add remaining stored manual journal entries (taken: true) for this UID
     for (const stored of dedupedStored.values()) {
       if (stored.taken !== true) continue;
       const id = String(stored.id);
@@ -194,7 +193,7 @@ router.get('/', async (req: any, res: any) => {
       if (canonKey) executedCanonicalKeys.add(canonKey);
     }
 
-    // Step D (Priority 3): Map SQLite + Firestore signals not already covered by an executed trade
+    // Step D (Priority 3): Map global SQLite + Firestore scanner signals not covered by a user trade
     const fsSignals: Record<string, any>[] = [];
     if (Array.isArray(fsSignalSnap?.docs)) {
       for (const doc of fsSignalSnap.docs) {
@@ -280,7 +279,8 @@ router.get('/', async (req: any, res: any) => {
 // POST /api/journal
 router.post('/', async (req: any, res: any) => {
   try {
-    const uid = await resolveRequestUid(req);
+    const uid = await requireAuthenticatedUid(req, res);
+    if (!uid) return;
     const entry = await saveJournalEntry({ ...(req.body || {}), uid });
     res.json({ success: true, entry });
   } catch (err: any) {
@@ -292,8 +292,9 @@ router.post('/', async (req: any, res: any) => {
 // PATCH /api/journal/:id
 router.patch('/:id', async (req: any, res: any) => {
   try {
+    const uid = await requireAuthenticatedUid(req, res);
+    if (!uid) return;
     const { id } = req.params;
-    const uid = await resolveRequestUid(req);
     const result = await updateJournalEntry(id, { ...(req.body || {}), uid });
 
     if (!result.found) {

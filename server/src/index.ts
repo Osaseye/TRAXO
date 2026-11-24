@@ -6,8 +6,8 @@ import express from 'express';
 import { env, resolveCorsOrigin } from './config/env';
 import { getScannableInstruments } from './config/instruments';
 import { newsEngine, startNewsPoller, stopNewsPoller } from './services/news/newsEngine';
+import { hydrateAllActiveTraders } from './modules/execution/paperAutoTraderRegistry';
 import { startCron } from './modules/scanner/scannerCron';
-import { hydratePaperStateFromCloudBackup } from './modules/storage/paperCloudBackup';
 import { broadcast, initWebSocketServer } from './modules/websocket/websocketManager';
 import { registerRoutes } from './routes';
 
@@ -58,7 +58,7 @@ export function bootstrapServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
-    void hydratePaperStateFromCloudBackup()
+    void hydrateAllActiveTraders()
       .catch(() => {})
       .finally(() => {
         startCron();

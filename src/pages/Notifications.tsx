@@ -1269,9 +1269,7 @@ export default function Notifications() {
                 }`}
               >
                 {mt5Account?.connected
-                  ? mt5Account?.mode !== 'metaapi'
-                    ? 'Paper Online'
-                    : 'MT5 Online'
+                  ? 'Paper Online'
                   : isHealthOk
                   ? 'API Online'
                   : 'Standby'}
@@ -2289,7 +2287,7 @@ export default function Notifications() {
                     <div className="flex items-center gap-2.5">
                       <PiHardDrives className="h-4 w-4 text-[#A1A1AA] shrink-0" />
                       <span className="text-[#FAFAFA]">
-                        {mt5Account?.mode !== 'metaapi' ? 'TRAXO Paper Engine' : 'Exness MT5 / MetaApi'}
+                        TRAXO Paper Engine
                       </span>
                     </div>
                     <span

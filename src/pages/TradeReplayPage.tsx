@@ -12,13 +12,13 @@ import {
   PiShieldCheck,
 } from 'react-icons/pi';
 import {
-  useMetaApi,
+  usePaperBroker,
   type PaperTradeEvent,
   type PaperTradeRecord,
   type TradeReplayCandle,
   type TradeReplayMarker,
   type TradeReplaySnapshot,
-} from '@/hooks/useMetaApi';
+} from '@/hooks/usePaperBroker';
 import { useAnalysisSignalStore, type StoredSignal } from '@/stores/useAnalysisSignalStore';
 import {
   useTradingContextStore,
@@ -408,7 +408,7 @@ function synthesizeDeterministicSignalReplay(
 
   const syntheticTrade: PaperTradeRecord = {
     id: input.id,
-    uid: 'default_trader',
+    uid: 'synthetic_replay',
     signalId: input.id,
     symbol: input.symbol,
     timeframe: input.timeframe || '15m',
@@ -507,7 +507,7 @@ export default function TradeReplayPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { paperTrades, fetchTradeReplay } = useMetaApi();
+  const { paperTrades, fetchTradeReplay } = usePaperBroker();
   const storedSignals = useAnalysisSignalStore((s) => s.signals);
   const journalEntries = useTradingContextStore((s) => s.journal);
   const fixedRiskAmount = useTradingContextStore((s) => s.fixedRiskAmount);
@@ -1486,7 +1486,7 @@ export default function TradeReplayPage() {
                     <PiFastForward size={13} className="text-[#71717A]" />
                   </div>
                   <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
-                    {trade.events.map((evt, idx) => (
+                    {trade.events.map((evt: PaperTradeEvent, idx: number) => (
                       <div
                         key={idx}
                         className="text-[12px] rounded-xl bg-[#0D0D10] px-3.5 py-2.5 border border-white/[0.06] space-y-1"

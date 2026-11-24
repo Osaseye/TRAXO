@@ -5,7 +5,6 @@ import {
   normalizeSymbol,
 } from '../../config/instruments';
 import { newsServiceClient } from '../../services/news/NewsServiceClient';
-import { firestore } from '../market-data/firebaseAdmin';
 import redis, { backupRedis } from '../market-data/redisClient';
 
 export type GuardrailCode = 'A.1' | 'A.2' | 'B.4' | 'B.7' | 'C.9' | 'C.10' | 'D.1' | 'D.2' | 'D.3';
@@ -118,33 +117,6 @@ export const DEFAULT_GUARDRAIL_CONFIG: GuardrailConfig = {
 };
 
 let runtimeGuardrailOverrides: Partial<GuardrailConfig> = {};
-let hydratedContextFromFirestore = false;
-let firestoreHydrationPromise: Promise<Record<string, any> | null> | null = null;
-
-function optNum(val: unknown): number | undefined {
-  if (val === undefined || val === null || val === '') return undefined;
-  const n = Number(val);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-function optBool(val: unknown): boolean | undefined {
-  if (typeof val === 'boolean') return val;
-  return undefined;
-}
-
-function resolveContextRiskUsd(ctx: Record<string, any>): number | undefined {
-  if (!ctx || typeof ctx !== 'object') return undefined;
-  const bal = Number(ctx.accountBalance);
-  const pct = Number(ctx.riskPerTradePct);
-  if (ctx.riskMode === 'percentage' && Number.isFinite(bal) && bal > 0 && Number.isFinite(pct) && pct > 0) {
-    return Math.max(1, Number(((bal * pct) / 100).toFixed(2)));
-  }
-  const fixed = Number(ctx.fixedRiskAmount);
-  if (Number.isFinite(fixed) && fixed > 0) {
-    return fixed;
-  }
-  return undefined;
-}
 
 export function updateRuntimeGuardrailConfig(partial: Partial<GuardrailConfig>): void {
   const cleaned: Partial<GuardrailConfig> = {};
@@ -475,153 +447,9 @@ export async function evaluatePreTradeGuardrailsAsync(
 }
 
 export async function loadGuardrailConfig(): Promise<GuardrailConfig> {
-  const [
-    cachedGuardrailsEnabled,
-    cachedMinConf,
-    cachedMinRR,
-    cachedMaxPos,
-    cachedRiskAmt,
-    cachedSession,
-    cachedSpreadCap,
-    cachedCorrelation,
-    cachedNewsFilter,
-    cachedCooldownEnabled,
-    cachedMaxDailyLossPct,
-    cachedMaxConsecLosses,
-    cachedTradingCtx,
-  ] = await Promise.all([
-    redis.get('metaapi:auto_trade_guardrails_enabled').catch(() => null),
-    redis.get('metaapi:auto_trade_min_conf').catch(() => null),
-    redis.get('metaapi:auto_trade_min_rr').catch(() => null),
-    redis.get('metaapi:auto_trade_max_pos').catch(() => null),
-    redis.get('metaapi:auto_trade_risk_amt').catch(() => null),
-    redis.get('metaapi:auto_trade_session').catch(() => null),
-    redis.get('metaapi:auto_trade_spread_cap').catch(() => null),
-    redis.get('metaapi:auto_trade_correlation').catch(() => null),
-    redis.get('metaapi:auto_trade_news_filter').catch(() => null),
-    redis.get('metaapi:auto_trade_cooldown_on_loss').catch(() => null),
-    redis.get('metaapi:auto_trade_max_daily_loss_pct').catch(() => null),
-    redis.get('metaapi:auto_trade_max_consec_losses').catch(() => null),
-    redis.get('trading_context:default_trader').catch(() => null),
-  ]);
-
-  let ctxObj: Record<string, any> = {};
-  if (cachedTradingCtx) {
-    try {
-      ctxObj = JSON.parse(cachedTradingCtx);
-    } catch {}
-  }
-
-  if (
-    runtimeGuardrailOverrides.guardrailsEnabled === undefined &&
-    cachedGuardrailsEnabled === null &&
-    !cachedTradingCtx
-  ) {
-    if (!hydratedContextFromFirestore) {
-      hydratedContextFromFirestore = true;
-      firestoreHydrationPromise = firestore
-        .collection('users')
-        .doc('default_trader')
-        .collection('settings')
-        .doc('tradingContext')
-        .get()
-        .then((snap: any) => (snap?.exists ? snap.data() || {} : null))
-        .catch(() => null);
-    }
-
-    const fsData = firestoreHydrationPromise ? await firestoreHydrationPromise : null;
-    if (fsData && typeof fsData === 'object') {
-      ctxObj = fsData;
-      const effectiveRisk = resolveContextRiskUsd(fsData);
-      const fsBalance = optNum(fsData.accountBalance);
-      updateRuntimeGuardrailConfig({
-        guardrailsEnabled: optBool(fsData.autoTradeGuardrailsEnabled),
-        minConfidence: optNum(fsData.autoTradeMinConfidence),
-        minRR: optNum(fsData.autoTradeMinRR),
-        maxPositions: optNum(fsData.autoTradeMaxPositions),
-        correlationEnabled: optBool(fsData.autoTradeCorrelationShield),
-        maxSpreadPips: optNum(fsData.autoTradeSpreadCapPips),
-        sessionFilter:
-          typeof fsData.autoTradeSessionFilter === 'string' && fsData.autoTradeSessionFilter
-            ? (fsData.autoTradeSessionFilter as SessionWindowFilter)
-            : undefined,
-        maxDailyLossPct: optNum(fsData.maxDailyLossPct),
-        cooldownEnabled: optBool(fsData.autoTradeCooldownOnLoss),
-        maxConsecutiveLosses: optNum(fsData.maxConsecutiveLossCap),
-        newsFilterEnabled: optBool(fsData.autoTradeNewsFilter),
-        riskAmountUsd: effectiveRisk,
-        accountBalance: fsBalance && fsBalance > 0 ? fsBalance : undefined,
-      });
-    }
-  }
-
-  const numOr = (val: string | null, fallback: number): number =>
-    val !== null && !Number.isNaN(Number(val)) ? Number(val) : fallback;
-
   return {
-    guardrailsEnabled:
-      runtimeGuardrailOverrides.guardrailsEnabled ??
-      (cachedGuardrailsEnabled !== null
-        ? cachedGuardrailsEnabled !== 'false'
-        : (ctxObj.autoTradeGuardrailsEnabled ?? DEFAULT_GUARDRAIL_CONFIG.guardrailsEnabled)),
-    minConfidence:
-      runtimeGuardrailOverrides.minConfidence ??
-      numOr(cachedMinConf, ctxObj.autoTradeMinConfidence ?? DEFAULT_GUARDRAIL_CONFIG.minConfidence),
-    minRR:
-      runtimeGuardrailOverrides.minRR ??
-      numOr(cachedMinRR, ctxObj.autoTradeMinRR ?? DEFAULT_GUARDRAIL_CONFIG.minRR),
-    maxPositions:
-      runtimeGuardrailOverrides.maxPositions ??
-      numOr(cachedMaxPos, ctxObj.autoTradeMaxPositions ?? DEFAULT_GUARDRAIL_CONFIG.maxPositions),
-    correlationEnabled:
-      runtimeGuardrailOverrides.correlationEnabled ??
-      (cachedCorrelation !== null
-        ? cachedCorrelation === 'true'
-        : (ctxObj.autoTradeCorrelationShield ?? DEFAULT_GUARDRAIL_CONFIG.correlationEnabled)),
-    maxCorrelatedUsdPositions:
-      runtimeGuardrailOverrides.maxCorrelatedUsdPositions ??
-      DEFAULT_GUARDRAIL_CONFIG.maxCorrelatedUsdPositions,
-    maxSpreadPips:
-      runtimeGuardrailOverrides.maxSpreadPips ??
-      numOr(cachedSpreadCap, ctxObj.autoTradeSpreadCapPips ?? DEFAULT_GUARDRAIL_CONFIG.maxSpreadPips),
-    sessionFilter:
-      runtimeGuardrailOverrides.sessionFilter ??
-      ((cachedSession || ctxObj.autoTradeSessionFilter || 'all') as SessionWindowFilter),
-    maxDailyLossPct:
-      runtimeGuardrailOverrides.maxDailyLossPct ??
-      numOr(
-        cachedMaxDailyLossPct,
-        ctxObj.maxDailyLossPct ?? DEFAULT_GUARDRAIL_CONFIG.maxDailyLossPct
-      ),
-    cooldownEnabled:
-      runtimeGuardrailOverrides.cooldownEnabled ??
-      (cachedCooldownEnabled !== null
-        ? cachedCooldownEnabled === 'true'
-        : (ctxObj.autoTradeCooldownOnLoss ?? DEFAULT_GUARDRAIL_CONFIG.cooldownEnabled)),
-    maxConsecutiveLosses:
-      runtimeGuardrailOverrides.maxConsecutiveLosses ??
-      numOr(
-        cachedMaxConsecLosses,
-        ctxObj.maxConsecutiveLossCap ?? DEFAULT_GUARDRAIL_CONFIG.maxConsecutiveLosses
-      ),
-    cooldownMinutes:
-      runtimeGuardrailOverrides.cooldownMinutes ?? DEFAULT_GUARDRAIL_CONFIG.cooldownMinutes,
-    newsFilterEnabled:
-      runtimeGuardrailOverrides.newsFilterEnabled ??
-      (cachedNewsFilter !== null
-        ? cachedNewsFilter === 'true'
-        : (ctxObj.autoTradeNewsFilter ?? DEFAULT_GUARDRAIL_CONFIG.newsFilterEnabled)),
-    newsFreezeBeforeMinutes: DEFAULT_GUARDRAIL_CONFIG.newsFreezeBeforeMinutes,
-    newsFreezeAfterMinutes: DEFAULT_GUARDRAIL_CONFIG.newsFreezeAfterMinutes,
-    riskAmountUsd:
-      runtimeGuardrailOverrides.riskAmountUsd ??
-      numOr(
-        cachedRiskAmt,
-        resolveContextRiskUsd(ctxObj) ?? DEFAULT_GUARDRAIL_CONFIG.riskAmountUsd
-      ),
-    accountBalance:
-      runtimeGuardrailOverrides.accountBalance ??
-      (Number(ctxObj.accountBalance) || DEFAULT_GUARDRAIL_CONFIG.accountBalance),
+    ...DEFAULT_GUARDRAIL_CONFIG,
+    ...runtimeGuardrailOverrides,
   };
 }
 

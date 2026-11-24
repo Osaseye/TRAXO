@@ -3,15 +3,16 @@ import {
   normalizeSymbol,
 } from '../../config/instruments';
 import type { MarketCandle } from '../market-data/marketDataService';
-import {
-  evaluatePreTradeGuardrailsAsync,
-  getRiskRuntimeState,
-  loadGuardrailConfig,
-  recordTradeResolutionForRisk,
-} from '../risk/guardrails';
+import { isValidUserUid } from '../auth/requestAuth';
+import { evaluatePreTradeGuardrailsAsync } from '../risk/guardrails';
 import { calculateLots } from '../risk/positionSizing';
 import { processResolvedLoss, processResolvedWin } from '../optimizer/strategyOptimizer';
 import { isWinningPaperStatus } from '../execution/executionBroker';
+import {
+  getUserTradingConfig,
+  recordUserTradeResolutionForRisk,
+  toGuardrailConfig,
+} from '../execution/paperAutoTraderRegistry';
 import { paperBrokerService } from '../execution/paperBrokerService';
 import { runAllStrategies } from '../scanner/signalScanner';
 import {
@@ -24,7 +25,8 @@ import { broadcast } from '../websocket/websocketManager';
 
 export type ReplayState = 'IDLE' | 'RUNNING' | 'PAUSED' | 'COMPLETED';
 
-export interface StartReplayOptions {
+export interface StartReplayParams {
+  uid?: string;
   symbols?: string[];
   timeframe?: string;
   startTime?: number;
@@ -32,6 +34,8 @@ export interface StartReplayOptions {
   speedMs?: number;
   seedIfEmpty?: boolean;
 }
+
+export type StartReplayOptions = StartReplayParams;
 
 export interface ReplayStatus {
   state: ReplayState;
@@ -135,6 +139,7 @@ function generateSyntheticReplaySeries(symbol: string, timeframe: string): Marke
 
 export class OfflineReplayController {
   private state: ReplayState = 'IDLE';
+  private targetUid: string | null = null;
   private symbols: string[] = ['EURUSD', 'XAUUSD', 'MNQ'];
   private timeframe = '15m';
   private seriesBySymbol = new Map<string, MarketCandle[]>();
@@ -183,7 +188,10 @@ export class OfflineReplayController {
     };
   }
 
-  private prepareSeries(options: StartReplayOptions): void {
+  private prepareSeries(options: StartReplayParams): void {
+    if (options.uid && isValidUserUid(options.uid)) {
+      this.targetUid = options.uid;
+    }
     const requestedSymbols =
       Array.isArray(options.symbols) && options.symbols.length > 0
         ? options.symbols.map((s) => normalizeSymbol(s))
@@ -285,14 +293,19 @@ export class OfflineReplayController {
   stopReplay(): ReplayStatus {
     this.clearTimer();
     this.state = 'IDLE';
+    this.targetUid = null;
     return this.getStatus();
   }
 
-  async stepReplay(bars = 1, initOptions?: StartReplayOptions): Promise<ReplayStatus> {
+  async stepReplay(bars = 1, initOptions?: StartReplayParams): Promise<ReplayStatus> {
     if (this.stepping) return this.getStatus();
     this.stepping = true;
 
     try {
+      if (initOptions?.uid && isValidUserUid(initOptions.uid)) {
+        this.targetUid = initOptions.uid;
+      }
+
       if (this.totalBars === 0 || this.seriesBySymbol.size === 0 || this.state === 'IDLE') {
         this.prepareSeries(initOptions || {});
         if (this.totalBars > 0 && this.state === 'IDLE') {
@@ -308,13 +321,14 @@ export class OfflineReplayController {
           break;
         }
 
-        const cfg = await loadGuardrailConfig().catch(() => null);
-        const riskState = await getRiskRuntimeState().catch(() => ({
-          dailyLossUsd: 0,
-          consecutiveLosses: 0,
-          cooldownUntil: null,
-          dateKey: '',
-        }));
+        const activeUid = this.targetUid && isValidUserUid(this.targetUid) ? this.targetUid : null;
+        const userCfg = activeUid ? await getUserTradingConfig(activeUid).catch(() => null) : null;
+        const cfg = userCfg ? toGuardrailConfig(userCfg) : null;
+        const todayUtc = new Date().toISOString().slice(0, 10);
+        const userDailyLoss =
+          userCfg && userCfg.dailyLossDate === todayUtc ? Number(userCfg.dailyLossUsd) || 0 : 0;
+        const userConsecLosses = userCfg ? Number(userCfg.consecutiveLosses) || 0 : 0;
+        const userCooldownUntil = userCfg ? userCfg.cooldownUntil ?? null : null;
 
         for (const sym of this.symbols) {
           const fullSeries = this.seriesBySymbol.get(sym);
@@ -350,23 +364,26 @@ export class OfflineReplayController {
             };
             if (isWin) {
               await processResolvedWin(optPayload).catch(() => {});
-              await recordTradeResolutionForRisk('WIN', Math.abs(closedTrade.realizedPnlUsd), cfg || undefined).catch(() => {});
             } else {
               await processResolvedLoss(optPayload).catch(() => {});
-              await recordTradeResolutionForRisk('LOSS', Math.abs(closedTrade.realizedPnlUsd), cfg || undefined).catch(() => {});
             }
+            await recordUserTradeResolutionForRisk(
+              closedTrade.uid,
+              isWin ? 'WIN' : 'LOSS',
+              Math.abs(closedTrade.realizedPnlUsd)
+            ).catch(() => {});
           }
 
           // 2. Run all TRAXO + core strategies on the historical slice
           const rawSignalMode = cfg?.guardrailsEnabled === false;
           const rollingDrawdownPct =
             !rawSignalMode && cfg && cfg.accountBalance > 0
-              ? Number(((riskState.dailyLossUsd / cfg.accountBalance) * 100).toFixed(2))
+              ? Number(((userDailyLoss / cfg.accountBalance) * 100).toFixed(2))
               : 0;
 
           const { signals: found } = runAllStrategies(windowSlice, sym, this.timeframe, null, {
             rollingDrawdownPct,
-            consecutiveLosses: rawSignalMode ? 0 : riskState.consecutiveLosses,
+            consecutiveLosses: rawSignalMode ? 0 : userConsecLosses,
             accountBalance: cfg?.accountBalance,
             bypassMinConfidence: rawSignalMode,
           });
@@ -378,9 +395,9 @@ export class OfflineReplayController {
 
             broadcast({ type: 'NEW_SIGNAL', payload: signal });
 
-            if (cfg) {
+            if (activeUid && cfg) {
               const [openPositions, quote] = await Promise.all([
-                paperBrokerService.getOpenPositions('default_trader'),
+                paperBrokerService.getOpenPositions(activeUid),
                 paperBrokerService.getSymbolQuote(signal.symbol, currentBar.close),
               ]);
               const evaluation = await evaluatePreTradeGuardrailsAsync({
@@ -388,10 +405,10 @@ export class OfflineReplayController {
                 config: cfg,
                 openPositions,
                 quote: quote.ok ? { bid: quote.bid, ask: quote.ask } : null,
-                dailyLossUsd: riskState.dailyLossUsd,
+                dailyLossUsd: userDailyLoss,
                 accountBalance: cfg.accountBalance,
-                consecutiveLosses: riskState.consecutiveLosses,
-                cooldownActiveUntil: riskState.cooldownUntil,
+                consecutiveLosses: userConsecLosses,
+                cooldownActiveUntil: userCooldownUntil,
                 newsMinutesAway: null,
                 now: new Date(currentBar.time * 1000),
               });
@@ -401,7 +418,7 @@ export class OfflineReplayController {
               const riskUsd = cfg.riskAmountUsd || 50;
               const dynamicLots = calculateLots(signal.symbol, signal.entry, signal.sl, riskUsd);
               const execRes = await paperBrokerService.executeTrade({
-                uid: 'default_trader',
+                uid: activeUid,
                 signalId: signal.id,
                 symbol: signal.symbol,
                 timeframe: signal.timeframe,

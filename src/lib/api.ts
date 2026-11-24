@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { auth } from './firebase'; // Assuming you have a function to get the user's auth token
+import { auth } from './firebase';
 import { useAuthStore } from '@/stores/useAuthStore';
 
 const DEFAULT_LIVE_API_URL = 'https://traxo-backend-1.onrender.com';
@@ -21,19 +20,20 @@ export function resolveApiBaseUrl(): string {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
-export function getActiveUid(): string {
-  return useAuthStore.getState().user?.id || auth.currentUser?.uid || 'default_trader';
+export function getActiveUid(): string | null {
+  return useAuthStore.getState().user?.id || auth.currentUser?.uid || null;
 }
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
   const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
   const headers = new Headers(options.headers);
+  const activeUid = getActiveUid();
 
   if (options.body && !headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
-  if (!headers.has('X-Traxo-Uid')) {
-    headers.set('X-Traxo-Uid', getActiveUid());
+  if (activeUid && !headers.has('X-Traxo-Uid')) {
+    headers.set('X-Traxo-Uid', activeUid);
   }
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
@@ -52,11 +52,12 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
+  const activeUid = getActiveUid();
   if (!headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  if (!headers.has('X-Traxo-Uid')) {
-    headers.set('X-Traxo-Uid', getActiveUid());
+  if (activeUid && !headers.has('X-Traxo-Uid')) {
+    headers.set('X-Traxo-Uid', activeUid);
   }
 
   const response = await apiFetch(endpoint, {
@@ -65,8 +66,8 @@ async function request(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({})); // Gracefully handle non-JSON error responses
-    throw new Error(errorData.message || 'An error occurred');
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || errorData.error || 'An error occurred');
   }
 
   return response.json();
@@ -84,6 +85,10 @@ export const getHistoricalSignals = (lastVisible: string | null = null, limit = 
 
 export const getLiveSignals = () => {
   return request('/api/signals/live');
+};
+
+export const getMarketQuotes = () => {
+  return request('/api/paper/quotes');
 };
 
 export const getCandleData = (
@@ -113,13 +118,17 @@ export const getScannerRejects = (symbol: string, timeframe: string) => {
 };
 
 export const getTradingContext = (uid?: string) => {
-  const activeUid = uid || getActiveUid();
+  const activeUid = uid?.trim() || getActiveUid();
+  if (!activeUid) return Promise.resolve(null);
   return request(`/api/trading-context?uid=${encodeURIComponent(activeUid)}`);
 };
 
 export const postTradingContext = (data: Record<string, unknown>) => {
   const activeUid =
-    typeof data?.uid === 'string' && data.uid.trim() ? data.uid : getActiveUid();
+    typeof data?.uid === 'string' && data.uid.trim() ? data.uid.trim() : getActiveUid();
+  if (!activeUid) {
+    return Promise.reject(new Error('Authentication required to update trading context'));
+  }
   return request('/api/trading-context', {
     method: 'POST',
     body: JSON.stringify({ ...data, uid: activeUid }),
@@ -127,22 +136,29 @@ export const postTradingContext = (data: Record<string, unknown>) => {
 };
 
 export const getJournalEntries = (uid?: string) => {
-  const activeUid = uid || getActiveUid();
+  const activeUid = uid?.trim() || getActiveUid();
+  if (!activeUid) return Promise.resolve([]);
   return request(`/api/journal?uid=${encodeURIComponent(activeUid)}`);
 };
 
-export const postJournalEntry = (entry: any) => {
+export const postJournalEntry = <T extends object & { uid?: string }>(entry: T) => {
   const activeUid =
-    typeof entry?.uid === 'string' && entry.uid.trim() ? entry.uid : getActiveUid();
+    typeof entry?.uid === 'string' && entry.uid.trim() ? entry.uid.trim() : getActiveUid();
+  if (!activeUid) {
+    return Promise.reject(new Error('Authentication required to save journal entry'));
+  }
   return request('/api/journal', {
     method: 'POST',
     body: JSON.stringify({ ...entry, uid: activeUid }),
   });
 };
 
-export const updateJournalEntry = (id: string, updates: any) => {
+export const updateJournalEntry = <T extends object & { uid?: string }>(id: string, updates: T) => {
   const activeUid =
-    typeof updates?.uid === 'string' && updates.uid.trim() ? updates.uid : getActiveUid();
+    typeof updates?.uid === 'string' && updates.uid.trim() ? updates.uid.trim() : getActiveUid();
+  if (!activeUid) {
+    return Promise.reject(new Error('Authentication required to update journal entry'));
+  }
   return request(`/api/journal/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ ...updates, uid: activeUid }),

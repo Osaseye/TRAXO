@@ -1,15 +1,20 @@
+import { isValidUserUid } from '../auth/requestAuth';
 import { firestore } from '../market-data/firebaseAdmin';
 import { backupRedis, getRedisTopologyStatus } from '../market-data/redisClient';
 import { getDb } from './sqliteDb';
 
-const BACKUP_KEY_PREFIX = 'backup:traxo:paper_state:';
+const BACKUP_KEY_PREFIX = 'backup:traxo:paper_v2:';
 const BACKUP_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
-const FIRESTORE_COLLECTION = 'system';
-const FIRESTORE_DOC_PREFIX = 'paper_state_';
 
-let lastSyncedAt: number | null = null;
-let lastRestoredFromCloud = false;
+const hydratedUids = new Set<string>();
+const inFlightHydrations = new Map<string, Promise<boolean>>();
+const lastSyncedAtByUid = new Map<string, number>();
+const restoredFromCloudUids = new Set<string>();
 const debounceTimers = new Map<string, NodeJS.Timeout>();
+
+function getUserPaperStateDoc(uid: string) {
+  return firestore.collection('users').doc(uid).collection('paper_state').doc('v2');
+}
 
 export interface PaperCloudBackupPayload {
   version: number;
@@ -18,16 +23,38 @@ export interface PaperCloudBackupPayload {
   account: any | null;
   trades: any[];
   replaySnapshots: any[];
+  settings?: any | null;
 }
 
-export async function syncPaperStateToCloudBackup(uid = 'default_trader'): Promise<{
+export function resetHydratedCacheForTests(): void {
+  hydratedUids.clear();
+  inFlightHydrations.clear();
+  lastSyncedAtByUid.clear();
+  restoredFromCloudUids.clear();
+  for (const timer of debounceTimers.values()) {
+    clearTimeout(timer);
+  }
+  debounceTimers.clear();
+}
+
+export async function syncPaperStateToCloudBackup(uid: string): Promise<{
   ok: boolean;
   syncedAt: number;
   tradeCount: number;
   snapshotCount: number;
 }> {
+  if (!isValidUserUid(uid)) {
+    return {
+      ok: false,
+      syncedAt: 0,
+      tradeCount: 0,
+      snapshotCount: 0,
+    };
+  }
+
   const db = getDb();
   const account = db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(uid) || null;
+  const settings = db.prepare('SELECT * FROM user_paper_settings WHERE uid = ?').get(uid) || null;
   const trades = db
     .prepare('SELECT * FROM paper_trades WHERE uid = ? ORDER BY created_at DESC LIMIT 250')
     .all(uid);
@@ -44,12 +71,13 @@ export async function syncPaperStateToCloudBackup(uid = 'default_trader'): Promi
 
   const syncedAt = Date.now();
   const payload: PaperCloudBackupPayload = {
-    version: 1,
+    version: 2,
     syncedAt,
     uid,
     account,
     trades,
     replaySnapshots,
+    settings,
   };
 
   await backupRedis
@@ -58,20 +86,19 @@ export async function syncPaperStateToCloudBackup(uid = 'default_trader'): Promi
 
   const firestoreMirror = JSON.parse(
     JSON.stringify({
-      version: 1,
+      version: 2,
       syncedAt,
       uid,
       account,
+      settings,
       trades: trades.slice(0, 200),
     })
   );
-  await firestore
-    .collection(FIRESTORE_COLLECTION)
-    .doc(`${FIRESTORE_DOC_PREFIX}${uid}`)
+  await getUserPaperStateDoc(uid)
     .set(firestoreMirror, { merge: true })
     .catch(() => {});
 
-  lastSyncedAt = syncedAt;
+  lastSyncedAtByUid.set(uid, syncedAt);
 
   return {
     ok: true,
@@ -81,7 +108,11 @@ export async function syncPaperStateToCloudBackup(uid = 'default_trader'): Promi
   };
 }
 
-export function schedulePaperCloudBackup(uid = 'default_trader', delayMs = 1_500): void {
+export function schedulePaperCloudBackup(uid: string, delayMs = 1_500): void {
+  if (!isValidUserUid(uid)) {
+    return;
+  }
+
   const existing = debounceTimers.get(uid);
   if (existing) clearTimeout(existing);
 
@@ -97,20 +128,25 @@ export function schedulePaperCloudBackup(uid = 'default_trader', delayMs = 1_500
 }
 
 /**
- * On startup (especially ephemeral cloud deployments where SQLite disk is wiped),
- * restores paper_accounts, paper_trades, and recent replay snapshots from backupRedis
- * or Firestore fallback if the local SQLite paper_trades table is empty.
+ * On demand per authenticated user (especially ephemeral cloud deployments where SQLite disk is wiped),
+ * restores paper_accounts, paper_trades, recent replay snapshots, and settings from backupRedis
+ * or Firestore fallback (`users/{uid}/paper_state/v2`) if the local SQLite has no data for `uid`.
  */
-export async function hydratePaperStateFromCloudBackup(uid = 'default_trader'): Promise<{
+export async function hydratePaperStateFromCloudBackup(uid: string): Promise<{
   restored: boolean;
   tradeCount: number;
   snapshotCount: number;
 }> {
+  if (!isValidUserUid(uid)) {
+    return { restored: false, tradeCount: 0, snapshotCount: 0 };
+  }
+
   const db = getDb();
+  const localAccountRow = db.prepare('SELECT 1 FROM paper_accounts WHERE uid = ?').get(uid);
   const localTradeCountRow = db
     .prepare('SELECT COUNT(*) AS cnt FROM paper_trades WHERE uid = ?')
     .get(uid);
-  if (Number(localTradeCountRow?.cnt || 0) > 0) {
+  if (localAccountRow || Number(localTradeCountRow?.cnt || 0) > 0) {
     return { restored: false, tradeCount: 0, snapshotCount: 0 };
   }
 
@@ -130,9 +166,7 @@ export async function hydratePaperStateFromCloudBackup(uid = 'default_trader'): 
   }
 
   if (!parsed) {
-    const snap = await firestore
-      .collection(FIRESTORE_COLLECTION)
-      .doc(`${FIRESTORE_DOC_PREFIX}${uid}`)
+    const snap = await getUserPaperStateDoc(uid)
       .get()
       .catch(() => null);
     const fsData = snap?.exists ? (snap.data() as PaperCloudBackupPayload | undefined) : null;
@@ -156,7 +190,7 @@ export async function hydratePaperStateFromCloudBackup(uid = 'default_trader'): 
           floating_pnl, realized_pnl, peak_equity, max_drawdown_pct, currency, leverage, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        String(a.uid || uid),
+        uid,
         Number(a.starting_balance ?? 10000),
         Number(a.balance ?? 10000),
         Number(a.equity ?? 10000),
@@ -169,6 +203,45 @@ export async function hydratePaperStateFromCloudBackup(uid = 'default_trader'): 
         String(a.currency || 'USD'),
         Number(a.leverage ?? 100),
         Number(a.updated_at || Date.now())
+      );
+    }
+
+    if (parsed.settings && typeof parsed.settings === 'object') {
+      const st = parsed.settings;
+      db.prepare(`
+        INSERT OR IGNORE INTO user_paper_settings (
+          uid, auto_trade_enabled, guardrails_enabled, risk_mode, fixed_risk_amount,
+          risk_per_trade_pct, max_daily_loss_pct, max_consecutive_loss_cap, min_confidence,
+          min_rr, max_positions, spread_cap_pips, session_filter, correlation_shield,
+          news_filter, cooldown_on_loss, allowed_categories_json, account_balance,
+          auto_sync_broker_balance, daily_loss_usd, daily_loss_date, consecutive_losses,
+          cooldown_until, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        uid,
+        Number(st.auto_trade_enabled ?? 0),
+        Number(st.guardrails_enabled ?? 1),
+        String(st.risk_mode || 'fixedAmount'),
+        Number(st.fixed_risk_amount ?? 50),
+        Number(st.risk_per_trade_pct ?? 0.5),
+        Number(st.max_daily_loss_pct ?? 4.0),
+        Number(st.max_consecutive_loss_cap ?? 3),
+        Number(st.min_confidence ?? 60),
+        Number(st.min_rr ?? 1.8),
+        Number(st.max_positions ?? 5),
+        Number(st.spread_cap_pips ?? 3.5),
+        String(st.session_filter || 'all'),
+        Number(st.correlation_shield ?? 1),
+        Number(st.news_filter ?? 1),
+        Number(st.cooldown_on_loss ?? 1),
+        String(st.allowed_categories_json || '["forex","metals","indices"]'),
+        Number(st.account_balance ?? 10000),
+        Number(st.auto_sync_broker_balance ?? 1),
+        Number(st.daily_loss_usd ?? 0),
+        String(st.daily_loss_date || ''),
+        Number(st.consecutive_losses ?? 0),
+        st.cooldown_until ?? null,
+        Number(st.updated_at || Date.now())
       );
     }
 
@@ -196,7 +269,7 @@ export async function hydratePaperStateFromCloudBackup(uid = 'default_trader'): 
     for (const t of trades) {
       tradeInsert.run(
         t.id,
-        t.uid || uid,
+        uid,
         t.signal_id ?? null,
         t.symbol,
         t.timeframe,
@@ -269,10 +342,10 @@ export async function hydratePaperStateFromCloudBackup(uid = 'default_trader'): 
     }
 
     db.exec('COMMIT');
-    lastRestoredFromCloud = true;
-    lastSyncedAt = parsed.syncedAt || Date.now();
+    restoredFromCloudUids.add(uid);
+    lastSyncedAtByUid.set(uid, parsed.syncedAt || Date.now());
     console.log(
-      `[PaperBackup] Restored ${trades.length} paper trade(s) & ${snaps.length} replay snapshot(s) from ${sourceLabel}.`
+      `[PaperBackup] Restored ${trades.length} paper trade(s) & ${snaps.length} replay snapshot(s) for uid=${uid} from ${sourceLabel}.`
     );
     return { restored: true, tradeCount: trades.length, snapshotCount: snaps.length };
   } catch (err: any) {
@@ -284,7 +357,46 @@ export async function hydratePaperStateFromCloudBackup(uid = 'default_trader'): 
   }
 }
 
-export async function getPaperBackupStatus(uid = 'default_trader'): Promise<{
+export async function ensureUserPaperHydrated(uid: string): Promise<boolean> {
+  if (!isValidUserUid(uid)) {
+    return false;
+  }
+
+  const db = getDb();
+  const hasLocalAccount = Boolean(
+    db.prepare('SELECT 1 FROM paper_accounts WHERE uid = ?').get(uid)
+  );
+  if (hydratedUids.has(uid) && hasLocalAccount) {
+    return true;
+  }
+  if (hasLocalAccount) {
+    hydratedUids.add(uid);
+    return true;
+  }
+
+  const existingInFlight = inFlightHydrations.get(uid);
+  if (existingInFlight) {
+    return existingInFlight;
+  }
+
+  const hydrationPromise = (async () => {
+    try {
+      const res = await hydratePaperStateFromCloudBackup(uid);
+      hydratedUids.add(uid);
+      return res.restored;
+    } catch {
+      hydratedUids.add(uid);
+      return false;
+    } finally {
+      inFlightHydrations.delete(uid);
+    }
+  })();
+
+  inFlightHydrations.set(uid, hydrationPromise);
+  return hydrationPromise;
+}
+
+export async function getPaperBackupStatus(uid: string): Promise<{
   configured: boolean;
   primaryHealthy: boolean;
   backupHealthy: boolean;
@@ -293,12 +405,21 @@ export async function getPaperBackupStatus(uid = 'default_trader'): Promise<{
   cloudSnapshotPresent: boolean;
 }> {
   const topology = getRedisTopologyStatus();
+  if (!isValidUserUid(uid)) {
+    return {
+      configured: topology.backupConfigured,
+      primaryHealthy: topology.primaryHealthy,
+      backupHealthy: topology.backupHealthy,
+      lastSyncedAt: null,
+      restoredFromCloud: false,
+      cloudSnapshotPresent: false,
+    };
+  }
+
   const raw = await backupRedis.get(`${BACKUP_KEY_PREFIX}${uid}`).catch(() => null);
   let cloudSnapshotPresent = Boolean(raw);
   if (!cloudSnapshotPresent) {
-    const snap = await firestore
-      .collection(FIRESTORE_COLLECTION)
-      .doc(`${FIRESTORE_DOC_PREFIX}${uid}`)
+    const snap = await getUserPaperStateDoc(uid)
       .get()
       .catch(() => null);
     cloudSnapshotPresent = Boolean(snap?.exists);
@@ -307,8 +428,8 @@ export async function getPaperBackupStatus(uid = 'default_trader'): Promise<{
     configured: topology.backupConfigured,
     primaryHealthy: topology.primaryHealthy,
     backupHealthy: topology.backupHealthy,
-    lastSyncedAt,
-    restoredFromCloud: lastRestoredFromCloud,
+    lastSyncedAt: lastSyncedAtByUid.get(uid) ?? null,
+    restoredFromCloud: restoredFromCloudUids.has(uid),
     cloudSnapshotPresent,
   };
 }

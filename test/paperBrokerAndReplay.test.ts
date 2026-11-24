@@ -59,6 +59,10 @@ function makeBars(params: {
 async function runTests() {
   resetDbForTests(tmpDbPath);
 
+  const runSuffix = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+  const TEST_UID = `test_uid_alpha_${runSuffix}`;
+  const OTHER_UID = `test_uid_beta_${runSuffix}`;
+
   // -------------------------------------------------------------------------
   // 1. SQLite Storage & Candle Window Queries
   // -------------------------------------------------------------------------
@@ -85,12 +89,12 @@ async function runTests() {
   // -------------------------------------------------------------------------
   // 2. Paper Broker Account Initialization, Reset & Bid/Ask Spread Quotes
   // -------------------------------------------------------------------------
-  const initialAcc = await paperBrokerService.getAccountInfo();
+  const initialAcc = await paperBrokerService.getAccountInfo(TEST_UID);
   assert.equal(initialAcc.connected, true);
   assert.equal(initialAcc.mode, 'paper');
   assert.equal(initialAcc.balance, 10000);
 
-  const resetAcc = await paperBrokerService.resetOrSetPaperBalance('default_trader', 25000, true);
+  const resetAcc = await paperBrokerService.resetOrSetPaperBalance(TEST_UID, 25000, true);
   assert.equal(resetAcc.balance, 25000, 'Paper balance resets cleanly to $25,000');
 
   const quote = await paperBrokerService.getSymbolQuote('EURUSD');
@@ -159,9 +163,10 @@ async function runTests() {
   // -------------------------------------------------------------------------
   // 4. Case A: FULL_TP1 Win + Balance Delta + Frozen Replay Snapshot
   // -------------------------------------------------------------------------
-  await paperBrokerService.resetOrSetPaperBalance('default_trader', 25000, true);
+  await paperBrokerService.resetOrSetPaperBalance(TEST_UID, 25000, true);
   const t0 = preBars[preBars.length - 1].time;
   const fullTpRes = await paperBrokerService.executeTrade({
+    uid: TEST_UID,
     signalId: 'sig_full_tp1',
     symbol: 'EURUSD',
     timeframe: '15m',
@@ -212,8 +217,9 @@ async function runTests() {
   // -------------------------------------------------------------------------
   // 5. Case B: SCALE_50_TP1_BE_TP2 Full Runner Win (TP1 -> BE -> TP2)
   // -------------------------------------------------------------------------
-  const balBeforeB = (await paperBrokerService.getAccountInfo()).balance;
+  const balBeforeB = (await paperBrokerService.getAccountInfo(TEST_UID)).balance;
   const scaleRes = await paperBrokerService.executeTrade({
+    uid: TEST_UID,
     signalId: 'sig_scale_tp2',
     symbol: 'EURUSD',
     timeframe: '15m',
@@ -254,7 +260,7 @@ async function runTests() {
   assert.equal(midTradeB.openVolume, 0.1);
   assert.ok(midTradeB.tp1PnlUsd > 0, 'TP1 50% PnL booked immediately');
   assert.ok(midTradeB.currentSl >= midTradeB.fillPrice!, 'Stop Loss moved to Breakeven >= fillPrice');
-  const balAfterTp1 = (await paperBrokerService.getAccountInfo()).balance;
+  const balAfterTp1 = (await paperBrokerService.getAccountInfo(TEST_UID)).balance;
   assert.ok(balAfterTp1 > balBeforeB, 'Balance increases immediately after TP1 partial close');
 
   // Bar 2 clears TP2 -> WIN_TP2
@@ -277,6 +283,7 @@ async function runTests() {
   // 6. Case C: SCALE_50_TP1_BE_TP2 TP1 Hit -> Runner Stops at BE (WIN_TP1_BE)
   // -------------------------------------------------------------------------
   const beRes = await paperBrokerService.executeTrade({
+    uid: TEST_UID,
     signalId: 'sig_scale_be',
     symbol: 'EURUSD',
     timeframe: '15m',
@@ -326,6 +333,7 @@ async function runTests() {
   // -------------------------------------------------------------------------
   const tieTime = t0 + 5400;
   const tieRes = await paperBrokerService.executeTrade({
+    uid: TEST_UID,
     signalId: 'sig_tiebreak_1m',
     symbol: 'EURUSD',
     timeframe: '15m',
@@ -402,6 +410,7 @@ async function runTests() {
   // -------------------------------------------------------------------------
   const pendStart = tieTime + 900;
   const limitRes = await paperBrokerService.executeTrade({
+    uid: TEST_UID,
     signalId: 'sig_limit_expire',
     symbol: 'EURUSD',
     timeframe: '15m',
@@ -436,9 +445,10 @@ async function runTests() {
   assert.equal(expiredTrade.fillPrice, null, 'Expired limit order never records a fillPrice');
 
   // -------------------------------------------------------------------------
-  // 9. Offline Replay Controller & Express Replay/Execution Routes
+  // 9. Offline Replay Controller & Express Replay/Execution Routes (Per-User Isolation)
   // -------------------------------------------------------------------------
   const stepStatus = await offlineReplayController.stepReplay(3, {
+    uid: TEST_UID,
     symbols: ['EURUSD', 'XAUUSD'],
     timeframe: '15m',
   });
@@ -451,17 +461,64 @@ async function runTests() {
   const baseUrl = `http://127.0.0.1:${addr.port}`;
 
   try {
-    const tradesResp = await fetch(`${baseUrl}/api/execution/trades`);
+    // Unauthenticated user-scoped endpoints must fail closed with 401
+    const unauthTradesResp = await fetch(`${baseUrl}/api/execution/trades`);
+    assert.equal(unauthTradesResp.status, 401, 'Unauthenticated /api/execution/trades returns 401');
+
+    const unauthAccountResp = await fetch(`${baseUrl}/api/paper/account`);
+    assert.equal(unauthAccountResp.status, 401, 'Unauthenticated /api/paper/account returns 401');
+
+    const unauthCtxResp = await fetch(`${baseUrl}/api/trading-context`);
+    assert.equal(unauthCtxResp.status, 401, 'Unauthenticated /api/trading-context returns 401');
+
+    const unauthJournalResp = await fetch(`${baseUrl}/api/journal`);
+    assert.equal(unauthJournalResp.status, 401, 'Unauthenticated /api/journal returns 401');
+
+    // Global market quotes stay accessible without auth
+    const quotesResp = await fetch(`${baseUrl}/api/paper/quotes`);
+    assert.equal(quotesResp.status, 200, 'Public /api/paper/quotes returns 200');
+    const quotesJson = (await quotesResp.json()) as any;
+    assert.equal(quotesJson.ok, true);
+    assert.ok(Array.isArray(quotesJson.quotes));
+
+    // Authenticated requests for test_uid_alpha
+    const alphaHeaders = { 'X-Traxo-Uid': TEST_UID };
+    const tradesResp = await fetch(`${baseUrl}/api/execution/trades`, { headers: alphaHeaders });
     assert.equal(tradesResp.status, 200);
     const tradesJson = (await tradesResp.json()) as any;
     assert.equal(tradesJson.ok, true);
     assert.ok(Array.isArray(tradesJson.trades) && tradesJson.trades.length >= 4);
 
-    const replayResp = await fetch(`${baseUrl}/api/execution/trades/${tradeA.id}/replay`);
+    const replayResp = await fetch(`${baseUrl}/api/execution/trades/${tradeA.id}/replay`, {
+      headers: alphaHeaders,
+    });
     assert.equal(replayResp.status, 200);
     const replayJson = (await replayResp.json()) as any;
     assert.equal(replayJson.ok, true);
     assert.ok(replayJson.replay.candles.length >= 60);
+
+    const autoTradeResp = await fetch(`${baseUrl}/api/paper/auto-trade`, { headers: alphaHeaders });
+    assert.equal(autoTradeResp.status, 200);
+    const autoTradeJson = (await autoTradeResp.json()) as any;
+    assert.equal(autoTradeJson.autoTradeEnabled, false, 'Auto-trade defaults OFF for new users');
+
+    // Second user test_uid_beta must remain completely isolated at $10,000 with 0 trades
+    const betaHeaders = { 'X-Traxo-Uid': OTHER_UID };
+    const betaAccountResp = await fetch(`${baseUrl}/api/paper/account`, { headers: betaHeaders });
+    assert.equal(betaAccountResp.status, 200);
+    const betaAccountJson = (await betaAccountResp.json()) as any;
+    assert.equal(betaAccountJson.balance, 10000, 'Second user starts isolated at $10,000 balance');
+
+    const betaTradesResp = await fetch(`${baseUrl}/api/paper/trades`, { headers: betaHeaders });
+    assert.equal(betaTradesResp.status, 200);
+    const betaTradesJson = (await betaTradesResp.json()) as any;
+    assert.equal(betaTradesJson.ok, true);
+    assert.equal(betaTradesJson.trades.length, 0, 'Second user has 0 trades and sees no alpha trades');
+
+    const crossReplayResp = await fetch(`${baseUrl}/api/execution/trades/${tradeA.id}/replay`, {
+      headers: betaHeaders,
+    });
+    assert.equal(crossReplayResp.status, 404, 'Cross-user trade replay lookup is blocked with 404');
 
     const statusResp = await fetch(`${baseUrl}/api/replay/status`);
     assert.equal(statusResp.status, 200);
@@ -509,7 +566,7 @@ async function runTests() {
   assert.equal(restoredTrades.length, 1);
   const restoredAcc = await paperBrokerService.getAccountInfo(testBackupUid);
   assert.equal(restoredAcc.balance, 18500);
-  await backupRedis.del(`backup:traxo:paper_state:${testBackupUid}`).catch(() => {});
+  await backupRedis.del(`backup:traxo:paper_v2:${testBackupUid}`).catch(() => {});
 
   // -------------------------------------------------------------------------
   // 11. Duplicate / Multi-Click Execution Protection

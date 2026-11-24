@@ -2,15 +2,21 @@ import crypto from 'crypto';
 import {
   calculateSpreadPips,
   getInstrumentSpec,
+  getScannableInstruments,
   normalizeSymbol,
   roundToDigits,
 } from '../../config/instruments';
+import { isValidUserUid, sanitizeUid } from '../auth/requestAuth';
 import type { MarketCandle } from '../market-data/marketDataService';
 import redis from '../market-data/redisClient';
-import { schedulePaperCloudBackup } from '../storage/paperCloudBackup';
+import {
+  ensureUserPaperHydrated,
+  schedulePaperCloudBackup,
+} from '../storage/paperCloudBackup';
 import {
   getDb,
   getLatestArchivedCandle,
+  getUserPaperSettings,
   normalizeCanonicalTimeframe,
   queryCandles,
 } from '../storage/sqliteDb';
@@ -23,6 +29,7 @@ import {
   type ExecuteTradeParams,
   type ExecuteTradeResult,
   type IExecutionBroker,
+  type MarketQuoteRow,
   type PaperAccountRecord,
   type PaperTradeRecord,
   type SymbolQuoteResponse,
@@ -36,7 +43,23 @@ import {
   mapTradeRowToRecord,
 } from './tradeResolutionEngine';
 
-const DEFAULT_UID = 'default_trader';
+const INSTRUMENT_DISPLAY_NAMES: Record<string, string> = {
+  EURUSD: 'Euro / US Dollar',
+  GBPUSD: 'British Pound / US Dollar',
+  AUDUSD: 'Australian Dollar / US Dollar',
+  USDCAD: 'US Dollar / Canadian Dollar',
+  USDJPY: 'US Dollar / Japanese Yen',
+  XAUUSD: 'Gold Spot / US Dollar',
+  MNQ: 'Micro E-mini Nasdaq-100',
+};
+
+function assertValidUid(uid: unknown): string {
+  const sanitized = sanitizeUid(uid);
+  if (!isValidUserUid(sanitized)) {
+    throw new Error('Valid Firebase user UID is required');
+  }
+  return sanitized;
+}
 
 function mapAccountRow(row: any): PaperAccountRecord {
   return {
@@ -71,20 +94,26 @@ export class PaperBrokerService implements IExecutionBroker {
   private readonly inFlightOrderKeys = new Set<string>();
   private readonly recentOrderTimestamps = new Map<string, number>();
 
-  async ensureAccount(uid = DEFAULT_UID): Promise<PaperAccountRecord> {
+  async ensureAccount(uid: string): Promise<PaperAccountRecord> {
+    const resolvedUid = assertValidUid(uid);
     const db = getDb();
-    const existing = db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(uid);
+    const existing = db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(resolvedUid);
     if (existing) {
       return mapAccountRow(existing);
     }
 
     let startingBalance = 10_000;
     try {
-      const cached = await redis.get(`trading_context:${uid}`).catch(() => null);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (typeof parsed.accountBalance === 'number' && parsed.accountBalance > 0) {
-          startingBalance = parsed.accountBalance;
+      const savedSettings = getUserPaperSettings(resolvedUid);
+      if (savedSettings && typeof savedSettings.accountBalance === 'number' && savedSettings.accountBalance > 0) {
+        startingBalance = savedSettings.accountBalance;
+      } else {
+        const cached = await redis.get(`trading_context:${resolvedUid}`).catch(() => null);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (typeof parsed.accountBalance === 'number' && parsed.accountBalance > 0) {
+            startingBalance = parsed.accountBalance;
+          }
         }
       }
     } catch {}
@@ -95,9 +124,9 @@ export class PaperBrokerService implements IExecutionBroker {
         uid, starting_balance, balance, equity, used_margin, free_margin,
         floating_pnl, realized_pnl, peak_equity, max_drawdown_pct, currency, leverage, updated_at
       ) VALUES (?, ?, ?, ?, 0, ?, 0, 0, ?, 0, 'USD', 100, ?)
-    `).run(uid, startingBalance, startingBalance, startingBalance, startingBalance, startingBalance, now);
+    `).run(resolvedUid, startingBalance, startingBalance, startingBalance, startingBalance, startingBalance, now);
 
-    const created = db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(uid);
+    const created = db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(resolvedUid);
     return mapAccountRow(created);
   }
 
@@ -126,20 +155,22 @@ export class PaperBrokerService implements IExecutionBroker {
     });
   }
 
-  hasTradeForSignal(signalId: string, uid = DEFAULT_UID): boolean {
+  hasTradeForSignal(signalId: string, uid: string): boolean {
+    const resolvedUid = assertValidUid(uid);
     const cleanId = String(signalId || '').trim();
     if (!cleanId) return false;
     const db = getDb();
     return Boolean(
       db
         .prepare("SELECT 1 FROM paper_trades WHERE uid = ? AND signal_id = ? AND status NOT IN ('CANCELLED') LIMIT 1")
-        .get(uid, cleanId)
+        .get(resolvedUid, cleanId)
     );
   }
 
-  recalculateAccountMetrics(uid = DEFAULT_UID): PaperAccountRecord {
+  recalculateAccountMetrics(uid: string): PaperAccountRecord {
+    const resolvedUid = assertValidUid(uid);
     const db = getDb();
-    const row = db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(uid);
+    const row = db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(resolvedUid);
     if (!row) {
       const now = Date.now();
       db.prepare(`
@@ -147,13 +178,13 @@ export class PaperBrokerService implements IExecutionBroker {
           uid, starting_balance, balance, equity, used_margin, free_margin,
           floating_pnl, realized_pnl, peak_equity, max_drawdown_pct, currency, leverage, updated_at
         ) VALUES (?, 10000, 10000, 10000, 0, 10000, 0, 0, 10000, 0, 'USD', 100, ?)
-      `).run(uid, now);
+      `).run(resolvedUid, now);
     }
-    const acc = mapAccountRow(db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(uid));
+    const acc = mapAccountRow(db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(resolvedUid));
 
     const openRows = db
       .prepare(`SELECT * FROM paper_trades WHERE uid = ? AND status IN ('OPEN', 'PARTIAL_TP1')`)
-      .all(uid);
+      .all(resolvedUid);
 
     let floatingPnl = 0;
     let usedMargin = 0;
@@ -180,7 +211,7 @@ export class PaperBrokerService implements IExecutionBroker {
 
     const realizedRow = db
       .prepare(`SELECT COALESCE(SUM(realized_pnl_usd), 0) AS total_realized FROM paper_trades WHERE uid = ?`)
-      .get(uid);
+      .get(resolvedUid);
     const realizedPnl = Number(Number(realizedRow?.total_realized || 0).toFixed(2));
     const balance = Number((acc.startingBalance + realizedPnl).toFixed(2));
     const equity = Number((balance + floatingPnl).toFixed(2));
@@ -205,26 +236,27 @@ export class PaperBrokerService implements IExecutionBroker {
       peakEquity,
       maxDrawdownPct,
       now,
-      uid
+      resolvedUid
     );
 
-    return mapAccountRow(db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(uid));
+    return mapAccountRow(db.prepare('SELECT * FROM paper_accounts WHERE uid = ?').get(resolvedUid));
   }
 
   async resetOrSetPaperBalance(
-    uid = DEFAULT_UID,
+    uid: string,
     balanceUsd: number,
     clearTrades = false
   ): Promise<PaperAccountRecord> {
+    const resolvedUid = assertValidUid(uid);
     const cleanBal = Math.max(100, Number(balanceUsd) || 10_000);
-    await this.ensureAccount(uid);
+    await this.ensureAccount(resolvedUid);
     const db = getDb();
 
     if (clearTrades) {
-      db.prepare('DELETE FROM trade_replay_snapshots WHERE trade_id IN (SELECT id FROM paper_trades WHERE uid = ?)').run(uid);
-      db.prepare('DELETE FROM paper_trades WHERE uid = ?').run(uid);
+      db.prepare('DELETE FROM trade_replay_snapshots WHERE trade_id IN (SELECT id FROM paper_trades WHERE uid = ?)').run(resolvedUid);
+      db.prepare('DELETE FROM paper_trades WHERE uid = ?').run(resolvedUid);
       for (const key of this.recentOrderTimestamps.keys()) {
-        if (key.startsWith(`${uid}::`)) {
+        if (key.startsWith(`${resolvedUid}::`)) {
           this.recentOrderTimestamps.delete(key);
         }
       }
@@ -236,31 +268,34 @@ export class PaperBrokerService implements IExecutionBroker {
       SET starting_balance = ?, balance = ?, equity = ?, used_margin = 0, free_margin = ?,
           floating_pnl = 0, realized_pnl = ?, peak_equity = ?, max_drawdown_pct = 0, updated_at = ?
       WHERE uid = ?
-    `).run(cleanBal, cleanBal, cleanBal, cleanBal, clearTrades ? 0 : 0, cleanBal, now, uid);
+    `).run(cleanBal, cleanBal, cleanBal, cleanBal, 0, cleanBal, now, resolvedUid);
 
     try {
-      const existingCtx = await redis.get(`trading_context:${uid}`).catch(() => null);
+      const existingCtx = await redis.get(`trading_context:${resolvedUid}`).catch(() => null);
       const parsed = existingCtx ? JSON.parse(existingCtx) : {};
       await redis.set(
-        `trading_context:${uid}`,
+        `trading_context:${resolvedUid}`,
         JSON.stringify({ ...parsed, accountBalance: cleanBal })
       );
     } catch {}
 
-    const rec = this.recalculateAccountMetrics(uid);
+    const rec = this.recalculateAccountMetrics(resolvedUid);
     this.broadcastAccountUpdate(rec);
-    schedulePaperCloudBackup(uid);
+    schedulePaperCloudBackup(resolvedUid);
     return rec;
   }
 
-  async getAccountInfo(uid = DEFAULT_UID): Promise<Record<string, any>> {
-    await this.ensureAccount(uid);
-    const acc = this.recalculateAccountMetrics(uid);
+  async getAccountInfo(uid: string): Promise<Record<string, any>> {
+    const resolvedUid = assertValidUid(uid);
+    await ensureUserPaperHydrated(resolvedUid).catch(() => {});
+    await this.ensureAccount(resolvedUid);
+    const acc = this.recalculateAccountMetrics(resolvedUid);
     return {
       connected: true,
       mode: 'paper',
       state: 'CONNECTED',
       platform: 'TRAXO PAPER',
+      uid: acc.uid,
       balance: acc.balance,
       equity: acc.equity,
       margin: acc.usedMargin,
@@ -345,8 +380,85 @@ export class PaperBrokerService implements IExecutionBroker {
     };
   }
 
+  async getAllInstrumentQuotes(): Promise<MarketQuoteRow[]> {
+    const instruments = getScannableInstruments();
+    const nowSec = Math.floor(Date.now() / 1000);
+    const dayAgoSec = nowSec - 86_400;
+
+    const rows: MarketQuoteRow[] = [];
+    for (const spec of instruments) {
+      const sym = spec.symbol;
+      const quote = await this.getSymbolQuote(sym);
+      let bars = queryCandles({
+        symbol: sym,
+        timeframe: '1h',
+        fromTime: dayAgoSec,
+        limit: 48,
+      });
+      if (!bars.length) {
+        bars = queryCandles({
+          symbol: sym,
+          timeframe: '15m',
+          fromTime: dayAgoSec,
+          limit: 96,
+        });
+      }
+
+      let dayOpen: number | null = null;
+      let dayHigh: number | null = null;
+      let dayLow: number | null = null;
+      let changePct: number | null = null;
+
+      if (bars.length > 0) {
+        dayOpen = bars[0].open;
+        dayHigh = Math.max(...bars.map((b) => b.high));
+        dayLow = Math.min(...bars.map((b) => b.low));
+        const currentRef = quote.mid ?? bars[bars.length - 1].close;
+        if (dayOpen > 0 && Number.isFinite(currentRef)) {
+          changePct = Number((((currentRef - dayOpen) / dayOpen) * 100).toFixed(2));
+        }
+      } else {
+        const latest = getLatestArchivedCandle(sym);
+        if (latest) {
+          dayOpen = latest.open;
+          dayHigh = latest.high;
+          dayLow = latest.low;
+          const currentRef = quote.mid ?? latest.close;
+          if (dayOpen > 0 && Number.isFinite(currentRef)) {
+            changePct = Number((((currentRef - dayOpen) / dayOpen) * 100).toFixed(2));
+          }
+        }
+      }
+
+      const quoteAssetType: MarketQuoteRow['assetType'] =
+        spec.assetType === 'FUTURES'
+          ? 'FUTURES'
+          : spec.category === 'metals' || spec.assetType === 'COMMODITY'
+          ? 'METAL'
+          : 'FOREX';
+
+      rows.push({
+        symbol: sym,
+        name: INSTRUMENT_DISPLAY_NAMES[sym] || sym,
+        assetType: quoteAssetType,
+        digits: spec.digits,
+        pipSize: spec.pipSize,
+        bid: quote.bid,
+        ask: quote.ask,
+        mid: quote.mid,
+        spreadPips: quote.spreadPips,
+        dayOpen: dayOpen !== null ? (roundToDigits(dayOpen, spec.digits) ?? dayOpen) : null,
+        dayHigh: dayHigh !== null ? (roundToDigits(dayHigh, spec.digits) ?? dayHigh) : null,
+        dayLow: dayLow !== null ? (roundToDigits(dayLow, spec.digits) ?? dayLow) : null,
+        changePct,
+        timestamp: quote.timestamp ?? null,
+      });
+    }
+    return rows;
+  }
+
   async executeTrade(params: ExecuteTradeParams): Promise<ExecuteTradeResult> {
-    const uid = params.uid || DEFAULT_UID;
+    const uid = assertValidUid(params.uid);
     const canonical = normalizeSymbol(params.symbol);
     const spec = getInstrumentSpec(canonical);
     const actionUpper = String(params.action || '').toUpperCase();
@@ -653,11 +765,12 @@ export class PaperBrokerService implements IExecutionBroker {
     return row ? mapTradeRowToRecord(row) : null;
   }
 
-  async getOpenPositions(uid = DEFAULT_UID): Promise<any[]> {
+  async getOpenPositions(uid: string): Promise<any[]> {
+    const resolvedUid = assertValidUid(uid);
     const db = getDb();
     const rows = db
       .prepare(`SELECT * FROM paper_trades WHERE uid = ? AND status IN ('OPEN', 'PARTIAL_TP1') ORDER BY created_at DESC`)
-      .all(uid);
+      .all(resolvedUid);
 
     const results: any[] = [];
     for (const r of rows) {
@@ -704,11 +817,12 @@ export class PaperBrokerService implements IExecutionBroker {
     return results;
   }
 
-  async getOpenOrders(uid = DEFAULT_UID): Promise<any[]> {
+  async getOpenOrders(uid: string): Promise<any[]> {
+    const resolvedUid = assertValidUid(uid);
     const db = getDb();
     const rows = db
       .prepare(`SELECT * FROM paper_trades WHERE uid = ? AND status = 'PENDING' ORDER BY created_at DESC`)
-      .all(uid);
+      .all(resolvedUid);
 
     return rows.map((r: any) => {
       const t = mapTradeRowToRecord(r);
@@ -732,18 +846,22 @@ export class PaperBrokerService implements IExecutionBroker {
 
   async closePosition(
     positionId: string,
-    exitPriceOverride?: number
+    exitPriceOverride?: number,
+    expectedUid?: string
   ): Promise<{ success: boolean; result?: any; error?: string }> {
     const db = getDb();
     const existing = this.getTradeById(positionId);
     if (!existing) {
       return { success: false, error: `Paper trade '${positionId}' not found` };
     }
+    if (expectedUid && existing.uid !== assertValidUid(expectedUid)) {
+      return { success: false, error: `Paper trade '${positionId}' does not belong to this user` };
+    }
     if (isTerminalPaperStatus(existing.status)) {
       return { success: false, error: `Paper trade '${positionId}' is already closed (${existing.status})` };
     }
     if (existing.status === 'PENDING') {
-      return this.cancelOrder(positionId);
+      return this.cancelOrder(positionId, expectedUid);
     }
 
     const quote = await this.getSymbolQuote(existing.symbol);
@@ -814,11 +932,17 @@ export class PaperBrokerService implements IExecutionBroker {
     return { success: true, result: updated };
   }
 
-  async cancelOrder(orderId: string): Promise<{ success: boolean; result?: any; error?: string }> {
+  async cancelOrder(
+    orderId: string,
+    expectedUid?: string
+  ): Promise<{ success: boolean; result?: any; error?: string }> {
     const db = getDb();
     const existing = this.getTradeById(orderId);
     if (!existing) {
       return { success: false, error: `Paper order '${orderId}' not found` };
+    }
+    if (expectedUid && existing.uid !== assertValidUid(expectedUid)) {
+      return { success: false, error: `Paper order '${orderId}' does not belong to this user` };
     }
     if (existing.status !== 'PENDING') {
       return { success: false, error: `Order '${orderId}' is not pending (${existing.status})` };
@@ -850,9 +974,10 @@ export class PaperBrokerService implements IExecutionBroker {
     return { success: true, result: updated };
   }
 
-  getAllTrades(uid = DEFAULT_UID, statusFilter?: string, limit = 200): PaperTradeRecord[] {
+  getAllTrades(uid: string, statusFilter?: string, limit = 200): PaperTradeRecord[] {
+    const resolvedUid = assertValidUid(uid);
     const db = getDb();
-    const args: Array<string | number> = [uid];
+    const args: Array<string | number> = [resolvedUid];
     let filterSql = '';
     if (statusFilter && statusFilter !== 'ALL') {
       if (statusFilter === 'ACTIVE') {
@@ -874,7 +999,8 @@ export class PaperBrokerService implements IExecutionBroker {
     return rows.map(mapTradeRowToRecord);
   }
 
-  getClosedTrades(uid = DEFAULT_UID, limit = 100): PaperTradeRecord[] {
+  getClosedTrades(uid: string, limit = 100): PaperTradeRecord[] {
+    const resolvedUid = assertValidUid(uid);
     const db = getDb();
     const rows = db
       .prepare(
@@ -882,7 +1008,7 @@ export class PaperBrokerService implements IExecutionBroker {
          WHERE uid = ? AND status IN ('WIN_TP1', 'WIN_TP2', 'WIN_TP1_BE', 'LOSS_SL', 'CLOSED_MANUAL', 'EXPIRED', 'CANCELLED')
          ORDER BY COALESCE(closed_at, created_at) DESC LIMIT ?`
       )
-      .all(uid, Math.min(1000, Math.max(1, limit)));
+      .all(resolvedUid, Math.min(1000, Math.max(1, limit)));
     return rows.map(mapTradeRowToRecord);
   }
 
@@ -1080,7 +1206,7 @@ export class PaperBrokerService implements IExecutionBroker {
     return { updatedTrades, newlyClosedTrades, tp1ScaledTrades };
   }
 
-  getPerformanceSummary(uid = DEFAULT_UID): {
+  getPerformanceSummary(uid: string): {
     account: PaperAccountRecord;
     totalTrades: number;
     openCount: number;
@@ -1096,8 +1222,9 @@ export class PaperBrokerService implements IExecutionBroker {
     netRealizedUsd: number;
     netReturnPct: number;
   } {
+    const resolvedUid = assertValidUid(uid);
     const db = getDb();
-    const rows = db.prepare('SELECT * FROM paper_trades WHERE uid = ?').all(uid);
+    const rows = db.prepare('SELECT * FROM paper_trades WHERE uid = ?').all(resolvedUid);
     const trades = rows.map(mapTradeRowToRecord);
 
     let openCount = 0;
@@ -1145,7 +1272,7 @@ export class PaperBrokerService implements IExecutionBroker {
         ? 'INF'
         : '0.00';
 
-    const account = this.recalculateAccountMetrics(uid);
+    const account = this.recalculateAccountMetrics(resolvedUid);
     const netRealizedUsd = account.realizedPnl;
     const netReturnPct =
       account.startingBalance > 0

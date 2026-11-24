@@ -38,10 +38,18 @@ function mapFirebaseUser(u: FirebaseUser | null, profile?: Partial<User> | null)
   }
 }
 
+async function bindTradingContextOwner(uid: string | null) {
+  try {
+    const { useTradingContextStore } = await import('@/stores/useTradingContextStore')
+    useTradingContextStore.getState().bindOwnerUid(uid)
+  } catch { /* non-fatal */ }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => {
   // subscribe to firebase auth state
   onAuthStateChanged(auth, async (fu) => {
     if (fu) {
+      await bindTradingContextOwner(fu.uid)
       const token = await fu.getIdToken()
       try {
         const { getDoc, doc } = await import('firebase/firestore')
@@ -70,6 +78,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       } catch { /* non-fatal */ }
     } else {
       set({ user: null, isAuthenticated: false, idToken: null, isLoading: false })
+      await bindTradingContextOwner(null)
       try {
         const { useOnboardingStore } = await import('@/stores/useOnboardingStore')
         useOnboardingStore.getState().setUid(null)
@@ -118,6 +127,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
           console.warn('Failed to write user profile to Firestore', err)
         }
 
+        await bindTradingContextOwner(fu?.uid ?? null)
         set({ user: mapFirebaseUser(fu), isAuthenticated: true, idToken: token, isLoading: false })
       } catch (error) {
         set({ isLoading: false })
@@ -162,6 +172,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const res = await signInWithEmailAndPassword(auth, email, password)
         const fu = res.user
         const token = await fu.getIdToken()
+        await bindTradingContextOwner(fu.uid)
         try {
           const { getDoc, doc } = await import('firebase/firestore')
           const snapshot = await getDoc(doc(db, 'users', fu.uid))
@@ -198,6 +209,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const res = await signInWithPopup(auth, provider)
         const fu = res.user
         const token = await fu.getIdToken()
+        await bindTradingContextOwner(fu.uid)
         try {
           const { getDoc, doc } = await import('firebase/firestore')
           const snapshot = await getDoc(doc(db, 'users', fu.uid))
@@ -220,6 +232,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     logout: async () => {
       set({ isLoading: true })
       await fbSignOut(auth)
+      await bindTradingContextOwner(null)
       set({ user: null, isAuthenticated: false, onboardingComplete: false, idToken: null, isLoading: false })
       try {
         const { useNotificationStore } = await import('@/stores/useNotificationStore')

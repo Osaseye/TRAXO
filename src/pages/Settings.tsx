@@ -19,8 +19,9 @@ import {
   type ChartSymbol,
   type ChartTimeframe,
 } from '@/stores/useTradingContextStore'
-import { useMetaApi } from '@/hooks/useMetaApi'
+import { usePaperBroker } from '@/hooks/usePaperBroker'
 import { getTradingContext, postTradingContext } from '@/lib/api'
+import { useAuthStore } from '@/stores/useAuthStore'
 import { showToast } from '@/stores/useToastStore'
 import { cn } from '@/lib/utils'
 
@@ -47,38 +48,6 @@ const ALLOWED_CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'metals', label: 'Gold (XAU/USD)' },
   { id: 'indices', label: 'Futures (MNQ)' },
 ]
-
-const BROKER_STORAGE_KEY = 'traxo-broker-desk-config'
-
-interface BrokerDeskConfig {
-  platform: 'exness-mt5' | 'exness-mt4' | 'custom-mt5'
-  loginId: string
-  serverName: string
-  executionMode: 'market' | 'limit'
-}
-
-function loadBrokerDeskConfig(): BrokerDeskConfig {
-  try {
-    const raw = localStorage.getItem(BROKER_STORAGE_KEY)
-    if (raw) {
-      return {
-        platform: 'exness-mt5',
-        loginId: '',
-        serverName: 'Exness-MT5Real',
-        executionMode: 'market',
-        ...JSON.parse(raw),
-      }
-    }
-  } catch {
-    // ignore storage parse failures
-  }
-  return {
-    platform: 'exness-mt5',
-    loginId: '',
-    serverName: 'Exness-MT5Real',
-    executionMode: 'market',
-  }
-}
 
 function playTestChime() {
   try {
@@ -145,13 +114,14 @@ type SettingsSectionTab = 'all' | 'broker' | 'risk' | 'engines' | 'alerts'
 
 const SETTINGS_MOBILE_TABS: Array<{ id: SettingsSectionTab; label: string }> = [
   { id: 'all', label: 'All Settings' },
-  { id: 'broker', label: 'Exness MT5' },
+  { id: 'broker', label: 'Paper Account' },
   { id: 'risk', label: 'Risk Guardrails' },
   { id: 'engines', label: 'Engines' },
   { id: 'alerts', label: 'Alerts & Audio' },
 ]
 
 export default function Settings() {
+  const activeUid = useAuthStore((s) => s.user?.id ?? null)
   const selectedStrategyId = useOnboardingStore((s) => s.selectedStrategyId)
   const selectedStrategyIds = useOnboardingStore((s) => s.selectedStrategyIds)
   const setSelectedStrategies = useOnboardingStore((s) => s.setSelectedStrategies)
@@ -209,19 +179,21 @@ export default function Settings() {
   const toggleNotifStrategyFilter = useTradingContextStore((s) => s.toggleNotifStrategyFilter)
 
   const {
-    account: metaAccount,
-    positions: metaPositions,
+    account: paperAccount,
+    positions: paperPositions,
     autoTradeEnabled,
-    loading: metaLoading,
+    loading: paperLoading,
     toggleAutoTrade,
+    resetPaperBalance,
     refreshAccount,
     refreshPositions,
-  } = useMetaApi()
+  } = usePaperBroker()
 
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default')
   const [maxConsecutiveLossCap, setMaxConsecutiveLossCap] = useState<number>(3)
-  const [brokerConfig, setBrokerConfig] = useState<BrokerDeskConfig>(loadBrokerDeskConfig)
-  const [brokerSavedToast, setBrokerSavedToast] = useState(false)
+  const [capitalInput, setCapitalInput] = useState<string>('10000')
+  const [clearPaperLedger, setClearPaperLedger] = useState<boolean>(false)
+  const [resettingPaper, setResettingPaper] = useState<boolean>(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsSavedState, setSettingsSavedState] = useState<'idle' | 'saved' | 'error'>('idle')
   const [mobileTab, setMobileTab] = useState<SettingsSectionTab>('all')
@@ -234,8 +206,9 @@ export default function Settings() {
   }, [])
 
   useEffect(() => {
+    if (!activeUid) return
     let active = true
-    getTradingContext()
+    getTradingContext(activeUid)
       .then((ctx: Record<string, unknown> | null) => {
         if (!active || !ctx || typeof ctx !== 'object') return
         if (typeof ctx.maxConsecutiveLossCap === 'number' && ctx.maxConsecutiveLossCap > 0) {
@@ -291,20 +264,40 @@ export default function Settings() {
     return () => {
       active = false
     }
-  }, [])
+  }, [activeUid])
 
-  function updateBrokerField<K extends keyof BrokerDeskConfig>(key: K, value: BrokerDeskConfig[K]) {
-    setBrokerConfig((prev) => {
-      const next = { ...prev, [key]: value }
-      try {
-        localStorage.setItem(BROKER_STORAGE_KEY, JSON.stringify(next))
-      } catch {
-        // ignore storage failures
+  async function handleApplyPaperCapital() {
+    const val = Number(capitalInput)
+    if (!Number.isFinite(val) || val < 100) {
+      showToast('Invalid Capital', 'Enter a starting capital of at least $100.', 'error')
+      return
+    }
+    setResettingPaper(true)
+    try {
+      const res = (await resetPaperBalance(val, clearPaperLedger)) as {
+        ok?: boolean
+        error?: string
       }
-      return next
-    })
-    setBrokerSavedToast(true)
-    setTimeout(() => setBrokerSavedToast(false), 1800)
+      if (res?.ok === false) {
+        throw new Error(res.error || 'Could not update paper account balance')
+      }
+      setAccountBalance(Number(val.toFixed(2)))
+      showToast(
+        'Paper Account Updated',
+        clearPaperLedger
+          ? `Paper balance reset to ${formatCurrency(val)} and trade ledger cleared.`
+          : `Starting capital updated to ${formatCurrency(val)}.`,
+        'success',
+      )
+    } catch (err) {
+      showToast(
+        'Reset Failed',
+        err instanceof Error ? err.message : 'Could not update paper account capital.',
+        'error',
+      )
+    } finally {
+      setResettingPaper(false)
+    }
   }
 
   function handleConsecLossChange(val: number) {
@@ -404,7 +397,7 @@ export default function Settings() {
               Settings
             </h1>
             <p className="text-[13.5px] sm:text-[14px] text-[#A1A1AA]">
-              Configure Exness MT5 connectivity, execution guardrails, active engines, and alert routing.
+              Configure your TRAXO Paper Broker account, execution guardrails, active engines, and alert routing.
             </p>
           </div>
 
@@ -523,7 +516,7 @@ export default function Settings() {
               </div>
               <TogglePill
                 enabled={autoTradeEnabled}
-                disabled={metaLoading}
+                disabled={paperLoading}
                 onToggle={() => void toggleAutoTrade(!autoTradeEnabled)}
                 label="Toggle Autonomous Auto-Trader"
               />
@@ -604,73 +597,66 @@ export default function Settings() {
           </div>
         </section>
 
-        {/* 1. Exness MT5 Connection */}
+        {/* 1. Paper Broker Account */}
         <section className={cn('space-y-3', !showSection('broker') && 'hidden md:block')}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-[17px] sm:text-[18px] font-semibold tracking-[-0.02em] text-[#FAFAFA]">
-                Exness MT5 Connection
+                Paper Broker Account
               </h2>
               <p className="text-[13px] text-[#71717A]">
-                RPC terminal execution bridge, auto-trade master switch, and broker telemetry.
+                Isolated virtual execution desk, live paper equity, and starting capital controls.
               </p>
             </div>
-            {brokerSavedToast && (
-              <span className="text-[12px] font-medium text-[#34D399] shrink-0">Saved locally</span>
-            )}
           </div>
 
           <div className="rounded-2xl bg-[#111113] border border-white/[0.07] divide-y divide-white/[0.06]">
-            {/* Bridge Master Row */}
+            {/* Paper Account Master Row */}
             <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-2.5 sm:space-y-1 min-w-0">
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="text-[14px] font-medium text-[#FAFAFA]">
-                    MetaApi Execution Bridge
+                    TRAXO Paper Engine
                   </span>
                   <span
                     className={cn(
                       'px-2.5 py-0.5 rounded-full text-[12px] font-medium',
-                      metaAccount?.connected
+                      paperAccount?.connected
                         ? 'bg-[#34D399]/10 text-[#34D399]'
-                        : 'bg-[#F87171]/10 text-[#F87171]',
+                        : 'bg-[#18181B] text-[#A1A1AA]',
                     )}
                   >
-                    {metaAccount?.connected ? 'Connected' : metaAccount?.state || 'Disconnected'}
+                    {paperAccount?.connected ? 'TRAXO Paper · Online' : paperAccount?.state || 'Standby'}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-x-2 text-[12.5px] sm:text-[13px] text-[#71717A]">
                   <div className="rounded-lg bg-[#161619] px-2.5 py-1.5 sm:bg-transparent sm:p-0">
                     <span className="block sm:inline text-[11px] sm:text-[13px] text-[#71717A]">Balance </span>
                     <span className="font-mono tabular-nums text-[#FAFAFA] sm:text-[#A1A1AA]">
-                      {formatCurrency(metaAccount?.balance ?? 0)}
+                      {formatCurrency(paperAccount?.balance ?? 0)}
                     </span>
                   </div>
                   <span className="hidden sm:inline">·</span>
                   <div className="rounded-lg bg-[#161619] px-2.5 py-1.5 sm:bg-transparent sm:p-0">
                     <span className="block sm:inline text-[11px] sm:text-[13px] text-[#71717A]">Equity </span>
                     <span className="font-mono tabular-nums text-[#FAFAFA] sm:text-[#A1A1AA]">
-                      {formatCurrency(metaAccount?.equity ?? 0)}
+                      {formatCurrency(paperAccount?.equity ?? 0)}
                     </span>
                   </div>
                   <span className="hidden sm:inline">·</span>
                   <div className="rounded-lg bg-[#161619] px-2.5 py-1.5 sm:bg-transparent sm:p-0">
                     <span className="block sm:inline text-[11px] sm:text-[13px] text-[#71717A]">Open </span>
                     <span className="font-mono tabular-nums text-[#FAFAFA] sm:text-[#A1A1AA]">
-                      {metaPositions.length}/{autoTradeMaxPositions}
+                      {paperPositions.length}/{autoTradeMaxPositions}
                     </span>
                   </div>
-                  {metaAccount?.leverage ? (
-                    <>
-                      <span className="hidden sm:inline">·</span>
-                      <div className="rounded-lg bg-[#161619] px-2.5 py-1.5 sm:bg-transparent sm:p-0">
-                        <span className="block sm:inline text-[11px] sm:text-[13px] text-[#71717A] sm:hidden">Leverage </span>
-                        <span className="font-mono tabular-nums text-[#FAFAFA] sm:text-[#A1A1AA]">
-                          1:{metaAccount.leverage}
-                        </span>
-                      </div>
-                    </>
-                  ) : null}
+                  <span className="hidden sm:inline">·</span>
+                  <div className="rounded-lg bg-[#161619] px-2.5 py-1.5 sm:bg-transparent sm:p-0">
+                    <span className="block sm:inline text-[11px] sm:text-[13px] text-[#71717A] sm:hidden">Leverage </span>
+                    <span className="font-mono tabular-nums text-[#FAFAFA] sm:text-[#A1A1AA]">
+                      1:{paperAccount?.leverage ?? 100}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -681,17 +667,17 @@ export default function Settings() {
                     void refreshAccount()
                     void refreshPositions()
                   }}
-                  disabled={metaLoading}
+                  disabled={paperLoading}
                   className="min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-xl bg-[#18181B] hover:bg-[#222227] text-[13px] font-medium text-[#FAFAFA] inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                 >
-                  <PiArrowsClockwise className={cn('h-4 w-4 text-[#A1A1AA]', metaLoading && 'animate-spin')} />
+                  <PiArrowsClockwise className={cn('h-4 w-4 text-[#A1A1AA]', paperLoading && 'animate-spin')} />
                   <span>Sync</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => void toggleAutoTrade(!autoTradeEnabled)}
-                  disabled={metaLoading}
+                  disabled={paperLoading}
                   className={cn(
                     'min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl text-[13px] font-medium inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50',
                     autoTradeEnabled
@@ -705,60 +691,67 @@ export default function Settings() {
               </div>
             </div>
 
-            {/* Platform */}
-            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="space-y-0.5">
-                <div className="text-[14px] font-medium text-[#FAFAFA]">Broker Platform</div>
-                <div className="text-[13px] text-[#71717A]">
-                  Select your Exness or custom MetaTrader routing terminal.
+            {/* Starting Capital / Reset Paper Account */}
+            <div className="p-4 sm:p-5 sm:px-6 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="text-[14px] font-medium text-[#FAFAFA]">
+                    Starting Capital / Reset Paper Account
+                  </div>
+                  <div className="text-[13px] text-[#71717A]">
+                    Set your virtual starting equity and optionally clear historical paper trades.
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 sm:flex items-center gap-1.5">
+                  {[10000, 25000, 50000, 100000].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setCapitalInput(String(preset))}
+                      className={cn(
+                        'min-h-[38px] sm:min-h-0 px-2.5 py-1.5 sm:py-1 rounded-lg text-[12px] font-mono tabular-nums transition-colors',
+                        Number(capitalInput) === preset
+                          ? 'bg-[#FAFAFA] text-[#09090B] font-semibold'
+                          : 'bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]',
+                      )}
+                    >
+                      ${(preset / 1000).toFixed(0)}k
+                    </button>
+                  ))}
                 </div>
               </div>
-              <select
-                value={brokerConfig.platform}
-                onChange={(e) =>
-                  updateBrokerField('platform', e.target.value as BrokerDeskConfig['platform'])
-                }
-                aria-label="Broker Platform"
-                className="w-full sm:w-56 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] text-[#FAFAFA] outline-none focus:border-white/[0.2]"
-              >
-                <option value="exness-mt5">Exness MT5</option>
-                <option value="exness-mt4">Exness MT4</option>
-                <option value="custom-mt5">Custom MT5 Server</option>
-              </select>
-            </div>
 
-            {/* Login ID */}
-            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="space-y-0.5">
-                <div className="text-[14px] font-medium text-[#FAFAFA]">Account Login ID</div>
-                <div className="text-[13px] text-[#71717A]">
-                  MetaTrader account identifier saved locally for terminal reference.
-                </div>
-              </div>
-              <input
-                type="text"
-                value={brokerConfig.loginId}
-                onChange={(e) => updateBrokerField('loginId', e.target.value)}
-                placeholder="MT5 Login ID"
-                className="w-full sm:w-56 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
-              />
-            </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <label className="inline-flex items-center gap-2 text-[13px] text-[#A1A1AA] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={clearPaperLedger}
+                    onChange={(e) => setClearPaperLedger(e.target.checked)}
+                    className="h-4 w-4 rounded border-white/20 bg-[#18181B] accent-[#FAFAFA]"
+                  />
+                  <span>Clear trade ledger</span>
+                </label>
 
-            {/* Broker Server */}
-            <div className="p-4 sm:p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="space-y-0.5">
-                <div className="text-[14px] font-medium text-[#FAFAFA]">Broker Server</div>
-                <div className="text-[13px] text-[#71717A]">
-                  Target Exness server cluster hostname.
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <input
+                    type="number"
+                    min={100}
+                    step={500}
+                    value={capitalInput}
+                    onChange={(e) => setCapitalInput(e.target.value)}
+                    aria-label="Paper Starting Capital USD"
+                    className="flex-1 sm:flex-none sm:w-36 min-h-[42px] sm:min-h-0 px-3 py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono tabular-nums text-[#FAFAFA] text-right outline-none focus:border-white/[0.2]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleApplyPaperCapital()}
+                    disabled={paperLoading || resettingPaper}
+                    className="min-h-[42px] sm:min-h-0 px-4 py-2 rounded-xl bg-[#FAFAFA] hover:bg-[#E4E4E7] text-[#09090B] text-[13px] font-semibold transition-colors disabled:opacity-50 shrink-0"
+                  >
+                    {resettingPaper ? 'Applying...' : 'Apply'}
+                  </button>
                 </div>
               </div>
-              <input
-                type="text"
-                value={brokerConfig.serverName}
-                onChange={(e) => updateBrokerField('serverName', e.target.value)}
-                placeholder="e.g. Exness-MT5Real14"
-                className="w-full sm:w-56 min-h-[44px] sm:min-h-0 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#18181B] border border-white/[0.07] text-[13px] font-mono text-[#FAFAFA] placeholder:text-[#71717A] outline-none focus:border-white/[0.2]"
-              />
             </div>
 
             {/* Auto-Sync Balance */}
@@ -766,7 +759,7 @@ export default function Settings() {
               <div className="space-y-0.5 min-w-0 flex-1">
                 <div className="text-[14px] font-medium text-[#FAFAFA]">Auto-Sync Balance</div>
                 <div className="text-[13px] text-[#71717A]">
-                  Continuously match sizing baseline to live Exness equity.
+                  Continuously match sizing baseline to live Paper Broker equity.
                 </div>
               </div>
               <TogglePill
@@ -899,15 +892,15 @@ export default function Settings() {
                     {formatCurrency(accountBalance)}
                   </span>
                   ).
-                  {metaAccount?.connected && typeof metaAccount.balance === 'number' && (
+                  {paperAccount?.connected && typeof paperAccount.balance === 'number' && (
                     <>
                       {' '}
                       <button
                         type="button"
-                        onClick={() => setAccountBalance(Number(metaAccount.balance?.toFixed(2)))}
+                        onClick={() => setAccountBalance(Number(paperAccount.balance?.toFixed(2)))}
                         className="text-[#34D399] hover:underline font-medium"
                       >
-                        Sync {formatCurrency(metaAccount.balance)}
+                        Sync {formatCurrency(paperAccount.balance)}
                       </button>
                     </>
                   )}
@@ -1025,7 +1018,7 @@ export default function Settings() {
                   Minimum Confidence (Rule A.1)
                 </div>
                 <div className="text-[13px] text-[#71717A]">
-                  Reject signals below this conviction score before MT5 order dispatch.
+                  Reject signals below this conviction score before Paper Broker order dispatch.
                 </div>
               </div>
               <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
@@ -1110,7 +1103,7 @@ export default function Settings() {
                   Max Open Positions (Rule B.4)
                 </div>
                 <div className="text-[13px] text-[#71717A]">
-                  Hard cap on simultaneous open Exness MT5 positions across all pairs.
+                  Hard cap on simultaneous open Paper Broker positions across all pairs.
                 </div>
               </div>
               <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">

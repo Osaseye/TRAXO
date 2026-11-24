@@ -1,7 +1,14 @@
+import { isValidUserUid } from '../auth/requestAuth';
+import {
+  getUserTradingConfig,
+  recordUserTradeResolutionForRisk,
+  resolveEffectiveRiskUsd,
+} from '../execution/paperAutoTraderRegistry';
+import type { PaperTradeRecord, PaperTradeStatus } from '../execution/executionBroker';
 import { firestore } from '../market-data/firebaseAdmin';
 import { processResolvedLoss, processResolvedWin } from '../optimizer/strategyOptimizer';
-import { loadGuardrailConfig, recordTradeResolutionForRisk } from '../risk/guardrails';
-import type { PaperTradeRecord, PaperTradeStatus } from '../execution/executionBroker';
+
+const JOURNAL_COLLECTION = 'journal_v2';
 
 // In-memory store per UID so auto-traded / live / manual journal writes and updates
 // never vanish if Firestore is offline or slow.
@@ -197,11 +204,18 @@ export function mapPaperTradeToJournalEntry(trade: PaperTradeRecord): Record<str
 }
 
 export async function syncPaperTradeToJournal(trade: PaperTradeRecord): Promise<Record<string, any>> {
-  const uid = trade.uid || 'default_trader';
+  const uid = trade.uid;
+  if (!isValidUserUid(uid)) {
+    throw new Error('Valid user UID is required to sync paper trade to journal');
+  }
   const entry = mapPaperTradeToJournalEntry(trade);
   getMemoryBucket(uid).set(entry.id, entry);
   try {
-    const docRef = firestore.collection('users').doc(uid).collection('journal').doc(entry.id);
+    const docRef = firestore
+      .collection('users')
+      .doc(uid)
+      .collection(JOURNAL_COLLECTION)
+      .doc(entry.id);
     await docRef.set(entry, { merge: true });
   } catch {
     // Non-fatal when Firestore unavailable — in-memory + SQLite paper_trades remain authoritative
@@ -209,7 +223,10 @@ export async function syncPaperTradeToJournal(trade: PaperTradeRecord): Promise<
   return entry;
 }
 
-export async function getJournalEntries(uid = 'default_trader'): Promise<any[]> {
+export async function getJournalEntries(uid: string): Promise<any[]> {
+  if (!isValidUserUid(uid)) {
+    return [];
+  }
   const merged = new Map<string, Record<string, any>>();
 
   // Start with in-memory entries for this UID
@@ -221,12 +238,12 @@ export async function getJournalEntries(uid = 'default_trader'): Promise<any[]> 
   }
 
   try {
-    const colRef = firestore.collection('users').doc(uid).collection('journal');
+    const colRef = firestore.collection('users').doc(uid).collection(JOURNAL_COLLECTION);
     const snap = await colRef.orderBy('createdAt', 'desc').limit(250).get();
     for (const d of snap?.docs || []) {
       const data = { id: d.id, ...d.data() };
       const existing = merged.get(d.id);
-      if (!existing || (Number((data as any).updatedAt || 0) >= Number(existing.updatedAt || 0))) {
+      if (!existing || Number((data as any).updatedAt || 0) >= Number(existing.updatedAt || 0)) {
         merged.set(d.id, data);
       }
     }
@@ -241,7 +258,7 @@ export async function getJournalEntries(uid = 'default_trader'): Promise<any[]> 
 
 export async function saveJournalEntry(body: Record<string, any>): Promise<Record<string, any>> {
   const {
-    uid = 'default_trader',
+    uid,
     id,
     suggestionKey,
     symbol,
@@ -274,7 +291,10 @@ export async function saveJournalEntry(body: Record<string, any>): Promise<Recor
     createdAt,
   } = body;
 
-  const resolvedUid = String(uid || 'default_trader').trim() || 'default_trader';
+  if (!isValidUserUid(uid)) {
+    throw new Error('Valid user UID is required to save journal entry');
+  }
+  const resolvedUid = uid;
   const entryId = String(id || tradeId || `journal-${Date.now()}`);
 
   const createdTs = normalizeCreatedAtMs(createdAt);
@@ -321,7 +341,7 @@ export async function saveJournalEntry(body: Record<string, any>): Promise<Recor
     const docRef = firestore
       .collection('users')
       .doc(resolvedUid)
-      .collection('journal')
+      .collection(JOURNAL_COLLECTION)
       .doc(entryId);
     await docRef.set(payload, { merge: true });
   } catch {
@@ -336,7 +356,7 @@ export async function updateJournalEntry(
   body: Record<string, any>
 ): Promise<{ found: boolean; entry?: Record<string, any> }> {
   const {
-    uid = 'default_trader',
+    uid,
     outcome,
     pnlUsd,
     pnlR,
@@ -346,12 +366,20 @@ export async function updateJournalEntry(
     breakEvenTriggered,
     notes,
   } = body;
-  const resolvedUid = String(uid || 'default_trader').trim() || 'default_trader';
+
+  if (!isValidUserUid(uid)) {
+    throw new Error('Valid user UID is required to update journal entry');
+  }
+  const resolvedUid = uid;
   const bucket = getMemoryBucket(resolvedUid);
   const memPrev = bucket.get(id);
 
   let fsPrev: Record<string, any> | null = null;
-  const docRef = firestore.collection('users').doc(resolvedUid).collection('journal').doc(id);
+  const docRef = firestore
+    .collection('users')
+    .doc(resolvedUid)
+    .collection(JOURNAL_COLLECTION)
+    .doc(id);
   try {
     const snap = await docRef.get();
     if (snap && snap.exists) {
@@ -382,7 +410,7 @@ export async function updateJournalEntry(
   if (breakEvenTriggered !== undefined) updates.breakEvenTriggered = Boolean(breakEvenTriggered);
   if (notes !== undefined) updates.notes = String(notes);
 
-  const merged = { ...prevData, ...updates, id };
+  const merged: Record<string, any> = { ...prevData, ...updates, id };
   bucket.set(id, merged);
 
   try {
@@ -391,18 +419,19 @@ export async function updateJournalEntry(
     // Non-fatal
   }
 
-  if (outcome === 'loss' && priorOutcome !== 'loss') {
-    const cfg = await loadGuardrailConfig().catch(() => null);
+  const isTakenTrade = merged.taken !== false;
+  if (isTakenTrade && outcome === 'loss' && priorOutcome !== 'loss') {
+    const userCfg = await getUserTradingConfig(resolvedUid).catch(() => null);
+    const fallbackRisk = userCfg ? resolveEffectiveRiskUsd(userCfg) : 50;
     processResolvedLoss(prevData).catch(() => {});
-    recordTradeResolutionForRisk(
+    recordUserTradeResolutionForRisk(
+      resolvedUid,
       'LOSS',
-      Math.abs(Number(pnlUsd ?? prevData.riskAmount ?? cfg?.riskAmountUsd ?? 0)),
-      cfg || undefined
+      Math.abs(Number(pnlUsd ?? prevData.riskAmount ?? fallbackRisk))
     ).catch(() => {});
-  } else if (outcome === 'win' && priorOutcome !== 'win') {
-    const cfg = await loadGuardrailConfig().catch(() => null);
+  } else if (isTakenTrade && outcome === 'win' && priorOutcome !== 'win') {
     processResolvedWin(prevData).catch(() => {});
-    recordTradeResolutionForRisk('WIN', 0, cfg || undefined).catch(() => {});
+    recordUserTradeResolutionForRisk(resolvedUid, 'WIN', 0).catch(() => {});
   }
 
   return { found: true, entry: merged };

@@ -11,7 +11,7 @@ import {
   PiWarningCircle,
   PiX,
 } from 'react-icons/pi';
-import { useMetaApi } from '@/hooks/useMetaApi';
+import { usePaperBroker } from '@/hooks/usePaperBroker';
 
 export function AutoTraderWidget() {
   const {
@@ -29,14 +29,13 @@ export function AutoTraderWidget() {
     refreshAccount,
     refreshPositions,
     closeOpenPosition,
-  } = useMetaApi();
+  } = usePaperBroker();
 
   const [showResetForm, setShowResetForm] = useState(false);
   const [balanceInput, setBalanceInput] = useState('10000');
   const [clearTrades, setClearTrades] = useState(false);
 
   const isConnected = account?.connected ?? false;
-  const isPaperMode = account?.mode === 'paper';
   const totalFloatingPnl =
     typeof account?.floatingPnl === 'number'
       ? account.floatingPnl
@@ -80,35 +79,27 @@ export function AutoTraderWidget() {
                     isConnected ? 'bg-[#34D399]' : 'bg-[#71717A]'
                   }`}
                 />
-                {isPaperMode
-                  ? 'PAPER ENGINE · ACTIVE'
-                  : isConnected
-                  ? account?.platform?.toUpperCase() || 'MT5'
-                  : 'Offline'}
+                {isConnected ? 'PAPER ENGINE · ACTIVE' : 'PAPER ENGINE · STANDBY'}
               </span>
             </div>
             <p className="text-[13px] text-[#71717A] mt-0.5">
-              {isPaperMode
-                ? 'Internal SQLite Paper Broker · Dynamic TP1/BE/TP2 Exit Engine & 1m Tie-Breaker'
-                : 'MetaApi execution bridge and live exposure monitor'}
+              Internal SQLite Paper Broker · Dynamic TP1/BE/TP2 Exit Engine &amp; 1m Tie-Breaker
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {isPaperMode && (
-            <button
-              type="button"
-              onClick={() => {
-                setBalanceInput(String(account?.balance ?? 10000));
-                setShowResetForm((v) => !v);
-              }}
-              className="h-9 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] hover:border-white/[0.16] text-[#A1A1AA] hover:text-[#FAFAFA] text-[12.5px] font-medium inline-flex items-center gap-1.5 transition-colors"
-            >
-              <PiCoins size={14} />
-              Set Balance
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              setBalanceInput(String(account?.balance ?? 10000));
+              setShowResetForm((v) => !v);
+            }}
+            className="h-9 px-3 rounded-xl bg-[#18181B] border border-white/[0.08] hover:border-white/[0.16] text-[#A1A1AA] hover:text-[#FAFAFA] text-[12.5px] font-medium inline-flex items-center gap-1.5 transition-colors"
+          >
+            <PiCoins size={14} />
+            Set Balance
+          </button>
 
           <button
             type="button"
@@ -139,7 +130,7 @@ export function AutoTraderWidget() {
 
       <div className="p-6 space-y-5">
         {/* Inline Paper Balance Configurator */}
-        {isPaperMode && showResetForm && (
+        {showResetForm && (
           <div className="rounded-xl bg-[#161619] border border-white/[0.08] p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[13px] font-medium text-[#FAFAFA]">
@@ -240,7 +231,7 @@ export function AutoTraderWidget() {
               {isConnected
                 ? `${totalFloatingPnl >= 0 ? '+' : ''}$${totalFloatingPnl.toFixed(2)}`
                 : '—'}
-              {isPaperMode && typeof account?.realizedPnl === 'number' && (
+              {typeof account?.realizedPnl === 'number' && (
                 <span className="ml-1.5 text-[11px] text-[#71717A]">
                   ({account.realizedPnl >= 0 ? '+' : ''}${account.realizedPnl.toFixed(0)} real.)
                 </span>
@@ -250,8 +241,7 @@ export function AutoTraderWidget() {
         </div>
 
         {/* Offline Bar-by-Bar Replay Tester Control */}
-        {isPaperMode && (
-          <div className="rounded-xl bg-[#161619] border border-white/[0.05] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="rounded-xl bg-[#161619] border border-white/[0.05] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-0.5 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-[12.5px] font-medium text-[#FAFAFA]">Offline Candle Replay</span>
@@ -307,7 +297,6 @@ export function AutoTraderWidget() {
               )}
             </div>
           </div>
-        )}
 
         {/* Standby / Disconnected Notice */}
         {!isConnected && (
@@ -315,7 +304,7 @@ export function AutoTraderWidget() {
             <PiWarningCircle size={16} className="text-[#71717A] shrink-0 mt-0.5" />
             <span className="leading-relaxed">
               {account?.error ||
-                'MetaApi bridge standby. Configure broker credentials on the backend to enable live MT4/MT5 order routing.'}
+                'TRAXO Paper Engine standby. Sign in to activate your isolated virtual paper trading account.'}
             </span>
           </div>
         )}
@@ -325,16 +314,16 @@ export function AutoTraderWidget() {
           <div className="rounded-xl bg-[#161619] overflow-hidden">
             <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
               <span className="text-[12px] font-medium text-[#71717A]">
-                Open {isPaperMode ? 'paper' : 'broker'} positions ({positions.length})
+                Open paper positions ({positions.length})
               </span>
               <span className="text-[12px] font-mono text-[#71717A] tabular-nums">
-                {account?.leverage ? `1:${account.leverage}` : 'MT5'}
+                1:{account?.leverage ?? 100}
               </span>
             </div>
 
             {positions.length === 0 ? (
               <div className="px-4 py-6 text-center text-[13px] text-[#71717A]">
-                No open {isPaperMode ? 'paper' : 'broker'} positions.
+                No open paper positions.
               </div>
             ) : (
               <div className="divide-y divide-white/[0.05]">

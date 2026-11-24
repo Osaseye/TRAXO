@@ -21,8 +21,8 @@ interface TopbarPaperBalance {
 }
 
 interface TopbarAccountPayload {
+  uid?: string
   connected?: boolean
-  mode?: 'paper' | 'metaapi'
   balance?: number
   equity?: number
   startingBalance?: number
@@ -55,21 +55,33 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
   const liveSignalCount = useAnalysisSignalStore(selectLiveSignalCount)
 
   const wsConnected = useSyncExternalStore(subscribeWs, getWsSnapshot, () => false)
-  const [mt5Connected, setMt5Connected] = useState<boolean>(false)
-  const [executionMode, setExecutionMode] = useState<'paper' | 'metaapi'>('paper')
+  const [paperConnected, setPaperConnected] = useState<boolean>(false)
   const [paperBalance, setPaperBalance] = useState<TopbarPaperBalance | null>(null)
 
   useEffect(() => {
     let active = true
 
-    async function checkMt5Status() {
+    if (!activeUid) {
+      const clearTimer = setTimeout(() => {
+        if (!active) return
+        setPaperConnected(false)
+        setPaperBalance(null)
+      }, 0)
+      return () => {
+        active = false
+        clearTimeout(clearTimer)
+      }
+    }
+
+    const uid = activeUid
+
+    async function checkPaperStatus() {
       try {
-        const res = await apiFetch('/api/metaapi/account')
+        const res = await apiFetch(`/api/paper/account?uid=${encodeURIComponent(uid)}`)
         if (!active) return
         if (res.ok) {
           const data = (await res.json()) as TopbarAccountPayload
-          setMt5Connected(Boolean(data?.connected))
-          setExecutionMode(data?.mode === 'metaapi' ? 'metaapi' : 'paper')
+          setPaperConnected(Boolean(data?.connected))
           if (typeof data?.balance === 'number' && Number.isFinite(data.balance)) {
             const nextBalance = data.balance
             const nextEquity =
@@ -87,29 +99,34 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
             })
           }
         } else {
-          setMt5Connected(false)
+          setPaperConnected(false)
         }
       } catch {
-        if (active) setMt5Connected(false)
+        if (active) setPaperConnected(false)
       }
     }
 
-    void checkMt5Status()
+    const initialTimer = setTimeout(() => {
+      if (!active) return
+      setPaperConnected(false)
+      setPaperBalance(null)
+      void checkPaperStatus()
+    }, 0)
+
     const timer = setInterval(() => {
-      void checkMt5Status()
+      void checkPaperStatus()
     }, 15_000)
 
     const unsubAccount = webSocketService.subscribe(
       'paper-account-updated',
       (payload?: TopbarAccountPayload) => {
         if (!active || !payload || typeof payload !== 'object') return
+        if (!payload.uid || payload.uid !== uid) return
+
         if (typeof payload.connected === 'boolean') {
-          setMt5Connected(payload.connected)
+          setPaperConnected(payload.connected)
         } else {
-          setMt5Connected(true)
-        }
-        if (payload.mode === 'metaapi' || payload.mode === 'paper') {
-          setExecutionMode(payload.mode)
+          setPaperConnected(true)
         }
         setPaperBalance((prev) => {
           const nextBalance =
@@ -136,6 +153,7 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
 
     return () => {
       active = false
+      clearTimeout(initialTimer)
       clearInterval(timer)
       unsubAccount()
     }
@@ -198,28 +216,20 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
 
         <span className="hidden md:block w-px h-3.5 bg-white/[0.08]" aria-hidden="true" />
 
-        {/* MT5 & WebSocket Connection Status Dots */}
+        {/* Paper Engine & WebSocket Connection Status Dots */}
         <div className="flex items-center gap-2.5 sm:gap-3 px-1">
           <span
             className="flex items-center gap-1.5"
-            title={
-              executionMode === 'metaapi'
-                ? mt5Connected
-                  ? 'MT5 Bridge Connected'
-                  : 'MT5 Bridge Standby'
-                : mt5Connected
-                ? 'TRAXO Paper Engine Active'
-                : 'Paper Engine Standby'
-            }
+            title={paperConnected ? 'TRAXO Paper Engine Active' : 'Paper Engine Standby'}
           >
             <span
               className={cn(
                 'w-1.5 h-1.5 rounded-full shrink-0',
-                mt5Connected ? 'bg-[#34D399]' : 'bg-[#52525B]',
+                paperConnected ? 'bg-[#34D399]' : 'bg-[#52525B]',
               )}
             />
             <span className="text-[11.5px] sm:text-[12px] font-medium text-[#A1A1AA]">
-              {executionMode === 'metaapi' ? 'MT5' : 'Paper'}
+              Paper
             </span>
           </span>
 

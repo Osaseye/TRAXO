@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Time, UTCTimestamp } from 'lightweight-charts'
 import {
   PiArrowsClockwise,
+  PiArrowsDownUp,
   PiCaretDown,
   PiCaretUp,
+  PiChartLineUp,
   PiCheck,
   PiCopy,
   PiCrosshair,
@@ -11,7 +13,9 @@ import {
   PiMagnifyingGlass,
   PiRows,
   PiSidebarSimple,
+  PiSlidersHorizontal,
   PiSpinnerGap,
+  PiWallet,
   PiX,
   PiXCircle,
 } from 'react-icons/pi'
@@ -28,11 +32,13 @@ import {
   type ChartPanelManualSetup,
   type ChartPanelMarker,
 } from '@/components/dashboard/ChartPanel'
+import { MobileQuotesBoard } from '@/components/dashboard/MobileQuotesBoard'
+import { MobileTradeBook } from '@/components/dashboard/MobileTradeBook'
 import { SignalFeed } from '@/components/dashboard/SignalFeed'
 import type { DashboardSignalItem } from '@/components/dashboard/SignalCard'
 import { RiskPanel } from '@/components/dashboard/RiskPanel'
 import { StatsRow } from '@/components/dashboard/StatsRow'
-import { useMetaApi } from '@/hooks/useMetaApi'
+import { useLiveQuotes, usePaperBroker } from '@/hooks/usePaperBroker'
 import { useMarketWebSocket } from '@/hooks/useMarketWebSocket'
 import { resolveApiBaseUrl } from '@/lib/api'
 import { auth } from '@/lib/firebase'
@@ -63,27 +69,13 @@ import type { DashboardStats } from '@/types'
 type TradeAction = 'BUY' | 'SELL'
 type InspectorTab = 'setups' | 'planner' | 'risk'
 type DockTab = 'positions' | 'orders'
-type MobileView = 'chart' | 'setups' | 'order' | 'risk' | 'positions'
-
-interface PendingOrder {
-  id: string
-  symbol: string
-  type: string
-  volume: number
-  openPrice: number
-  currentPrice?: number
-  sl?: number
-  tp?: number
-  state?: string
-  comment?: string
-  time?: string
-}
+type MobileView = 'quotes' | 'chart' | 'trade' | 'setups' | 'order'
 
 interface LiveQuote {
   bid: number | null
   ask: number | null
   spreadPips: number | null
-  source: 'mt5' | 'feed'
+  source: 'paper' | 'feed'
 }
 
 interface ManualPlannerState {
@@ -222,8 +214,8 @@ function defaultPlannerLevels(
   }
 }
 
-function getDashboardActiveUid(): string {
-  return useAuthStore.getState().user?.id || auth.currentUser?.uid || 'default_trader'
+function getDashboardActiveUid(): string | null {
+  return useAuthStore.getState().user?.id || auth.currentUser?.uid || null
 }
 
 async function dashboardApiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
@@ -235,7 +227,7 @@ async function dashboardApiFetch(endpoint: string, options: RequestInit = {}): P
   const activeUid = getDashboardActiveUid()
   const headers = new Headers(options.headers)
 
-  if (!headers.has('X-Traxo-Uid')) {
+  if (activeUid && !headers.has('X-Traxo-Uid')) {
     headers.set('X-Traxo-Uid', activeUid)
   }
   if (options.body && !headers.has('Content-Type')) {
@@ -260,7 +252,6 @@ async function dashboardApiFetch(endpoint: string, options: RequestInit = {}): P
 }
 
 export default function Dashboard() {
-  const activeStoreUid = useAuthStore((s) => s.user?.id ?? null)
   const displayName = useAuthStore(
     (s) => s.user?.displayName || s.user?.fullName || s.user?.email || 'Operator'
   )
@@ -298,21 +289,23 @@ export default function Dashboard() {
 
   const {
     account,
-    positions: metaPositions,
+    positions: openPositions,
+    orders: pendingOrders,
     paperTrades,
     autoTradeEnabled,
     toggleAutoTrade,
     executeManualTrade,
     closeOpenPosition,
+    cancelPendingOrder,
     refreshPositions,
+    refreshOrders,
     refreshAccount,
-    loading: metaLoading,
-  } = useMetaApi()
+    loading: brokerLoading,
+  } = usePaperBroker()
 
-  const executionMode: 'paper' | 'metaapi' = account?.mode === 'metaapi' ? 'metaapi' : 'paper'
-  const isPaperMode = executionMode !== 'metaapi'
-  const executionVenueLabel = isPaperMode ? 'Paper Broker' : 'Broker Bridge'
-  const executionDeskBadge = isPaperMode ? 'TRAXO Paper' : 'Live Broker'
+  const executionMode = 'paper' as const
+  const executionVenueLabel = 'TRAXO Paper Engine'
+  const executionDeskBadge = 'TRAXO Paper'
 
   // Terminal UI states
   const [inspectorOpen, setInspectorOpen] = useState(true)
@@ -321,7 +314,14 @@ export default function Dashboard() {
   const [dockExpanded, setDockExpanded] = useState(true)
   const [dockTab, setDockTab] = useState<DockTab>('positions')
   const [signalScope, setSignalScope] = useState<'chart' | 'all'>('chart')
-  const [mobileView, setMobileView] = useState<MobileView>('chart')
+  const [mobileView, setMobileView] = useState<MobileView>('quotes')
+
+  const {
+    quotes: liveQuotes,
+    loading: liveQuotesLoading,
+    lastUpdatedAt: liveQuotesUpdatedAt,
+    refreshQuotes,
+  } = useLiveQuotes(mobileView === 'quotes')
 
   const handleSelectMobileView = useCallback((view: MobileView) => {
     setMobileView(view)
@@ -331,12 +331,6 @@ export default function Dashboard() {
     } else if (view === 'order') {
       setInspectorOpen(true)
       setInspectorTab('planner')
-    } else if (view === 'risk') {
-      setInspectorOpen(true)
-      setInspectorTab('risk')
-    } else if (view === 'positions') {
-      setDockVisible(true)
-      setDockExpanded(true)
     }
   }, [])
 
@@ -374,14 +368,13 @@ export default function Dashboard() {
     candlesRef.current = candles
   }, [candles])
 
-  // Live quote & pending orders
+  // Live quote state
   const [liveQuote, setLiveQuote] = useState<LiveQuote>({
     bid: null,
     ask: null,
     spreadPips: null,
     source: 'feed',
   })
-  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([])
   const [closingPosId, setClosingPosId] = useState<string | null>(null)
   const [cancelingOrderId, setCancelingOrderId] = useState<string | null>(null)
   const [executingTrade, setExecutingTrade] = useState(false)
@@ -576,10 +569,10 @@ export default function Dashboard() {
     },
   })
 
-  // Fetch live broker quote & pending orders
+  // Fetch live paper broker quote for active chart symbol
   const fetchLiveQuote = useCallback(async () => {
     try {
-      const res = await dashboardApiFetch(`/api/metaapi/quote?symbol=${encodeURIComponent(symbol)}`)
+      const res = await dashboardApiFetch(`/api/paper/quote?symbol=${encodeURIComponent(symbol)}`)
       if (res.ok) {
         const data = await res.json()
         if (data && typeof data.bid === 'number' && typeof data.ask === 'number') {
@@ -587,13 +580,13 @@ export default function Dashboard() {
             bid: data.bid,
             ask: data.ask,
             spreadPips: typeof data.spreadPips === 'number' ? data.spreadPips : null,
-            source: 'mt5',
+            source: 'paper',
           })
           return
         }
       }
     } catch {
-      // Fall back to candle feed via effectiveBid/effectiveAsk
+      // Fall back to live board quote or candle feed via effectiveBid/effectiveAsk
     }
     setLiveQuote({
       bid: null,
@@ -603,41 +596,112 @@ export default function Dashboard() {
     })
   }, [symbol])
 
-  const fetchPendingOrders = useCallback(async () => {
-    try {
-      const uid = activeStoreUid || auth.currentUser?.uid || 'default_trader'
-      const res = await dashboardApiFetch(`/api/metaapi/orders?uid=${encodeURIComponent(uid)}`)
-      if (res.ok) {
-        const data = await res.json()
-        setPendingOrders(Array.isArray(data.orders) ? data.orders : [])
-      }
-    } catch {
-      // Endpoint unavailable when offline
-    }
-  }, [activeStoreUid])
-
   useEffect(() => {
     const initialTimer = setTimeout(() => {
       void fetchLiveQuote()
-      void fetchPendingOrders()
     }, 0)
     const timer = setInterval(() => {
       void fetchLiveQuote()
-      void fetchPendingOrders()
     }, 5000)
     return () => {
       clearTimeout(initialTimer)
       clearInterval(timer)
     }
-  }, [fetchLiveQuote, fetchPendingOrders])
+  }, [fetchLiveQuote])
 
-  // Fallback live bid/ask from latest candle when MT5 quote is offline
-  const effectiveBid = liveQuote.bid ?? candles[candles.length - 1]?.close ?? null
-  const effectiveAsk = liveQuote.ask ?? candles[candles.length - 1]?.close ?? null
-  const effectiveSpreadPips = liveQuote.spreadPips
+  const activeBoardQuote = useMemo(
+    () => liveQuotes.find((q) => q.symbol === symbol) ?? null,
+    [liveQuotes, symbol]
+  )
+
+  // Fallback live bid/ask from Quotes board or latest candle when quote endpoint is offline
+  const effectiveBid =
+    liveQuote.bid ?? activeBoardQuote?.bid ?? candles[candles.length - 1]?.close ?? null
+  const effectiveAsk =
+    liveQuote.ask ?? activeBoardQuote?.ask ?? candles[candles.length - 1]?.close ?? null
+  const effectiveSpreadPips = liveQuote.spreadPips ?? activeBoardQuote?.spreadPips ?? null
+  const hasPaperQuoteFeed = liveQuote.source === 'paper' || activeBoardQuote?.bid != null
 
   // Signals filtered for current chart + active engines
   const activeEngineSet = useMemo(() => new Set<string>(activeEngineKebabs), [activeEngineKebabs])
+
+  const signalsBySymbol = useMemo(() => {
+    const grouped: Record<string, { topSignal: StoredSignal; liveCount: number }> = {}
+    for (const signal of allSignals) {
+      if (!isSignalLive(signal.status)) continue
+      if (!activeEngineSet.has(normalizeStrategyToKebab(signal.strategyId))) continue
+      const existing = grouped[signal.symbol]
+      if (!existing) {
+        grouped[signal.symbol] = { topSignal: signal, liveCount: 1 }
+      } else {
+        existing.liveCount += 1
+        const sConf = signal.confidence <= 1 ? signal.confidence * 100 : signal.confidence
+        const eConf =
+          existing.topSignal.confidence <= 1
+            ? existing.topSignal.confidence * 100
+            : existing.topSignal.confidence
+        if (sConf > eConf || (sConf === eConf && signal.time > existing.topSignal.time)) {
+          existing.topSignal = signal
+        }
+      }
+    }
+    return grouped
+  }, [activeEngineSet, allSignals])
+
+  const totalLiveSignalsCount = useMemo(
+    () => Object.values(signalsBySymbol).reduce((sum, item) => sum + item.liveCount, 0),
+    [signalsBySymbol]
+  )
+
+  const openCountBySymbol = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const pos of openPositions) {
+      counts[pos.symbol] = (counts[pos.symbol] ?? 0) + 1
+    }
+    return counts
+  }, [openPositions])
+
+  const handleMobileOpenChart = useCallback(
+    (nextSym: ChartSymbol) => {
+      if (nextSym !== symbol) {
+        handleSelectSymbol(nextSym)
+      }
+      setMobileView('chart')
+    },
+    [handleSelectSymbol, symbol]
+  )
+
+  const handleMobileOpenOrder = useCallback(
+    (nextSym: ChartSymbol) => {
+      if (nextSym !== symbol) {
+        handleSelectSymbol(nextSym)
+      }
+      setInspectorOpen(true)
+      setInspectorTab('planner')
+      setMobileView('order')
+    },
+    [handleSelectSymbol, symbol]
+  )
+
+  const handleMobileOpenSetups = useCallback(
+    (nextSym: ChartSymbol) => {
+      const topSig = signalsBySymbol[nextSym]?.topSignal
+      const targetTf =
+        topSig && TIMEFRAMES.includes(topSig.timeframe as ChartTimeframe)
+          ? (topSig.timeframe as ChartTimeframe)
+          : timeframe
+      if (nextSym !== symbol) setSymbol(nextSym)
+      if (targetTf !== timeframe) setTimeframe(targetTf)
+      if (nextSym !== symbol || targetTf !== timeframe) {
+        setSearchParams({ symbol: nextSym, timeframe: targetTf }, { replace: true })
+      }
+      setSignalScope('chart')
+      setInspectorOpen(true)
+      setInspectorTab('setups')
+      setMobileView('setups')
+    },
+    [setSearchParams, setSymbol, setTimeframe, signalsBySymbol, symbol, timeframe]
+  )
 
   const chartSignals = useMemo(() => {
     const bySetup = new Map<string, StoredSignal>()
@@ -733,8 +797,8 @@ export default function Dashboard() {
   }, [journal])
 
   const totalOpenProfit = useMemo(
-    () => metaPositions.reduce((sum, p) => sum + (p.profit || 0), 0),
-    [metaPositions]
+    () => openPositions.reduce((sum, p) => sum + (p.profit || 0), 0),
+    [openPositions]
   )
 
   const dashboardStats = useMemo<DashboardStats>(() => {
@@ -753,10 +817,10 @@ export default function Dashboard() {
     return {
       signalsToday,
       weeklyWinRate,
-      activeTrades: metaPositions.length + pendingOrders.length,
+      activeTrades: openPositions.length + pendingOrders.length,
       pnlToday: totalOpenProfit,
     }
-  }, [allSignals, journal, metaPositions.length, pendingOrders.length, totalOpenProfit])
+  }, [allSignals, journal, openPositions.length, pendingOrders.length, totalOpenProfit])
 
   const currentLossPct = liveBalance > 0 ? (todayLoss / liveBalance) * 100 : 0
 
@@ -878,7 +942,7 @@ export default function Dashboard() {
       }
     }
 
-    const pos = metaPositions.find((p) => p.id === lockedPositionId)
+    const pos = openPositions.find((p) => p.id === lockedPositionId)
     const order = pos ? null : pendingOrders.find((o) => o.id === lockedPositionId)
     const src = pos ?? order
     if (!src || src.symbol !== symbol || !src.sl || !src.tp) return null
@@ -899,7 +963,7 @@ export default function Dashboard() {
       strategyLabel: pos?.strategyLabel ?? src.comment,
       lotSize: src.volume,
     }
-  }, [lockedPositionId, metaPositions, paperTrades, pendingOrders, symbol])
+  }, [lockedPositionId, openPositions, paperTrades, pendingOrders, symbol])
 
   // Hover previews any marker (even while something is locked); lock wins otherwise.
   const hoverPreviewSignal =
@@ -1221,7 +1285,7 @@ export default function Dashboard() {
         getCandles(symbol, timeframe, 2000),
         refreshAccount(),
         refreshPositions(),
-        fetchPendingOrders(),
+        refreshOrders(),
         fetchLiveQuote(),
       ])
 
@@ -1305,14 +1369,14 @@ export default function Dashboard() {
           outcome: 'pending',
           tradeId: result.tradeId,
           signalId: raw.id,
-          mode: isPaperMode ? 'paper' : 'metaapi',
+          mode: 'paper',
         })
         showToast(
-          isPaperMode ? 'Paper Trade Executed' : 'Trade Executed',
+          'Paper Trade Executed',
           `${direction} ${lotSize}L ${raw.symbol} placed on ${executionVenueLabel}`,
           'success'
         )
-        await fetchPendingOrders()
+        await refreshOrders()
       } else if (result?.duplicate) {
         setLocalExecutedSignalIds((prev) => (prev.includes(raw.id) ? prev : [...prev, raw.id]))
         showToast(
@@ -1322,7 +1386,7 @@ export default function Dashboard() {
         )
       } else {
         showToast(
-          isPaperMode ? 'Paper Broker Notice' : 'Execution Notice',
+          'Paper Broker Notice',
           result?.error || `Calculated ${lotSize}L — ${executionVenueLabel} standby`,
           'info'
         )
@@ -1486,15 +1550,15 @@ export default function Dashboard() {
           taken: true,
           outcome: 'pending',
           tradeId: result.tradeId,
-          mode: isPaperMode ? 'paper' : 'metaapi',
+          mode: 'paper',
         })
 
         showToast(
-          isPaperMode ? 'Paper Order Placed' : 'Order Placed',
+          'Paper Order Placed',
           `${manualPlanner.entryType.toUpperCase()} ${manualPlanner.action} ${plannerLots}L ${symbol} placed on ${executionVenueLabel}`,
           'success'
         )
-        await fetchPendingOrders()
+        await refreshOrders()
       } else if (result?.duplicate) {
         showToast(
           'Order Already Placed',
@@ -1503,7 +1567,7 @@ export default function Dashboard() {
         )
       } else {
         showToast(
-          isPaperMode ? 'Paper Broker Notice' : 'Broker Notice',
+          'Paper Broker Notice',
           result?.error || `Lot Size ${plannerLots}L — ${executionVenueLabel} standby`,
           'info'
         )
@@ -1516,20 +1580,34 @@ export default function Dashboard() {
     }
   }
 
+  const handleClosePosition = async (positionId: string, posSymbol: string) => {
+    try {
+      setClosingPosId(positionId)
+      const res = await closeOpenPosition(positionId)
+      if (res?.success) {
+        showToast(
+          'Position Closed',
+          `Closed ${posSymbol} on ${executionVenueLabel}`,
+          'success'
+        )
+        await refreshPositions()
+      } else {
+        showToast('Notice', res?.error || 'Failed to close position', 'info')
+      }
+    } finally {
+      setClosingPosId(null)
+    }
+  }
+
   const handleCancelPendingOrder = async (orderId: string) => {
     try {
       setCancelingOrderId(orderId)
-      const res = await dashboardApiFetch('/api/metaapi/orders/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, uid: getDashboardActiveUid() }),
-      })
-      const data = await res.json()
-      if (data.success || data.ok) {
+      const data = await cancelPendingOrder(orderId)
+      if (data?.success || data?.ok) {
         showToast('Order Cancelled', `Pending order ${orderId} cancelled`, 'success')
-        await fetchPendingOrders()
+        await refreshOrders()
       } else {
-        showToast('Cancel Notice', data.error || 'Unable to cancel order', 'info')
+        showToast('Cancel Notice', data?.error || 'Unable to cancel order', 'info')
       }
     } catch {
       showToast('Server Error', 'Failed to reach pending order endpoint', 'error')
@@ -1606,15 +1684,21 @@ export default function Dashboard() {
 
   const spreadAlert =
     effectiveSpreadPips != null && effectiveSpreadPips > autoTradeSpreadCapPips
-  const activePositionsTotal = metaPositions.length + pendingOrders.length
+  const activePositionsTotal = openPositions.length + pendingOrders.length
 
-  const isMobileInspectorView =
-    mobileView === 'setups' || mobileView === 'order' || mobileView === 'risk'
+  const isMobileInspectorView = mobileView === 'setups' || mobileView === 'order'
+  const showMobileControlHeader =
+    mobileView === 'chart' || mobileView === 'setups' || mobileView === 'order'
 
   return (
     <div className="h-full min-h-0 bg-[#09090B] text-[#FAFAFA] flex flex-col overflow-hidden">
-      {/* 1. SLEEK CONTROL HEADER */}
-      <div className="px-3 sm:px-4 py-2 lg:py-1.5 lg:min-h-[52px] bg-[#09090B] border-b border-white/[0.06] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 lg:gap-3 shrink-0 z-30">
+      {/* 1. SLEEK CONTROL HEADER (Always on Desktop; shown on Mobile for Chart/Setups/Order) */}
+      <div
+        className={cn(
+          'px-3 sm:px-4 py-2 lg:py-1.5 lg:min-h-[52px] bg-[#09090B] border-b border-white/[0.06] flex-col lg:flex-row lg:items-center lg:justify-between gap-2 lg:gap-3 shrink-0 z-30',
+          showMobileControlHeader ? 'flex' : 'hidden lg:flex'
+        )}
+      >
         {/* Top Row on Mobile / Left Cluster on Desktop: Symbol Picker + Mobile Venue + Desktop Timeframes */}
         <div className="flex items-center justify-between lg:justify-start gap-2 sm:gap-2.5 min-w-0">
           <div className="relative shrink-0" ref={symbolPickerRef}>
@@ -1738,7 +1822,7 @@ export default function Dashboard() {
                 account?.connected ? 'bg-[#34D399]' : 'bg-[#71717A]'
               )}
             />
-            <span>{isPaperMode ? 'Paper' : 'MT5'}</span>
+            <span>Paper</span>
           </div>
         </div>
 
@@ -1766,18 +1850,12 @@ export default function Dashboard() {
           <div className="flex items-center gap-4 text-[13px]">
             <span
               className="flex items-center gap-1.5"
-              title={
-                liveQuote.source === 'mt5'
-                  ? isPaperMode
-                    ? 'Paper Broker Quote'
-                    : 'Live Broker Quote'
-                  : 'Market Feed Quote'
-              }
+              title={hasPaperQuoteFeed ? 'Paper Broker Quote' : 'Market Feed Quote'}
             >
               <span
                 className={cn(
                   'w-1.5 h-1.5 rounded-full',
-                  liveQuote.source === 'mt5' ? 'bg-[#34D399]' : 'bg-[#71717A]'
+                  hasPaperQuoteFeed ? 'bg-[#34D399]' : 'bg-[#71717A]'
                 )}
               />
               <span className="text-[12px] text-[#71717A]">Bid</span>
@@ -1865,48 +1943,76 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* MOBILE WORKSPACE VIEW SWITCHER (< lg) */}
-      <div className="lg:hidden px-3 py-2 bg-[#09090B] border-b border-white/[0.06] shrink-0 z-20">
-        <div className="grid grid-cols-5 gap-1 rounded-xl bg-[#111113] border border-white/[0.06] p-1">
-          {(
-            [
-              { id: 'chart', label: 'Chart', count: 0, dot: false },
-              { id: 'setups', label: 'Setups', count: chartSignals.length, dot: false },
-              { id: 'order', label: 'Order', count: 0, dot: manualPlanner.activeOnChart },
-              { id: 'risk', label: 'Risk', count: 0, dot: riskNotices.some((n) => n.critical) },
-              { id: 'positions', label: 'Book', count: activePositionsTotal, dot: false },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => handleSelectMobileView(tab.id)}
-              className={cn(
-                'relative min-h-[38px] px-1 rounded-lg text-[12px] font-medium transition-colors flex items-center justify-center gap-1 truncate',
-                mobileView === tab.id
-                  ? 'bg-white/[0.11] text-[#FAFAFA]'
-                  : 'text-[#71717A] hover:text-[#A1A1AA]'
-              )}
-            >
-              <span className="truncate">{tab.label}</span>
-              {tab.count > 0 && (
-                <span className="font-mono text-[10px] tabular-nums px-1 py-0.5 rounded-full bg-white/[0.1] text-[#FAFAFA] leading-none">
-                  {tab.count > 99 ? '99+' : tab.count}
-                </span>
-              )}
-              {tab.dot && tab.count === 0 && (
-                <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shrink-0" />
-              )}
-            </button>
-          ))}
+      {/* MOBILE MT5 QUOTES VIEW (< lg) */}
+      {mobileView === 'quotes' && (
+        <div className="lg:hidden flex-1 min-h-0 flex flex-col overflow-hidden">
+          <MobileQuotesBoard
+            quotes={liveQuotes}
+            loading={liveQuotesLoading}
+            lastUpdatedAt={liveQuotesUpdatedAt}
+            equity={liveEquity}
+            balance={liveBalance}
+            autoTradeEnabled={autoTradeEnabled}
+            fixedRiskAmount={fixedRiskAmount}
+            activeRiskUsd={activeRiskUsd}
+            activeSymbol={symbol}
+            signalsBySymbol={signalsBySymbol}
+            openCountBySymbol={openCountBySymbol}
+            executingSignalIds={new Set(executingSignalIds)}
+            executedSignalIds={executedSignalIdSet}
+            onRefresh={refreshQuotes}
+            onToggleAutoTrade={() => toggleAutoTrade(!autoTradeEnabled)}
+            onOpenChart={handleMobileOpenChart}
+            onOpenOrder={handleMobileOpenOrder}
+            onOpenSetups={handleMobileOpenSetups}
+            onQuickExecuteSignal={handleExecuteSignal}
+          />
         </div>
-      </div>
+      )}
+
+      {/* MOBILE MT5 TRADE BOOK VIEW (< lg) */}
+      {mobileView === 'trade' && (
+        <div className="lg:hidden flex-1 min-h-0 flex flex-col overflow-hidden">
+          <MobileTradeBook
+            account={account}
+            balance={liveBalance}
+            equity={liveEquity}
+            floatingPnl={totalOpenProfit}
+            realizedPnl={account?.realizedPnl ?? 0}
+            margin={account?.margin ?? 0}
+            freeMargin={account?.freeMargin ?? liveEquity}
+            positions={openPositions}
+            orders={pendingOrders}
+            activeRiskUsd={activeRiskUsd}
+            autoTradeEnabled={autoTradeEnabled}
+            guardrailsEnabled={autoTradeGuardrailsEnabled}
+            loading={brokerLoading}
+            closingPosId={closingPosId}
+            cancelingOrderId={cancelingOrderId}
+            onToggleAutoTrade={() => toggleAutoTrade(!autoTradeEnabled)}
+            onToggleGuardrails={() =>
+              setAutoTradeGuardrailsEnabled(!autoTradeGuardrailsEnabled)
+            }
+            onRefresh={async () => {
+              await Promise.all([refreshAccount(), refreshPositions(), refreshOrders()])
+            }}
+            onFocusPosition={(posId, posSymbol, posTime) => {
+              handleFocusPosition(posId, posSymbol, posTime)
+              setMobileView('chart')
+            }}
+            onClosePosition={handleClosePosition}
+            onCancelOrder={handleCancelPendingOrder}
+            onOpenQuotes={() => handleSelectMobileView('quotes')}
+            onOpenSetups={() => handleSelectMobileView('setups')}
+          />
+        </div>
+      )}
 
       {/* 2. CHART-FIRST CANVAS + CALM 340px INSPECTOR DRAWER */}
       <div
         className={cn(
-          'flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden',
-          mobileView === 'positions' && 'hidden lg:flex'
+          'flex-1 min-h-0 flex-col lg:flex-row overflow-hidden',
+          mobileView === 'quotes' || mobileView === 'trade' ? 'hidden lg:flex' : 'flex'
         )}
       >
         {/* LEFT: Chart Canvas */}
@@ -1923,7 +2029,7 @@ export default function Dashboard() {
                 <span
                   className={cn(
                     'w-1.5 h-1.5 rounded-full shrink-0',
-                    liveQuote.source === 'mt5' ? 'bg-[#34D399]' : 'bg-[#71717A]'
+                    hasPaperQuoteFeed ? 'bg-[#34D399]' : 'bg-[#71717A]'
                   )}
                 />
                 <span className="text-[#71717A]">Bid</span>
@@ -2465,16 +2571,12 @@ export default function Dashboard() {
                     )}
                     <span>
                       {isPlannerJustPlaced
-                        ? isPaperMode
-                          ? 'Paper Order Placed'
-                          : 'Order Placed'
+                        ? 'Paper Order Placed'
                         : executingTrade
-                        ? isPaperMode
-                          ? 'Placing Paper Order...'
-                          : 'Submitting to MT5...'
+                        ? 'Placing Paper Order...'
                         : `Execute ${manualPlanner.entryType === 'limit' ? 'Limit' : 'Market'} ${
                             manualPlanner.action === 'BUY' ? 'Buy' : 'Sell'
-                          } (${isPaperMode ? 'Paper' : 'MT5'})`}
+                          } (Paper)`}
                     </span>
                     {!executingTrade && !isPlannerJustPlaced && (
                       <span className="font-mono tabular-nums text-[12px] opacity-85">
@@ -2547,7 +2649,7 @@ export default function Dashboard() {
                   equity={liveEquity}
                   marginUsed={account?.margin}
                   freeMargin={account?.freeMargin}
-                  openPositionsCount={metaPositions.length}
+                  openPositionsCount={openPositions.length}
                   maxPositions={autoTradeMaxPositions}
                   consecutiveLosses={consecutiveLosses}
                   spreadPips={effectiveSpreadPips}
@@ -2607,13 +2709,11 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* 3. COLLAPSIBLE BOTTOM POSITIONS & PENDING ORDERS SHEET (Full-Pane Book on Mobile) */}
-      {(dockVisible || mobileView === 'positions') && (
+      {/* 3. COLLAPSIBLE BOTTOM POSITIONS & PENDING ORDERS SHEET (Desktop lg+) */}
+      {dockVisible && (
         <section
           className={cn(
-            'lg:border-t border-white/[0.07] bg-[#111113] lg:shrink-0 z-20 flex-col min-h-0',
-            mobileView === 'positions' ? 'flex flex-1 lg:flex-none' : 'hidden lg:flex',
-            !dockVisible && 'lg:hidden'
+            'hidden lg:flex lg:border-t border-white/[0.07] bg-[#111113] lg:shrink-0 z-20 flex-col min-h-0'
           )}
         >
           {/* Sheet Header */}
@@ -2645,7 +2745,7 @@ export default function Dashboard() {
                 >
                   <span>Positions</span>
                   <span className="font-mono tabular-nums text-[#A1A1AA]">
-                    {metaPositions.length}
+                    {openPositions.length}
                   </span>
                 </button>
                 <button
@@ -2687,12 +2787,12 @@ export default function Dashboard() {
                 onClick={() => {
                   void refreshPositions()
                   void refreshAccount()
-                  void fetchPendingOrders()
+                  void refreshOrders()
                 }}
                 className="w-9 h-9 lg:w-auto lg:h-auto lg:p-1.5 rounded-lg flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA] hover:bg-white/[0.05] transition-colors"
-                title={isPaperMode ? 'Refresh paper positions & orders' : 'Refresh broker positions & orders'}
+                title="Refresh paper positions & orders"
               >
-                <PiArrowsClockwise size={15} className={cn(metaLoading && 'animate-spin')} />
+                <PiArrowsClockwise size={15} className={cn(brokerLoading && 'animate-spin')} />
               </button>
 
               <button
@@ -2707,122 +2807,17 @@ export default function Dashboard() {
           </div>
 
           {/* Sheet Body */}
-          {(dockExpanded || mobileView === 'positions') && (
+          {dockExpanded && (
             <div className="flex-1 lg:flex-none lg:max-h-48 overflow-auto">
               {dockTab === 'positions' ? (
-                metaPositions.length === 0 ? (
+                openPositions.length === 0 ? (
                   <div className="py-10 lg:py-6 text-center text-[13px] text-[#71717A]">
-                    {isPaperMode ? 'No open paper positions' : 'No open broker positions'}
+                    No open paper positions
                   </div>
                 ) : (
                   <>
-                    {/* Mobile Position Cards (< md) */}
-                    <div className="md:hidden p-3 space-y-2.5">
-                      {metaPositions.map((pos) => {
-                        const isBuy = pos.type.toUpperCase().includes('BUY')
-                        const isCurrent = pos.symbol === symbol
-                        return (
-                          <div
-                            key={pos.id}
-                            onClick={() => handleFocusPosition(pos.id, pos.symbol, pos.time)}
-                            className={cn(
-                              'rounded-xl border p-3.5 space-y-3 transition-colors cursor-pointer',
-                              lockedPositionId === pos.id
-                                ? 'bg-white/[0.06] border-[#38BDF8]/40'
-                                : isCurrent
-                                ? 'bg-white/[0.04] border-white/[0.14]'
-                                : 'bg-[#161619] border-white/[0.06]'
-                            )}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-[14px] font-semibold text-[#FAFAFA]">
-                                  {pos.symbol}
-                                </span>
-                                <span
-                                  className={cn(
-                                    'px-2 py-0.5 rounded-md text-[11px] font-semibold',
-                                    isBuy
-                                      ? 'bg-[#34D399]/10 text-[#34D399]'
-                                      : 'bg-[#F87171]/10 text-[#F87171]'
-                                  )}
-                                >
-                                  {isBuy ? 'BUY' : 'SELL'}
-                                </span>
-                                <span className="text-[12px] font-mono tabular-nums text-[#A1A1AA]">
-                                  {pos.volume.toFixed(2)}L
-                                </span>
-                              </div>
-                              <span
-                                className={cn(
-                                  'text-[14px] font-mono font-semibold tabular-nums',
-                                  pos.profit >= 0 ? 'text-[#34D399]' : 'text-[#F87171]'
-                                )}
-                              >
-                                {pos.profit >= 0 ? '+' : '-'}${Math.abs(pos.profit).toFixed(2)}
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2 text-[12px] pt-2 border-t border-white/[0.06]">
-                              <div>
-                                <span className="block text-[11px] text-[#71717A]">Entry</span>
-                                <span className="font-mono tabular-nums text-[#FAFAFA]">
-                                  {formatPrice(pos.openPrice, undefined, pos.symbol)}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="block text-[11px] text-[#71717A]">Current</span>
-                                <span className="font-mono tabular-nums text-[#FAFAFA]">
-                                  {formatPrice(pos.currentPrice, undefined, pos.symbol)}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="block text-[11px] text-[#71717A]">SL / TP</span>
-                                <span className="font-mono tabular-nums text-[#A1A1AA] truncate block">
-                                  {pos.sl ? formatPrice(pos.sl, undefined, pos.symbol) : '—'} /{' '}
-                                  {pos.tp ? formatPrice(pos.tp, undefined, pos.symbol) : '—'}
-                                </span>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              disabled={closingPosId === pos.id}
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                try {
-                                  setClosingPosId(pos.id)
-                                  const res = await closeOpenPosition(pos.id)
-                                  if (res?.success) {
-                                    showToast(
-                                      'Position Closed',
-                                      `Closed ${pos.symbol} on ${executionVenueLabel}`,
-                                      'success'
-                                    )
-                                    await refreshPositions()
-                                  } else {
-                                    showToast('Notice', res?.error || 'Failed to close position', 'info')
-                                  }
-                                } finally {
-                                  setClosingPosId(null)
-                                }
-                              }}
-                              className="w-full h-10 rounded-xl bg-[#111113] hover:bg-[#F87171]/15 border border-white/[0.08] hover:border-[#F87171]/40 text-[13px] font-medium text-[#F87171] inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
-                            >
-                              {closingPosId === pos.id ? (
-                                <PiSpinnerGap size={15} className="animate-spin" />
-                              ) : (
-                                <PiXCircle size={15} />
-                              )}
-                              <span>Close position</span>
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    {/* Desktop Position Table (>= md) */}
-                    <table className="hidden md:table w-full text-left border-collapse text-[13px]">
+                    {/* Desktop Position Table */}
+                    <table className="w-full text-left border-collapse text-[13px]">
                     <thead className="bg-[#111113] border-b border-white/[0.06] text-[12px] font-medium text-[#71717A] sticky top-0">
                       <tr>
                         <th className="py-2.5 px-4 font-medium">Symbol</th>
@@ -2838,7 +2833,7 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.05]">
-                      {metaPositions.map((pos) => {
+                      {openPositions.map((pos) => {
                         const isBuy = pos.type.toUpperCase().includes('BUY')
                         const isCurrent = pos.symbol === symbol
                         return (
@@ -2893,24 +2888,9 @@ export default function Dashboard() {
                               <button
                                 type="button"
                                 disabled={closingPosId === pos.id}
-                                onClick={async (e) => {
+                                onClick={(e) => {
                                   e.stopPropagation()
-                                  try {
-                                    setClosingPosId(pos.id)
-                                    const res = await closeOpenPosition(pos.id)
-                                    if (res?.success) {
-                                      showToast(
-                                        'Position Closed',
-                                        `Closed ${pos.symbol} on ${executionVenueLabel}`,
-                                        'success'
-                                      )
-                                      await refreshPositions()
-                                    } else {
-                                      showToast('Notice', res?.error || 'Failed to close position', 'info')
-                                    }
-                                  } finally {
-                                    setClosingPosId(null)
-                                  }
+                                  void handleClosePosition(pos.id, pos.symbol)
                                 }}
                                 className="h-7 px-2.5 rounded-lg bg-[#161619] hover:bg-[#F87171]/15 border border-white/[0.08] hover:border-[#F87171]/40 text-[12px] font-medium text-[#F87171] inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
                               >
@@ -2931,7 +2911,7 @@ export default function Dashboard() {
                 )
               ) : pendingOrders.length === 0 ? (
                 <div className="py-10 lg:py-6 text-center text-[13px] text-[#71717A]">
-                  {isPaperMode ? 'No pending limit or stop orders' : 'No pending broker limit or stop orders'}
+                  No pending limit or stop orders
                 </div>
               ) : (
                 <>
@@ -3107,6 +3087,83 @@ export default function Dashboard() {
           )}
         </section>
       )}
+
+      {/* 4. MT5-STYLE MOBILE BOTTOM TAB BAR (< lg) */}
+      <nav
+        aria-label="Mobile trading terminal navigation"
+        className="lg:hidden shrink-0 border-t border-white/[0.08] bg-[#0B0B0E]/95 backdrop-blur-md px-1.5 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] z-30"
+      >
+        <div className="grid grid-cols-5 gap-1">
+          {(
+            [
+              {
+                id: 'quotes' as const,
+                label: 'Quotes',
+                icon: PiArrowsDownUp,
+                badge: 0,
+                dot: false,
+              },
+              {
+                id: 'chart' as const,
+                label: 'Chart',
+                icon: PiChartLineUp,
+                badge: 0,
+                dot: false,
+              },
+              {
+                id: 'trade' as const,
+                label: 'Trade',
+                icon: PiWallet,
+                badge: activePositionsTotal,
+                dot: false,
+              },
+              {
+                id: 'setups' as const,
+                label: 'Setups',
+                icon: PiLightning,
+                badge: totalLiveSignalsCount,
+                dot: false,
+              },
+              {
+                id: 'order' as const,
+                label: 'Order',
+                icon: PiSlidersHorizontal,
+                badge: 0,
+                dot: manualPlanner.activeOnChart,
+              },
+            ]
+          ).map((tab) => {
+            const Icon = tab.icon
+            const active = mobileView === tab.id
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleSelectMobileView(tab.id)}
+                className={cn(
+                  'relative min-h-[48px] rounded-xl flex flex-col items-center justify-center gap-0.5 transition-colors',
+                  active
+                    ? 'bg-white/[0.09] text-[#FAFAFA]'
+                    : 'text-[#71717A] hover:text-[#A1A1AA]'
+                )}
+              >
+                <div className="relative">
+                  <Icon size={19} />
+                  {tab.badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-[#34D399] text-[#09090B] font-mono text-[9.5px] font-bold tabular-nums flex items-center justify-center leading-none">
+                      {tab.badge > 99 ? '99+' : tab.badge}
+                    </span>
+                  )}
+                  {tab.dot && tab.badge === 0 && (
+                    <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-[#34D399]" />
+                  )}
+                </div>
+                <span className="text-[10.5px] font-medium leading-none">{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </nav>
     </div>
   )
 }
