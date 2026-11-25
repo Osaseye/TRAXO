@@ -15,6 +15,7 @@ import {
   PiWifiSlash,
 } from 'react-icons/pi'
 import { apiFetch, getScannerStatus } from '@/lib/api'
+import { AccessCodeManagerPanel } from '@/components/admin/AccessCodeManagerPanel'
 import { usePaperBroker } from '@/hooks/usePaperBroker'
 import { useStrategyOptimizer } from '@/hooks/useStrategyOptimizer'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -242,6 +243,9 @@ export default function AdminPanel() {
             </span>
           </div>
         </section>
+
+        {/* Admin 5-Digit Login Access Code Gate */}
+        <AccessCodeManagerPanel />
 
         {/* Unboxed 5-Metric Summary Strip */}
         <section className="rounded-2xl bg-[#111113] border border-white/[0.07] grid grid-cols-2 lg:grid-cols-5">

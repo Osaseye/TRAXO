@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { NavLink } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -14,6 +14,8 @@ import {
   PiBroadcastBold,
   PiGearSix,
   PiGearSixBold,
+  PiShieldCheck,
+  PiShieldCheckBold,
   PiUserCircle,
   PiUserCircleBold,
   PiCaretLeft,
@@ -21,7 +23,13 @@ import {
   PiX,
 } from 'react-icons/pi'
 import { cn } from '@/lib/utils'
-import { selectLiveSignalCount, useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
+import {
+  canonicalSignalKey,
+  isSignalLive,
+  useAnalysisSignalStore,
+} from '@/stores/useAnalysisSignalStore'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { isAdminUser, isTimestampVisibleForUser } from '@/lib/userSignalScope'
 
 interface SidebarProps {
   collapsed: boolean
@@ -49,7 +57,30 @@ export function Sidebar({
   mobileOpen = false,
   onMobileClose,
 }: SidebarProps) {
-  const liveSignalCount = useAnalysisSignalStore(selectLiveSignalCount)
+  const user = useAuthStore((s) => s.user)
+  const signals = useAnalysisSignalStore((s) => s.signals)
+  const showAdminDesk = isAdminUser(user)
+
+  const liveSignalCount = useMemo(() => {
+    const keys = new Set<string>()
+    for (const s of signals) {
+      if (!isSignalLive(s.status)) continue
+      if (!isTimestampVisibleForUser(s.time, user)) continue
+      keys.add(canonicalSignalKey(s) || s.id)
+    }
+    return keys.size
+  }, [signals, user])
+
+  const utilityNavItems = useMemo(
+    () =>
+      showAdminDesk
+        ? [
+            { to: '/admin', icon: PiShieldCheck, activeIcon: PiShieldCheckBold, label: 'Admin Desk' },
+            ...UTILITY_NAV,
+          ]
+        : UTILITY_NAV,
+    [showAdminDesk],
+  )
 
   useEffect(() => {
     if (!mobileOpen || !onMobileClose) return
@@ -163,7 +194,7 @@ export function Sidebar({
 
       {/* Bottom Utility Navigation */}
       <div className="p-2 border-t border-white/[0.06] space-y-1 shrink-0">
-        {UTILITY_NAV.map(({ to, icon: Icon, activeIcon: ActiveIcon, label }) => (
+        {utilityNavItems.map(({ to, icon: Icon, activeIcon: ActiveIcon, label }) => (
           <NavLink
             key={to}
             to={to}
@@ -312,7 +343,7 @@ export function Sidebar({
 
               {/* Utility Links */}
               <div className="p-3 border-t border-white/[0.06] space-y-1 shrink-0">
-                {UTILITY_NAV.map(({ to, icon: Icon, activeIcon: ActiveIcon, label }) => (
+                {utilityNavItems.map(({ to, icon: Icon, activeIcon: ActiveIcon, label }) => (
                   <NavLink
                     key={to}
                     to={to}

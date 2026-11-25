@@ -1,10 +1,12 @@
 import { Navigate, Outlet } from 'react-router'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { isAdminEmail } from '@/lib/userSignalScope'
 import Loading from '@/components/ui/Loading'
 
-/** Comma-separated admin emails, set in .env as VITE_ADMIN_EMAILS */
+/** Admin check: wavecrest@gmail.com is always admin, plus any VITE_ADMIN_EMAILS */
 function isAdmin(email: string | undefined | null): boolean {
   if (!email) return false
+  if (isAdminEmail(email)) return true
   const raw = import.meta.env.VITE_ADMIN_EMAILS as string | undefined
   if (!raw) return false
   return raw.split(',').map((e) => e.trim().toLowerCase()).includes(email.toLowerCase())

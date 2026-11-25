@@ -46,6 +46,8 @@ import {
   type StoredSignal,
 } from '@/stores/useAnalysisSignalStore'
 import { useNotificationStore } from '@/stores/useNotificationStore'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { isTimestampVisibleForUser } from '@/lib/userSignalScope'
 import { showToast } from '@/stores/useToastStore'
 import { ONBOARDING_STRATEGIES, useOnboardingStore } from '@/stores/useOnboardingStore'
 import {
@@ -390,11 +392,18 @@ export default function Notifications() {
   })()
   const [activeTab, setActiveTab] = useState<OpsTab>(initialTab)
 
+  const user = useAuthStore((s) => s.user)
   const notifications = useNotificationStore((s) => s.notifications)
   const markRead = useNotificationStore((s) => s.markRead)
   const markAllRead = useNotificationStore((s) => s.markAllRead)
   const clearNotifications = useNotificationStore((s) => s.clearNotifications)
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications])
+  const unreadCount = useMemo(
+    () =>
+      notifications.filter(
+        (n) => !n.read && isTimestampVisibleForUser(n.time ?? n.createdAt, user)
+      ).length,
+    [notifications, user]
+  )
 
   const storeSignals = useAnalysisSignalStore((s) => s.signals)
   const setChartSymbol = useTradingContextStore((s) => s.setChartSymbol)
@@ -626,14 +635,15 @@ export default function Notifications() {
         }
       }
 
-      collected.sort((a, b) => (b.timestampMs ?? 0) - (a.timestampMs ?? 0))
-      setRejections(collected)
+      const scopedCollected = collected.filter((r) => isTimestampVisibleForUser(r.timestampMs, user))
+      scopedCollected.sort((a, b) => (b.timestampMs ?? 0) - (a.timestampMs ?? 0))
+      setRejections(scopedCollected)
     } catch (err) {
       setRejectionsError(err instanceof Error ? err.message : 'Failed to fetch scanner rejections')
     } finally {
       setRejectionsLoading(false)
     }
-  }, [])
+  }, [user])
 
   // Fetch Telemetry (Scanner Status, Global Signal Status, Health)
   const fetchTelemetry = useCallback(async (silent = false) => {
@@ -707,6 +717,7 @@ export default function Notifications() {
     const map = new Map<string, LedgerSignal>()
 
     for (const s of storeSignals) {
+      if (!isTimestampVisibleForUser(s.time, user)) continue
       const cKey =
         canonicalSignalKey({
           id: s.id,
@@ -780,7 +791,7 @@ export default function Notifications() {
     }
 
     return Array.from(map.values()).sort((a, b) => b.timestampMs - a.timestampMs)
-  }, [storeSignals, notifications])
+  }, [storeSignals, notifications, user])
 
   // Summary metrics
   const ledgerSummary = useMemo(() => {

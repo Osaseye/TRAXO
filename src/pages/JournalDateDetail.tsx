@@ -17,6 +17,7 @@ import { useMetaApi, type PaperTradeRecord } from '@/hooks/useMetaApi'
 import { getJournalEntries, updateJournalEntry } from '@/lib/api'
 import webSocketService from '@/lib/websocket'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { isTimestampVisibleForUser } from '@/lib/userSignalScope'
 import {
   canonicalSignalKey,
   normalizeSignalStatus,
@@ -702,7 +703,8 @@ export default function JournalDateDetail() {
   const [fallbackDateKey] = useState(() => toDateKey(Date.now()))
   const activeDateKey = date || fallbackDateKey
 
-  const activeUid = useAuthStore((s) => s.user?.id ?? null)
+  const user = useAuthStore((s) => s.user)
+  const activeUid = user?.id ?? null
   const storeSignals = useAnalysisSignalStore((s) => s.signals)
   const journal = useTradingContextStore((s) => s.journal)
   const fixedRiskAmount = useTradingContextStore((s) => s.fixedRiskAmount)
@@ -846,13 +848,16 @@ export default function JournalDateDetail() {
       }
     }
 
-    for (const s of storeSignals) upsert(signalToDetailEntry(s, defaultRiskUsd))
+    for (const s of storeSignals) {
+      if (!isTimestampVisibleForUser(s.time, user)) continue
+      upsert(signalToDetailEntry(s, defaultRiskUsd))
+    }
     for (const e of journal) upsert(e)
     for (const e of remoteEntries) upsert(e)
     for (const t of paperTrades) upsert(paperTradeToDetailEntry(t))
 
     return Array.from(records.values())
-  }, [storeSignals, defaultRiskUsd, journal, remoteEntries, paperTrades])
+  }, [storeSignals, defaultRiskUsd, journal, remoteEntries, paperTrades, user])
 
   const dayEntries = useMemo(() => {
     return mergedEntries

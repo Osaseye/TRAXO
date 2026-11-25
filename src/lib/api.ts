@@ -35,6 +35,10 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
   if (activeUid && !headers.has('X-Traxo-Uid')) {
     headers.set('X-Traxo-Uid', activeUid);
   }
+  const activeEmail = useAuthStore.getState().user?.email || auth.currentUser?.email || '';
+  if (activeEmail && !headers.has('X-Traxo-Admin-Email')) {
+    headers.set('X-Traxo-Admin-Email', activeEmail);
+  }
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
@@ -162,5 +166,43 @@ export const updateJournalEntry = <T extends object & { uid?: string }>(id: stri
   return request(`/api/journal/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ ...updates, uid: activeUid }),
+  });
+};
+
+// --- Admin 5-Digit Login Access Codes ---
+
+export const requestLoginAccessCode = (email: string) => {
+  return request('/api/access-codes/request', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+};
+
+export const verifyLoginAccessCode = (email: string, code: string) => {
+  return request('/api/access-codes/verify', {
+    method: 'POST',
+    body: JSON.stringify({ email, code }),
+  });
+};
+
+export const getAdminAccessCodes = () => {
+  return request('/api/access-codes/admin/list');
+};
+
+export const generateAdminAccessCode = (payload: {
+  targetEmail?: string;
+  requestId?: string;
+  ttlHours?: number;
+}) => {
+  return request('/api/access-codes/admin/generate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
+export const revokeAdminAccessCode = (code: string) => {
+  return request('/api/access-codes/admin/revoke', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
   });
 };

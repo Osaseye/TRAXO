@@ -42,6 +42,7 @@ import { useLiveQuotes, usePaperBroker } from '@/hooks/usePaperBroker'
 import { useMarketWebSocket } from '@/hooks/useMarketWebSocket'
 import { resolveApiBaseUrl } from '@/lib/api'
 import { auth } from '@/lib/firebase'
+import { isTimestampVisibleForUser } from '@/lib/userSignalScope'
 import { getCandles, getOlderCandles, type Candle } from '@/lib/marketData'
 import { getMarketRiskContext } from '@/lib/marketRisk'
 import {
@@ -284,7 +285,12 @@ export default function Dashboard() {
   const timeframe = useTradingContextStore((s) => s.chartTimeframe)
   const setTimeframe = useTradingContextStore((s) => s.setChartTimeframe)
 
-  const allSignals = useAnalysisSignalStore((s) => s.signals)
+  const user = useAuthStore((s) => s.user)
+  const rawAllSignals = useAnalysisSignalStore((s) => s.signals)
+  const allSignals = useMemo(
+    () => rawAllSignals.filter((s) => isTimestampVisibleForUser(s.time, user)),
+    [rawAllSignals, user]
+  )
   const addSignals = useAnalysisSignalStore((s) => s.addSignals)
 
   const {

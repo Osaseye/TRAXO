@@ -1,9 +1,14 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router'
 import { PiBell, PiList } from 'react-icons/pi'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
-import { selectLiveSignalCount, useAnalysisSignalStore } from '@/stores/useAnalysisSignalStore'
+import {
+  canonicalSignalKey,
+  isSignalLive,
+  useAnalysisSignalStore,
+} from '@/stores/useAnalysisSignalStore'
+import { isTimestampVisibleForUser } from '@/lib/userSignalScope'
 import { apiFetch } from '@/lib/api'
 import webSocketService from '@/lib/websocket'
 import { cn } from '@/lib/utils'
@@ -46,13 +51,22 @@ function getWsSnapshot(): boolean {
 }
 
 export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
-  const activeUid = useAuthStore((s) => s.user?.id ?? null)
-  const displayName = useAuthStore(
-    (s) => s.user?.displayName || s.user?.fullName || s.user?.email || 'Operator',
-  )
+  const user = useAuthStore((s) => s.user)
+  const activeUid = user?.id ?? null
+  const displayName =
+    user?.displayName || user?.fullName || user?.email || 'Operator'
   const chartSymbol = useTradingContextStore((s) => s.chartSymbol)
   const chartTimeframe = useTradingContextStore((s) => s.chartTimeframe)
-  const liveSignalCount = useAnalysisSignalStore(selectLiveSignalCount)
+  const signals = useAnalysisSignalStore((s) => s.signals)
+  const liveSignalCount = useMemo(() => {
+    const keys = new Set<string>()
+    for (const s of signals) {
+      if (!isSignalLive(s.status)) continue
+      if (!isTimestampVisibleForUser(s.time, user)) continue
+      keys.add(canonicalSignalKey(s) || s.id)
+    }
+    return keys.size
+  }, [signals, user])
 
   const wsConnected = useSyncExternalStore(subscribeWs, getWsSnapshot, () => false)
   const [paperConnected, setPaperConnected] = useState<boolean>(false)

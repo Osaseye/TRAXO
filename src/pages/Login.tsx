@@ -6,29 +6,59 @@ import {
   PiEyeSlash,
   PiArrowRight,
   PiGoogleLogo,
+  PiKey,
   PiLockKey,
   PiEnvelopeSimple,
   PiShieldCheck,
 } from 'react-icons/pi'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { requestLoginAccessCode } from '@/lib/api'
+import { isAdminEmail } from '@/lib/userSignalScope'
 import { getFirebaseErrorMessage } from '@/lib/utils'
 
 export default function Login() {
   const [showPw, setShowPw] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [accessCode, setAccessCode] = useState('')
+  const [requestBusy, setRequestBusy] = useState(false)
+  const [requestNotice, setRequestNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const emailId = useId()
   const passwordId = useId()
+  const codeId = useId()
   const navigate = useNavigate()
   const signIn = useAuthStore((s) => s.signIn)
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle)
   const isLoading = useAuthStore((s) => s.isLoading)
 
+  const isAdminBypass = isAdminEmail(email)
+
+  const handleRequestCode = async () => {
+    setError(null)
+    setRequestNotice(null)
+    const cleanEmail = email.trim()
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setError('Enter your email address first to request a 5-digit code from the admin.')
+      return
+    }
+    setRequestBusy(true)
+    try {
+      const res = (await requestLoginAccessCode(cleanEmail)) as { message?: string }
+      setRequestNotice(
+        res?.message || 'Request sent to admin. Ask the admin for your 5-digit access code.'
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to send code request')
+    } finally {
+      setRequestBusy(false)
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    signIn(email, password)
+    signIn(email, password, accessCode)
       .then(() => {
         navigate('/dashboard')
       })
@@ -39,7 +69,7 @@ export default function Login() {
 
   const handleGoogleSignIn = () => {
     setError(null)
-    signInWithGoogle()
+    signInWithGoogle(accessCode)
       .then(() => {
         navigate('/dashboard')
       })
@@ -230,6 +260,53 @@ export default function Login() {
                 </button>
               </div>
             </div>
+
+            {/* 5-Digit Admin Access Code (required for all non-admin accounts) */}
+            {!isAdminBypass ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label htmlFor={codeId} className="text-[12px] font-medium text-[#A1A1AA]">
+                    5-Digit Admin Access Code
+                  </label>
+                  <button
+                    type="button"
+                    disabled={requestBusy}
+                    onClick={() => void handleRequestCode()}
+                    className="text-[11.5px] font-medium text-[#34D399] hover:text-[#6EE7B7] transition-colors disabled:opacity-50"
+                  >
+                    {requestBusy ? 'Sending request...' : 'Request code from admin'}
+                  </button>
+                </div>
+                <div className="relative flex items-center group">
+                  <PiKey
+                    className="absolute left-3.5 text-[#71717A] group-focus-within:text-[#34D399] transition-colors"
+                    size={17}
+                  />
+                  <input
+                    id={codeId}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={5}
+                    value={accessCode}
+                    onChange={(e) => setAccessCode(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                    placeholder="Enter 5-digit code (e.g. 48291)"
+                    required
+                    autoComplete="one-time-code"
+                    className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.14] focus:border-[#34D399]/60 focus:bg-white/[0.05] text-[14px] font-mono tracking-[0.22em] text-[#FAFAFA] placeholder:text-[#52525B] placeholder:tracking-normal placeholder:font-sans focus:outline-none focus:ring-1 focus:ring-[#34D399]/20 transition-all"
+                  />
+                </div>
+                {requestNotice && (
+                  <p className="text-[11.5px] text-[#34D399] leading-relaxed">
+                    {requestNotice}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="px-3.5 py-2 rounded-xl bg-[#34D399]/10 border border-[#34D399]/25 text-[12px] text-[#34D399] flex items-center gap-2">
+                <PiShieldCheck size={15} />
+                <span>Admin clearance recognized — access code bypassed</span>
+              </div>
+            )}
 
             {/* Primary Action Button */}
             <button

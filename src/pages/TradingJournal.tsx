@@ -21,6 +21,7 @@ import { useMetaApi, type PaperTradeRecord } from '@/hooks/useMetaApi'
 import { getJournalEntries, updateJournalEntry } from '@/lib/api'
 import webSocketService from '@/lib/websocket'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { isTimestampVisibleForUser } from '@/lib/userSignalScope'
 import {
   canonicalSignalKey,
   normalizeSignalStatus,
@@ -507,13 +508,16 @@ export default function TradingJournal() {
       }
     }
 
-    for (const s of storeSignals) upsert(signalToJournalEntry(s, defaultRiskUsd))
+    for (const s of storeSignals) {
+      if (!isTimestampVisibleForUser(s.time, user)) continue
+      upsert(signalToJournalEntry(s, defaultRiskUsd))
+    }
     for (const e of journal) upsert(e)
     for (const e of remoteJournal) upsert(e)
     for (const t of paperTrades) upsert(paperTradeToJournalEntry(t))
 
     return Array.from(records.values()).sort((a, b) => b.createdAt - a.createdAt)
-  }, [storeSignals, defaultRiskUsd, journal, remoteJournal, paperTrades])
+  }, [storeSignals, defaultRiskUsd, journal, remoteJournal, paperTrades, user])
 
   const scopedEntries = useMemo(() => {
     if (scope === 'taken') return allJournalEntries.filter((j) => j.taken)

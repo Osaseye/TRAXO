@@ -66,6 +66,7 @@ export interface User {
   email: string
   plan: Plan
   subscriptionStatus: 'active' | 'cancelled' | 'expired'
+  createdAtMs?: number
   // Optional profile fields stored in Firestore
   fullName?: string
   displayName?: string

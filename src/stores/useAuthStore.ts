@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type { User } from '@/types'
 import { auth, db } from '@/lib/firebase'
+import { isAdminEmail, normalizeEpochMs } from '@/lib/userSignalScope'
+import { verifyLoginAccessCode } from '@/lib/api'
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -21,20 +23,35 @@ interface AuthState {
   setLoading: (loading: boolean) => void
   setOnboardingComplete: (v: boolean) => void
   signUp: (name: string, email: string, password: string) => Promise<void>
-  signIn: (email: string, password: string) => Promise<void>
-  signInWithGoogle: () => Promise<void>
+  signIn: (email: string, password: string, accessCode?: string) => Promise<void>
+  signInWithGoogle: (accessCode?: string) => Promise<void>
   updateProfile: (data: Partial<User>) => Promise<void>
   logout: () => Promise<void>
 }
 
-function mapFirebaseUser(u: FirebaseUser | null, profile?: Partial<User> | null): User | null {
+let accessCodeVerificationInFlight = false
+
+function resolveUserCreatedAtMs(u: FirebaseUser, profile?: Partial<User> & { createdAt?: unknown } | null): number {
+  const metaMs = normalizeEpochMs(u.metadata?.creationTime)
+  if (metaMs > 0) return metaMs
+  const profileMs = normalizeEpochMs(profile?.createdAtMs ?? profile?.createdAt)
+  if (profileMs > 0) return profileMs
+  return Date.now()
+}
+
+function mapFirebaseUser(
+  u: FirebaseUser | null,
+  profile?: (Partial<User> & { createdAt?: unknown }) | null
+): User | null {
   if (!u) return null
+  const createdAtMs = resolveUserCreatedAtMs(u, profile)
   return {
     id: u.uid,
     email: u.email ?? '',
     plan: 'free',
     subscriptionStatus: 'active',
     ...profile,
+    createdAtMs,
   }
 }
 
@@ -48,6 +65,7 @@ async function bindTradingContextOwner(uid: string | null) {
 export const useAuthStore = create<AuthState>((set, get) => {
   // subscribe to firebase auth state
   onAuthStateChanged(auth, async (fu) => {
+    if (accessCodeVerificationInFlight) return
     if (fu) {
       await bindTradingContextOwner(fu.uid)
       const token = await fu.getIdToken()
@@ -166,11 +184,30 @@ export const useAuthStore = create<AuthState>((set, get) => {
         throw err
       }
     },
-    signIn: async (email: string, password: string) => {
+    signIn: async (email: string, password: string, accessCode?: string) => {
       set({ isLoading: true })
+      const cleanEmail = email.trim()
+      const requiresCode = !isAdminEmail(cleanEmail)
+      if (requiresCode && !/^\d{5}$/.test(String(accessCode || '').trim())) {
+        set({ isLoading: false })
+        throw new Error('A valid 5-digit access code from the admin is required to sign in.')
+      }
+
+      accessCodeVerificationInFlight = true
       try {
-        const res = await signInWithEmailAndPassword(auth, email, password)
+        const res = await signInWithEmailAndPassword(auth, cleanEmail, password)
         const fu = res.user
+
+        if (!isAdminEmail(fu.email || cleanEmail)) {
+          try {
+            await verifyLoginAccessCode(fu.email || cleanEmail, String(accessCode || '').trim())
+          } catch (codeErr) {
+            await fbSignOut(auth).catch(() => {})
+            set({ user: null, isAuthenticated: false, idToken: null, isLoading: false })
+            throw codeErr
+          }
+        }
+
         const token = await fu.getIdToken()
         await bindTradingContextOwner(fu.uid)
         try {
@@ -200,14 +237,34 @@ export const useAuthStore = create<AuthState>((set, get) => {
       } catch (error) {
         set({ isLoading: false })
         throw error
+      } finally {
+        accessCodeVerificationInFlight = false
       }
     },
-    signInWithGoogle: async () => {
+    signInWithGoogle: async (accessCode?: string) => {
       set({ isLoading: true })
+      accessCodeVerificationInFlight = true
       try {
         const provider = new GoogleAuthProvider()
         const res = await signInWithPopup(auth, provider)
         const fu = res.user
+
+        if (!isAdminEmail(fu.email)) {
+          const cleanCode = String(accessCode || '').trim()
+          if (!/^\d{5}$/.test(cleanCode)) {
+            await fbSignOut(auth).catch(() => {})
+            set({ user: null, isAuthenticated: false, idToken: null, isLoading: false })
+            throw new Error('Enter your 5-digit admin access code above before signing in with Google.')
+          }
+          try {
+            await verifyLoginAccessCode(fu.email || '', cleanCode)
+          } catch (codeErr) {
+            await fbSignOut(auth).catch(() => {})
+            set({ user: null, isAuthenticated: false, idToken: null, isLoading: false })
+            throw codeErr
+          }
+        }
+
         const token = await fu.getIdToken()
         await bindTradingContextOwner(fu.uid)
         try {
@@ -227,6 +284,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
       } catch (error) {
         set({ isLoading: false })
         throw error
+      } finally {
+        accessCodeVerificationInFlight = false
       }
     },
     logout: async () => {
