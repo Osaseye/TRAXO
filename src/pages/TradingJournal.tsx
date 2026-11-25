@@ -321,7 +321,8 @@ function extractTagsFromNotes(notes?: string): string[] {
 
 export default function TradingJournal() {
   const navigate = useNavigate()
-  const activeUid = useAuthStore((s) => s.user?.id ?? null)
+  const user = useAuthStore((s) => s.user)
+  const activeUid = user?.id ?? null
   const storeSignals = useAnalysisSignalStore((s) => s.signals)
   const journal = useTradingContextStore((s) => s.journal)
   const fixedRiskAmount = useTradingContextStore((s) => s.fixedRiskAmount)

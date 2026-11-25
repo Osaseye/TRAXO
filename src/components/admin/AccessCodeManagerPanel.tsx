@@ -74,7 +74,13 @@ export function AccessCodeManagerPanel() {
   }, [])
 
   useEffect(() => {
-    void loadData()
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (!cancelled) void loadData()
+    })
+    return () => {
+      cancelled = true
+    }
   }, [loadData])
 
   const handleCopy = (code: string) => {
