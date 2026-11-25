@@ -25,7 +25,7 @@ import {
 import { cn } from '@/lib/utils'
 import {
   canonicalSignalKey,
-  isSignalLive,
+  normalizeSignalStatus,
   useAnalysisSignalStore,
 } from '@/stores/useAnalysisSignalStore'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -64,7 +64,7 @@ export function Sidebar({
   const liveSignalCount = useMemo(() => {
     const keys = new Set<string>()
     for (const s of signals) {
-      if (!isSignalLive(s.status)) continue
+      if (normalizeSignalStatus(s.status) !== 'LIVE') continue
       if (!isTimestampVisibleForUser(s.time, user)) continue
       keys.add(canonicalSignalKey(s) || s.id)
     }

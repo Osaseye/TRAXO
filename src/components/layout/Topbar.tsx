@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { useTradingContextStore } from '@/stores/useTradingContextStore'
 import {
   canonicalSignalKey,
-  isSignalLive,
+  normalizeSignalStatus,
   useAnalysisSignalStore,
 } from '@/stores/useAnalysisSignalStore'
 import { isTimestampVisibleForUser } from '@/lib/userSignalScope'
@@ -61,7 +61,7 @@ export function Topbar({ title, subtitle, onMenuClick }: TopbarProps) {
   const liveSignalCount = useMemo(() => {
     const keys = new Set<string>()
     for (const s of signals) {
-      if (!isSignalLive(s.status)) continue
+      if (normalizeSignalStatus(s.status) !== 'LIVE') continue
       if (!isTimestampVisibleForUser(s.time, user)) continue
       keys.add(canonicalSignalKey(s) || s.id)
     }
