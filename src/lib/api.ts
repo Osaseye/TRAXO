@@ -206,3 +206,35 @@ export const revokeAdminAccessCode = (code: string) => {
     body: JSON.stringify({ code }),
   });
 };
+
+// --- Modular Broker Integrations (Webhook / cTrader / Tradovate) ---
+
+export const getBrokerConnections = () => {
+  return request('/api/brokers/connections');
+};
+
+export const saveWebhookBroker = (payload: {
+  enabled: boolean;
+  url: string;
+  preset: 'generic' | 'traderspost' | 'pickmytrade' | 'pineconnector';
+  triggerMode: 'auto' | 'manual' | 'both';
+  secret?: string;
+  clearSecret?: boolean;
+}) => {
+  return request('/api/brokers/webhook', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
+export const testWebhookBroker = () => {
+  return request('/api/brokers/webhook/test', {
+    method: 'POST',
+  });
+};
+
+export const deleteWebhookBroker = () => {
+  return request('/api/brokers/webhook', {
+    method: 'DELETE',
+  });
+};

@@ -6,6 +6,7 @@ import {
   setUserAutoTradeEnabled,
 } from '../modules/execution/paperAutoTraderRegistry';
 import { paperBrokerService } from '../modules/execution/paperBrokerService';
+import { notifyExternalBrokersOnExecution } from '../modules/brokers/brokerRouter';
 import {
   ensureUserPaperHydrated,
   getPaperBackupStatus,
@@ -216,6 +217,30 @@ router.post('/execute', async (req: any, res: any) => {
       confluence,
       comment,
     });
+    if (result?.success) {
+      const actionUpper = String(action || '').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
+      const entryUpper =
+        entryType === 'limit' ? 'LIMIT' : entryType === 'stop' ? 'STOP' : 'MARKET';
+      void notifyExternalBrokersOnExecution(uid, {
+        tradeId: result.tradeId,
+        signalId: signalId ? String(signalId) : undefined,
+        symbol: result.symbol || String(symbol),
+        action: actionUpper,
+        entryType: entryUpper,
+        price: result.price ?? Number(price ?? openPrice ?? limitPrice ?? referencePrice ?? 0),
+        sl: result.sl ?? (sl ? Number(sl) : undefined),
+        tp1: result.tp ?? (tp ? Number(tp) : undefined),
+        tp2: result.tp2 ?? (tp2 != null ? Number(tp2) : undefined),
+        volume: result.volume ?? (volume ? Number(volume) : 0.01),
+        riskAmountUsd: riskAmountUsd != null ? Number(riskAmountUsd) : undefined,
+        timeframe: timeframe ? String(timeframe) : undefined,
+        strategyId: strategyId ? String(strategyId) : undefined,
+        strategyLabel: strategyLabel ? String(strategyLabel) : undefined,
+        confidence: confidence != null ? Number(confidence) : undefined,
+        rr: rr != null ? Number(rr) : undefined,
+        triggerSource: 'manual',
+      });
+    }
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: error.message });

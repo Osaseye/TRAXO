@@ -28,6 +28,7 @@ import ProtectedRoute from '@/components/ui/ProtectedRoute'
 import AdminRoute from '@/components/ui/AdminRoute'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { GlobalSignalMonitor } from '@/components/shared/GlobalSignalMonitor'
+import { SessionInactivityGuard } from '@/components/shared/SessionInactivityGuard'
 import { SignalToastStack } from '@/components/shared/SignalToastStack'
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
     <ErrorBoundary>
       <ScrollToTop />
       <GlobalSignalMonitor />
+      <SessionInactivityGuard />
       <SignalToastStack />
       <Suspense fallback={<Loading />}>
         <PageTransition>

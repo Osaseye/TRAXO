@@ -35,6 +35,7 @@ import {
   toGuardrailConfig,
 } from '../execution/paperAutoTraderRegistry';
 import { paperBrokerService } from '../execution/paperBrokerService';
+import { notifyExternalBrokersOnExecution } from '../brokers/brokerRouter';
 import { isWinningPaperStatus } from '../execution/executionBroker';
 import { evaluateSignalDeterministically } from '../execution/tradeResolutionEngine';
 import { queryCandles } from '../storage/sqliteDb';
@@ -691,6 +692,25 @@ export async function runScan(): Promise<void> {
                 console.log(
                   `[AutoTrader:${userCfg.uid}] Paper trade executed: ${signal.symbol} ${signal.direction} ${dynamicLots}L (${entryType})`
                 );
+                void notifyExternalBrokersOnExecution(userCfg.uid, {
+                  tradeId: execRes.tradeId,
+                  signalId: signal.id,
+                  symbol: execRes.symbol || signal.symbol,
+                  action: signal.direction === 'SELL' ? 'SELL' : 'BUY',
+                  entryType: entryType === 'limit' ? 'LIMIT' : 'MARKET',
+                  price: execRes.price ?? execPrice ?? signal.entry,
+                  sl: execRes.sl ?? signal.sl,
+                  tp1: execRes.tp ?? signal.tp,
+                  tp2: execRes.tp2 ?? signal.tp2,
+                  volume: execRes.volume ?? dynamicLots,
+                  riskAmountUsd: riskUsd,
+                  timeframe: signal.timeframe,
+                  strategyId: signal.strategyId,
+                  strategyLabel: signal.strategyLabel,
+                  confidence: signal.confidence,
+                  rr: signal.rr,
+                  triggerSource: 'auto',
+                });
               } else if (!execRes.duplicate) {
                 console.error(`[AutoTrader:${userCfg.uid}] Trade execution failed: ${execRes.error}`);
               }

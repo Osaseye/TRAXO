@@ -1,5 +1,5 @@
 import { useState, useId } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { motion } from 'framer-motion'
 import {
   PiEye,
@@ -28,6 +28,11 @@ export default function Login() {
   const passwordId = useId()
   const codeId = useId()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const timedOutNotice =
+    searchParams.get('reason') === 'session_timeout'
+      ? 'Your session timed out after 15 minutes of inactivity. Enter a fresh 5-digit code to sign back in.'
+      : null
   const signIn = useAuthStore((s) => s.signIn)
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle)
   const isLoading = useAuthStore((s) => s.isLoading)
@@ -190,6 +195,17 @@ export default function Login() {
               Connect to institutional signals and direct MT5 trade execution
             </p>
           </div>
+
+          {/* Session timeout notice */}
+          {timedOutNotice && !error && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="px-3.5 py-2.5 rounded-lg bg-[#FBBF24]/10 border border-[#FBBF24]/25 text-[12px] text-[#FBBF24] text-center"
+            >
+              {timedOutNotice}
+            </motion.div>
+          )}
 
           {/* Error notice */}
           {error && (

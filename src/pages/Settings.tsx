@@ -20,6 +20,7 @@ import {
   type ChartTimeframe,
 } from '@/stores/useTradingContextStore'
 import { usePaperBroker } from '@/hooks/usePaperBroker'
+import { BrokerIntegrationsSection } from '@/components/settings/BrokerIntegrationsSection'
 import { getTradingContext, postTradingContext } from '@/lib/api'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { showToast } from '@/stores/useToastStore'
@@ -770,6 +771,9 @@ export default function Settings() {
             </div>
           </div>
         </section>
+
+        {/* 1B. External Broker Bridges (Webhooks + Upcoming Cloud OAuth) */}
+        <BrokerIntegrationsSection visible={showSection('broker')} />
 
         {/* 2. Risk & Execution Guardrails */}
         <section className={cn('space-y-3', !showSection('risk') && 'hidden md:block')}>

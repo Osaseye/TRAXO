@@ -4,6 +4,10 @@ import { auth, db } from '@/lib/firebase'
 import { isAdminEmail, normalizeEpochMs } from '@/lib/userSignalScope'
 import { verifyLoginAccessCode } from '@/lib/api'
 import {
+  clearSessionActivity,
+  markSessionActivityNow,
+} from '@/lib/sessionActivity'
+import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -146,6 +150,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         }
 
         await bindTradingContextOwner(fu?.uid ?? null)
+        markSessionActivityNow()
         set({ user: mapFirebaseUser(fu), isAuthenticated: true, idToken: token, isLoading: false })
       } catch (error) {
         set({ isLoading: false })
@@ -209,6 +214,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         }
 
         const token = await fu.getIdToken()
+        markSessionActivityNow()
         await bindTradingContextOwner(fu.uid)
         try {
           const { getDoc, doc } = await import('firebase/firestore')
@@ -266,6 +272,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         }
 
         const token = await fu.getIdToken()
+        markSessionActivityNow()
         await bindTradingContextOwner(fu.uid)
         try {
           const { getDoc, doc } = await import('firebase/firestore')
@@ -290,6 +297,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
     logout: async () => {
       set({ isLoading: true })
+      clearSessionActivity()
       await fbSignOut(auth)
       await bindTradingContextOwner(null)
       set({ user: null, isAuthenticated: false, onboardingComplete: false, idToken: null, isLoading: false })

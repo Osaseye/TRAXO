@@ -1,6 +1,7 @@
 import { getAvailableCount, getStatus as getKeyStatus } from '../modules/market-data/keyRotator';
 import accessCodesRouter from './accessCodes';
 import authRouter, { setupAuthRoutes } from './auth';
+import brokersRouter from './brokers';
 import candlesRouter from './candles';
 import globalSignalsRouter from './globalSignals';
 import journalRouter from './journal';
@@ -41,6 +42,7 @@ export function registerRoutes(app: any): void {
   app.use('/api/replay', replayRouter);
   app.use('/api/strategy-optimization', strategyOptimizationRouter);
   app.use('/api/access-codes', accessCodesRouter);
+  app.use('/api/brokers', brokersRouter);
   app.use('/api/auth', authRouter);
 
   // Preserve legacy auth endpoints (/verify-token, /api/profile, /api/trades)
